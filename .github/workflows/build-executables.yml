@@ -5,6 +5,9 @@ on:
     types: [published]
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: write  # Needed for release asset uploads
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -36,7 +39,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-        pip install pyinstaller
+        pip install pyinstaller requests packaging
     
     - name: Build executable
       run: |
@@ -64,11 +67,7 @@ jobs:
     
     - name: Upload to Release
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: dist/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        asset_content_type: application/octet-stream
+        files: dist/${{ matrix.artifact_name }}
+

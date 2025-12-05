@@ -3,19 +3,23 @@ Version checking and auto-update functionality
 """
 import requests
 from packaging import version as pkg_version
+from subtitlekit import __version__
 
 
-def check_for_updates(current_version="0.1.1", repo="angelospk/subtitlekit"):
+def check_for_updates(current_version=None, repo="angelospk/subtitlekit"):
     """
     Check GitHub releases for newer versions.
     
     Args:
-        current_version: Current installed version
+        current_version: Current installed version (defaults to package version)
         repo: GitHub repository in format "owner/repo"
         
     Returns:
         tuple: (update_available: bool, latest_version: str, download_url: str)
     """
+    if current_version is None:
+        current_version = __version__
+    
     try:
         url = f"https://api.github.com/repos/{repo}/releases/latest"
         response = requests.get(url, timeout=5)
