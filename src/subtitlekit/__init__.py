@@ -4,7 +4,10 @@ SubtitleKit - Subtitle Processing Toolkit
 A comprehensive library for subtitle processing, synchronization, and correction.
 """
 
-__version__ = "0.1.0"
+try:
+    from ._version import version as __version__
+except ImportError:
+    __version__ = "0.0.0.dev0"  # Fallback for development without install
 
 from .tools import merge_subtitles, fix_overlaps, apply_corrections
 from .core import (

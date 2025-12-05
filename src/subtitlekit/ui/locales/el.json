@@ -1,0 +1,47 @@
+{
+  "app_title": "SubtitleKit - Επεξεργασία Υποτίτλων",
+  "menu_file": "Αρχείο",
+  "menu_help": "Βοήθεια",
+  " menu_about": "Σχετικά",
+  "menu_check_updates": "Έλεγχος Ενημερώσεων",
+  "menu_exit": "Έξοδος",
+  
+  "tab_merge": "Ένωση Υποτίτλων",
+  "tab_overlaps": "Διόρθωση Χρονισμών",
+  "tab_corrections": "Εφαρμογή Διορθώσεων",
+  
+  "label_original": "Αρχικός υπότιτλος:",
+  "label_helper": "Βοηθητικοί υπότιτλοι:",
+  "label_input": "Υπότιτλος εισόδου:",
+  "label_reference": "Υπότιτλος αναφοράς:",
+  "label_corrections": "Διορθώσεις JSON:",
+  "label_output": "Αρχείο εξόδου:",
+  "label_window": "Μέγεθος παραθύρου:",
+  
+  "button_browse": "Αναζήτηση...",
+  "button_add_helper": "Προσθήκη",
+  "button_remove_helper": "Αφαίρεση",
+  "button_process": "Επεξεργασία",
+  "button_clear": "Καθαρισμός",
+  
+  "checkbox_skip_sync": "Παράλειψη συγχρονισμού",
+  "checkbox_preprocess": "Προεπεξεργασία",
+  "checkbox_quiet": "Σιωπηλή λειτουργία",
+  
+  "status_ready": "Έτοιμο",
+  "status_processing": "Επεξεργασία...",
+  "status_success": "✅ Επιτυχία!",
+  "status_error": "❌ Σφάλμα",
+  
+  "msg_select_files": "Παρακαλώ επιλέξτε όλα τα απαραίτητα αρχεία",
+  "msg_processing": "Επεξεργασία υποτίτλων, παρακαλώ περιμένετε...",
+  "msg_complete": "Η επεξεργασία ολοκληρώθηκε! Το αποτέλεσμα αποθηκεύτηκε στο: {path}",
+  "msg_error": "Σφάλμα: {error}",
+  
+  "title_about": "Σχετικά με το SubtitleKit",
+  "about_text": "SubtitleKit v{version}\\n\\nΕργαλεία επεξεργασίας υποτίτλων για ένωση, διόρθωση χρονισμών και εφαρμογή διορθώσεων.\\n\\n© 2025 SubtitleKit Contributors",
+  
+  "title_update_available": "Διαθέσιμη Ενημέρωση",
+  "update_message": "Μια νέα έκδοση (v{version}) είναι διαθέσιμη!\\n\\nΘέλετε να την κατεβάσετε;",
+  "update_no_updates": "Εκτελείτε την τελευταία έκδοση!"
+}

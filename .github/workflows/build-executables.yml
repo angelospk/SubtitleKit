@@ -24,6 +24,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for setuptools-scm version detection
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -38,9 +40,6 @@ jobs:
     
     - name: Build executable
       run: |
-        # Create locales if they don't exist in the package
-        mkdir -p src/subtitlekit/ui/locales
-        
         # Build with spec file for better control
         pyinstaller SubtitleKit.spec
       shell: bash

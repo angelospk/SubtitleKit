@@ -5,7 +5,7 @@ import requests
 from packaging import version as pkg_version
 
 
-def check_for_updates(current_version="0.1.0", repo="angelospk/subtitlekit"):
+def check_for_updates(current_version="0.1.1", repo="angelospk/subtitlekit"):
     """
     Check GitHub releases for newer versions.
     

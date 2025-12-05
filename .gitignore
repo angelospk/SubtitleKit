@@ -2,9 +2,13 @@
 *.srt
 !test_fixtures/*.srt
 
-# Generated JSON files (except test fixtures)
+# Generated JSON files (except test fixtures and locales)
 *.json
 !test_fixtures/*.json
+!src/subtitlekit/ui/locales/*.json
+
+# Generated version file (created by setuptools-scm)
+src/subtitlekit/_version.py
 
 # Python cache
 __pycache__/

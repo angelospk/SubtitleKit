@@ -1,0 +1,47 @@
+{
+  "app_title": "SubtitleKit - Subtitle Processing Toolkit",
+  "menu_file": "File",
+  "menu_help": "Help",
+  "menu_about": "About",
+  "menu_check_updates": "Check for Updates",
+  "menu_exit": "Exit",
+  
+  "tab_merge": "Merge Subtitles",
+  "tab_overlaps": "Fix Overlaps",
+  "tab_corrections": "Apply Corrections",
+  
+  "label_original": "Original subtitle:",
+  "label_helper": "Helper subtitle(s):",
+  "label_input": "Input subtitle:",
+  "label_reference": "Reference subtitle:",
+  "label_corrections": "Corrections JSON:",
+  "label_output": "Output file:",
+  "label_window": "Window size:",
+  
+  "button_browse": "Browse...",
+  "button_add_helper": "Add Helper",
+  "button_remove_helper": "Remove",
+  "button_process": "Process",
+  "button_clear": "Clear",
+  
+  "checkbox_skip_sync": "Skip synchronization",
+  "checkbox_preprocess": "Preprocess input",
+  "checkbox_quiet": "Quiet mode",
+  
+  "status_ready": "Ready",
+  "status_processing": "Processing...",
+  "status_success": "✅ Success!",
+  "status_error": "❌ Error",
+  
+  "msg_select_files": "Please select all required files",
+  "msg_processing": "Processing subtitles, please wait...",
+  "msg_complete": "Processing complete! Output saved to: {path}",
+  "msg_error": "Error: {error}",
+  
+  "title_about": "About SubtitleKit",
+  "about_text": "SubtitleKit v{version}\\n\\nSubtitle processing toolkit for merging, fixing, and correcting subtitles.\\n\\n© 2025 SubtitleKit Contributors",
+  
+  "title_update_available": "Update Available",
+  "update_message": "A new version (v{version}) is available!\\n\\nWould you like to download it?",
+  "update_no_updates": "You're running the latest version!"
+}
