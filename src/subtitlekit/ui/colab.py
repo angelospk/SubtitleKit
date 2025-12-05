@@ -1,12 +1,15 @@
 """
-Google Colab UI using ipywidgets
+Google Colab UI using ipywidgets - Enhanced version
 
-This module provides a Jupyter/Colab-friendly interface for subtitle processing.
+This module provides a Jupyter/Colab-friendly interface for subtitle processing
+with file pickers, JSON paste, and better dark mode support.
 """
 import ipywidgets as widgets
 from IPython.display import display, HTML
+from google.colab import files
 import json
 import os
+import glob
 
 
 def show_ui(lang='en'):
@@ -32,19 +35,25 @@ def show_ui(lang='en'):
             'tab_merge': 'Merge Subtitles',
             'tab_overlaps': 'Fix Overlaps',
             'tab_corrections': 'Apply Corrections',
-            'label_original': 'Original subtitle path:',
-            'label_helper': 'Helper subtitle paths (comma-separated):',
-            'label_input': 'Input subtitle path:',
-            'label_reference': 'Reference subtitle path:',
-            'label_corrections': 'Corrections JSON path:',
-            'label_output': 'Output file path:',
+            'label_original': 'Original subtitle:',
+            'label_helper': 'Helper subtitles (comma-separated):',
+            'label_input': 'Input subtitle:',
+            'label_reference': 'Reference subtitle:',
+            'label_corrections_file': 'Corrections file:',
+            'label_corrections_json': 'Or paste JSON:',
+            'label_output': 'Output filename:',
             'label_window': 'Window size:',
+            'button_upload': 'Upload File',
             'button_process': 'Process',
             'checkbox_skip_sync': 'Skip synchronization',
             'checkbox_preprocess': 'Preprocess input',
+            'checkbox_auto_download': 'Auto-download result',
+            'status_upload': 'Click Upload to select file',
             'status_processing': '⏳ Processing...',
-            'status_success': '✅ Success! Output saved.',
+            'status_success': '✅ Success!',
             'status_error': '❌ Error: ',
+            'msg_no_files': 'Please select or upload files first',
+            'msg_json_error': '❌ JSON parse error: ',
         },
         'el': {
             'title': '📝 SubtitleKit - Επεξεργασία Υποτίτλων',
@@ -52,34 +61,92 @@ def show_ui(lang='en'):
             'tab_overlaps': 'Διόρθωση Χρονισμών',
             'tab_corrections': 'Εφαρμογή Διορθώσεων',
             'label_original': 'Αρχικός υπότιτλος:',
-            'label_helper': 'Βοηθητικοί υπότιτλοι (διαχωρισμένοι με κόμμα):',
+            'label_helper': 'Βοηθητικοί υπότιτλοι (με κόμμα):',
             'label_input': 'Υπότιτλος εισόδου:',
             'label_reference': 'Υπότιτλος αναφοράς:',
-            'label_corrections': 'Διορθώσεις JSON:',
-            'label_output': 'Αρχείο εξόδου:',
+            'label_corrections_file': 'Αρχείο διορθώσεων:',
+            'label_corrections_json': 'Ή επικόλληση JSON:',
+            'label_output': 'Όνομα αρχείου εξόδου:',
             'label_window': 'Μέγεθος παραθύρου:',
+            'button_upload': 'Ανέβασμα Αρχείου',
             'button_process': 'Επεξεργασία',
             'checkbox_skip_sync': 'Παράλειψη συγχρονισμού',
             'checkbox_preprocess': 'Προεπεξεργασία',
+            'checkbox_auto_download': 'Αυτόματο κατέβασμα',
+            'status_upload': 'Κλικ για ανέβασμα',
             'status_processing': '⏳ Επεξεργασία...',
-            'status_success': '✅ Επιτυχία! Το αποτέλεσμα αποθηκεύτηκε.',
+            'status_success': '✅ Επιτυχία!',
             'status_error': '❌ Σφάλμα: ',
+            'msg_no_files': 'Παρακαλώ επιλέξτε ή ανεβάστε αρχεία',
+            'msg_json_error': '❌ Σφάλμα JSON: ',
         }
     }
     
     t = translations.get(lang, translations['en'])
     
+    # Custom CSS for better dark mode support
+    display(HTML("""
+    <style>
+    .widget-label { color: var(--colab-primary-text-color, #202124) !important; }
+    .widget-text input, .widget-dropdown select, .widget-textarea textarea {
+        background-color: var(--colab-secondary-surface-color, #fff) !important;
+        color: var(--colab-primary-text-color, #202124) !important;
+        border: 1px solid var(--colab-border-color, #dadce0) !important;
+    }
+    .widget-button { 
+        background-color: #1a73e8 !important;
+        color: white !important;
+        border: none !important;
+    }
+    .output_area { 
+        background-color: var(--colab-secondary-surface-color, #f8f9fa) !important;
+        color: var(--colab-primary-text-color, #202124) !important;
+        padding: 10px !important;
+        border-radius: 4px !important;
+    }
+    </style>
+    """))
+    
     # Display title
-    display(HTML(f"<h2>{t['title']}</h2>"))
+    display(HTML(f"<h2 style='color: var(--colab-primary-text-color, #202124);'>{t['title']}</h2>"))
+    
+    # Helper: File picker widget
+    def create_file_picker(label, file_types='*.srt'):
+        """Create a file picker with upload option"""
+        dropdown = widgets.Dropdown(
+            options=[''] + sorted(glob.glob(file_types)),
+            description=label,
+            style={'description_width': '150px'},
+            layout=widgets.Layout(width='500px')
+        )
+        upload_btn = widgets.Button(description=t['button_upload'], button_style='info', layout=widgets.Layout(width='120px'))
+        upload_status = widgets.HTML(value='')
+        
+        def on_upload(b):
+            uploaded = files.upload()
+            if uploaded:
+                filename = list(uploaded.keys())[0]
+                dropdown.options = [''] + sorted(glob.glob(file_types))
+                dropdown.value = filename
+                upload_status.value = f'✅ {filename}'
+        
+        upload_btn.on_click(on_upload)
+        return widgets.HBox([dropdown, upload_btn, upload_status]), dropdown
     
     # Create tabs
     tab = widgets.Tab()
     
     # ===== MERGE TAB =====
-    merge_original = widgets.Text(description=t['label_original'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    merge_helpers = widgets.Text(description=t['label_helper'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    merge_output = widgets.Text(description=t['label_output'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
+    merge_original_box, merge_original = create_file_picker(t['label_original'])
+    merge_helpers_box, merge_helpers = create_file_picker(t['label_helper'])
+    merge_output = widgets.Text(
+        value='merged_output.json',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
     merge_skip_sync = widgets.Checkbox(description=t['checkbox_skip_sync'], value=False)
+    merge_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     merge_button = widgets.Button(description=t['button_process'], button_style='primary')
     merge_output_area = widgets.Output()
     
@@ -91,10 +158,10 @@ def show_ui(lang='en'):
             try:
                 original = merge_original.value.strip()
                 helpers = [h.strip() for h in merge_helpers.value.split(',') if h.strip()]
-                output = merge_output.value.strip()
+                output = merge_output.value.strip() or 'merged_output.json'
                 
-                if not original or not helpers or not output:
-                    print("❌ Please fill all fields")
+                if not original or not helpers:
+                    print(t['msg_no_files'])
                     return
                 
                 # Process
@@ -105,8 +172,13 @@ def show_ui(lang='en'):
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 
                 print(f"{t['status_success']}")
-                print(f"📁 Output: {output}")
-                print(f"📊 Processed {len(results)} entries")
+                print(f"📁 {output}")
+                print(f"📊 {len(results)} entries")
+                
+                # Auto download
+                if merge_auto_dl.value:
+                    files.download(output)
+                    print(f"⬇️ Downloaded!")
                 
             except Exception as e:
                 print(f"{t['status_error']}{e}")
@@ -114,20 +186,31 @@ def show_ui(lang='en'):
     merge_button.on_click(on_merge_click)
     
     merge_tab = widgets.VBox([
-        merge_original,
-        merge_helpers,
+        merge_original_box,
+        merge_helpers_box,
         merge_output,
         merge_skip_sync,
+        merge_auto_dl,
         merge_button,
         merge_output_area
-    ])
+    ], layout=widgets.Layout(padding='10px'))
     
     # ===== OVERLAPS TAB =====
-    overlaps_input = widgets.Text(description=t['label_input'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    overlaps_reference = widgets.Text(description=t['label_reference'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    overlaps_output = widgets.Text(description=t['label_output'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    overlaps_window = widgets.IntSlider(description=t['label_window'], min=1, max=20, value=5, style={'description_width': '200px'})
+    overlaps_input_box, overlaps_input = create_file_picker(t['label_input'])
+    overlaps_reference_box, overlaps_reference = create_file_picker(t['label_reference'])
+    overlaps_output = widgets.Text(
+        value='fixed_overlaps.srt',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    overlaps_window = widgets.IntSlider(
+        description=t['label_window'],
+        min=1, max=20, value=5,
+        style={'description_width': '150px'}
+    )
     overlaps_preprocess = widgets.Checkbox(description=t['checkbox_preprocess'], value=False)
+    overlaps_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     overlaps_button = widgets.Button(description=t['button_process'], button_style='primary')
     overlaps_output_area = widgets.Output()
     
@@ -139,10 +222,10 @@ def show_ui(lang='en'):
             try:
                 input_file = overlaps_input.value.strip()
                 reference = overlaps_reference.value.strip()
-                output = overlaps_output.value.strip()
+                output = overlaps_output.value.strip() or 'fixed_overlaps.srt'
                 
-                if not input_file or not reference or not output:
-                    print("❌ Please fill all fields")
+                if not input_file or not reference:
+                    print(t['msg_no_files'])
                     return
                 
                 # Process
@@ -155,7 +238,12 @@ def show_ui(lang='en'):
                 )
                 
                 print(f"{t['status_success']}")
-                print(f"📁 Output: {output}")
+                print(f"📁 {output}")
+                
+                # Auto download
+                if overlaps_auto_dl.value:
+                    files.download(output)
+                    print(f"⬇️ Downloaded!")
                 
             except Exception as e:
                 print(f"{t['status_error']}{e}")
@@ -163,19 +251,35 @@ def show_ui(lang='en'):
     overlaps_button.on_click(on_overlaps_click)
     
     overlaps_tab = widgets.VBox([
-        overlaps_input,
-        overlaps_reference,
+        overlaps_input_box,
+        overlaps_reference_box,
         overlaps_output,
         overlaps_window,
         overlaps_preprocess,
+        overlaps_auto_dl,
         overlaps_button,
         overlaps_output_area
-    ])
+    ], layout=widgets.Layout(padding='10px'))
     
     # ===== CORRECTIONS TAB =====
-    corrections_input = widgets.Text(description=t['label_input'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    corrections_json = widgets.Text(description=t['label_corrections'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
-    corrections_output = widgets.Text(description=t['label_output'], style={'description_width': '200px'}, layout=widgets.Layout(width='600px'))
+    corrections_input_box, corrections_input = create_file_picker(t['label_input'])
+    
+    # JSON file OR paste
+    corrections_file_box, corrections_file = create_file_picker(t['label_corrections_file'], '*.json')
+    corrections_json = widgets.Textarea(
+        description=t['label_corrections_json'],
+        placeholder='[{"id": 1, "rx": "find", "sb": "replace"}]',
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px', height='100px')
+    )
+    
+    corrections_output = widgets.Text(
+        value='corrected.srt',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    corrections_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     corrections_button = widgets.Button(description=t['button_process'], button_style='primary')
     corrections_output_area = widgets.Output()
     
@@ -186,24 +290,53 @@ def show_ui(lang='en'):
             
             try:
                 input_file = corrections_input.value.strip()
-                corrections_file = corrections_json.value.strip()
-                output = corrections_output.value.strip()
+                output = corrections_output.value.strip() or 'corrected.srt'
                 
-                if not input_file or not corrections_file or not output:
-                    print("❌ Please fill all fields")
+                if not input_file:
+                    print(t['msg_no_files'])
                     return
+                
+                # Get corrections from file OR JSON paste
+                corrections_data = None
+                
+                if corrections_json.value.strip():
+                    # Parse pasted JSON
+                    try:
+                        corrections_data = json.loads(corrections_json.value)
+                        temp_json = '_temp_corrections.json'
+                        with open(temp_json, 'w', encoding='utf-8') as f:
+                            json.dump(corrections_data, f)
+                        corrections_file_path = temp_json
+                    except json.JSONDecodeError as e:
+                        print(f"{t['msg_json_error']}{e}")
+                        return
+                else:
+                    # Use file
+                    corrections_file_path = corrections_file.value.strip()
+                    if not corrections_file_path:
+                        print(t['msg_no_files'])
+                        return
                 
                 # Process
                 stats = apply_corrections_from_file(
                     input_file,
-                    corrections_file,
+                    corrections_file_path,
                     output,
                     verbose=False
                 )
                 
                 print(f"{t['status_success']}")
-                print(f"📁 Output: {output}")
-                print(f"📊 Applied: {stats['applied']}/{stats['total']} corrections")
+                print(f"📁 {output}")
+                print(f"📊 {stats['applied']}/{stats['total']} corrections applied")
+                
+                # Auto download
+                if corrections_auto_dl.value:
+                    files.download(output)
+                    print(f"⬇️ Downloaded!")
+                
+                # Cleanup temp file
+                if corrections_json.value.strip() and os.path.exists('_temp_corrections.json'):
+                    os.remove('_temp_corrections.json')
                 
             except Exception as e:
                 print(f"{t['status_error']}{e}")
@@ -211,12 +344,14 @@ def show_ui(lang='en'):
     corrections_button.on_click(on_corrections_click)
     
     corrections_tab = widgets.VBox([
-        corrections_input,
+        corrections_input_box,
+        corrections_file_box,
         corrections_json,
         corrections_output,
+        corrections_auto_dl,
         corrections_button,
         corrections_output_area
-    ])
+    ], layout=widgets.Layout(padding='10px'))
     
     # Add tabs
     tab.children = [merge_tab, overlaps_tab, corrections_tab]
@@ -228,9 +363,13 @@ def show_ui(lang='en'):
     display(tab)
     
     # Add usage hint
-    display(HTML("""
-    <div style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;">
-        <b>💡 Tip:</b> You can upload files to Colab using the file browser on the left, or use Google Drive paths like <code>/content/drive/MyDrive/...</code>
+    display(HTML(f"""
+    <div style="margin-top: 20px; padding: 10px; 
+                background-color: var(--colab-highlighted-surface-color, #e8f0fe); 
+                color: var(--colab-primary-text-color, #202124);
+                border-radius: 5px; border-left: 4px solid #1a73e8;">
+        <b>💡 Tip:</b> Use the file browser (left) or Upload buttons to add files. 
+        Files already in /content/ will appear in the dropdown menus.
     </div>
     """))
 

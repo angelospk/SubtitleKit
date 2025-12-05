@@ -39,6 +39,10 @@ class I18n:
         if locale_file.exists():
             with open(locale_file, 'r', encoding='utf-8') as f:
                 self.translations = json.load(f)
+        else:
+            # Fallback to English defaults if file not found
+            print(f"Warning: Locale file {locale_file} not found, using defaults")
+            self.translations = {}
     
     def t(self, key, **kwargs):
         """Translate key"""

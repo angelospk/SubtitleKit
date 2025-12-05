@@ -38,9 +38,11 @@ jobs:
     
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --name SubtitleKit \
-          --add-data "src/subtitlekit/ui/locales:subtitlekit/ui/locales" \
-          src/subtitlekit/ui/desktop.py
+        # Create locales if they don't exist in the package
+        mkdir -p src/subtitlekit/ui/locales
+        
+        # Build with spec file for better control
+        pyinstaller SubtitleKit.spec
       shell: bash
     
     - name: Verify executable (Non-Windows)
