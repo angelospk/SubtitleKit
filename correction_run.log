@@ -1,0 +1,27 @@
+Loading files...
+Loaded 1021 subtitles and 89 corrections
+
+✓ ID 101 → Applied at subtitle #100 (offset: -1)
+✓ ID 175 → Applied at subtitle #174 (offset: -1)
+✗ ID 514: NOT FOUND - 'Ποια πηδάς;...'
+✗ ID 651: NOT FOUND - 'Η σκέψη... να μπω σ' ένα άδειο διαμέρισμα είναι
+απ...'
+✗ ID 676: NOT FOUND - 'Ε, μπεργκερά....'
+✓ ID 720 → Applied at subtitle #719 (offset: -1)
+✓ ID 738 → Applied at subtitle #739 (offset: +1)
+✗ ID 818: NOT FOUND - '- Καταπίνουν;
+- Γκέιμπ!...'
+✓ ID 950 → Applied at subtitle #949 (offset: -1)
+✓ ID 979 → Applied at subtitle #974 (offset: -5)
+
+Saving to corrected_greek_fixed_FINAL.srt...
+
+================================================================================
+SUMMARY
+================================================================================
+Total corrections: 89
+✓ Applied: 85
+✗ Not found: 4
+
+Output saved to: corrected_greek_fixed_FINAL.srt
+

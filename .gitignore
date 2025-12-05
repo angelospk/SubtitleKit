@@ -1,0 +1,27 @@
+# Subtitle files (except test fixtures)
+*.srt
+!test_fixtures/*.srt
+
+# Generated JSON files (except test fixtures)
+*.json
+!test_fixtures/*.json
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+old_code_backup/
+
+# Virtual environment
+venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

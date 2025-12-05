@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subtitlekit"
+version = "0.1.0"
+description = "Subtitle processing toolkit: merge, sync, fix overlaps, and apply corrections"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "angelospk", email = "haroldpoigr@gmail.com"}
+]
+keywords = ["subtitles", "srt", "synchronization", "translation", "processing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Text Processing",
+]
+
+dependencies = [
+    "pysrt>=1.1.2",
+    "chardet>=5.0.0",
+    "ffsubsync>=0.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+ui = [
+    "ipywidgets>=8.0.0",  # For Colab UI
+]
+
+[project.urls]
+Homepage = "https://github.com/angelospk/subtitlekit"
+Repository = "https://github.com/angelospk/subtitlekit"
+Issues = "https://github.com/angelospk/subtitlekit/issues"
+
+[project.scripts]
+subtitlekit = "subtitlekit.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+subtitlekit = ["ui/locales/*.json"]
