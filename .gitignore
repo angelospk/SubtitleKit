@@ -18,6 +18,14 @@ old_code_backup/
 
 # Virtual environment
 venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
 
 # IDE files
 .vscode/
