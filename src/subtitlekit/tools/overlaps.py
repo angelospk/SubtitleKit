@@ -183,7 +183,7 @@ def fix_problematic_timings(input_path: str,
     actual_input_path = input_path
     if preprocess:
         print("\n📋 Preprocessing input file...")
-        from srt_preprocessor import preprocess_srt_file
+        from subtitlekit.core.preprocessor import preprocess_srt_file
         
         # Create temp file for preprocessed input
         with tempfile.NamedTemporaryFile(mode='w', suffix='_cleaned.srt', delete=False) as tmp:

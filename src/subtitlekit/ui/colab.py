@@ -42,6 +42,7 @@ def show_ui(lang='en'):
             'label_corrections_file': 'Corrections file:',
             'label_corrections_json': 'Or paste JSON:',
             'label_output': 'Output filename:',
+            'label_postfix': 'Output postfix:',
             'label_window': 'Window size:',
             'button_upload': 'Upload File',
             'button_process': 'Process',
@@ -67,6 +68,7 @@ def show_ui(lang='en'):
             'label_corrections_file': 'Αρχείο διορθώσεων:',
             'label_corrections_json': 'Ή επικόλληση JSON:',
             'label_output': 'Όνομα αρχείου εξόδου:',
+            'label_postfix': 'Κατάληξη εξόδου:',
             'label_window': 'Μέγεθος παραθύρου:',
             'button_upload': 'Ανέβασμα Αρχείου',
             'button_process': 'Επεξεργασία',
@@ -110,23 +112,75 @@ def show_ui(lang='en'):
     # Display title
     display(HTML(f"<h2 style='color: var(--colab-primary-text-color, #202124);'>{t['title']}</h2>"))
     
+    # Shared list of all dropdowns for refreshing
+    all_srt_dropdowns = []
+    all_json_dropdowns = []
+    
+    def refresh_all_dropdowns():
+        """Refresh file options in all dropdowns"""
+        srt_files = [''] + sorted(glob.glob('*.srt'))
+        json_files = [''] + sorted(glob.glob('*.json'))
+        
+        for dropdown in all_srt_dropdowns:
+            current = dropdown.value
+            dropdown.options = srt_files
+            if current in srt_files:
+                dropdown.value = current
+        
+        for dropdown in all_json_dropdowns:
+            current = dropdown.value
+            dropdown.options = json_files
+            if current in json_files:
+                dropdown.value = current
+    
+    def generate_output_filename(input_filename, postfix, extension):
+        """Generate output filename from input with postfix"""
+        if not input_filename:
+            return ''
+        basename = os.path.splitext(input_filename)[0]
+        return f"{basename}{postfix}.{extension}"
+    
     # Helper: File picker widget
-    def create_file_picker(label, file_types='*.srt'):
+    def create_file_picker(label, file_types='*.srt', output_widget=None, postfix_widget=None, extension='srt'):
         """Create a file picker with upload option"""
+        is_json = file_types == '*.json'
+        options = [''] + sorted(glob.glob(file_types))
+        
         dropdown = widgets.Dropdown(
-            options=[''] + sorted(glob.glob(file_types)),
+            options=options,
             description=label,
             style={'description_width': '150px'},
             layout=widgets.Layout(width='500px')
         )
+        
+        # Track dropdown based on type
+        if is_json:
+            all_json_dropdowns.append(dropdown)
+        else:
+            all_srt_dropdowns.append(dropdown)
+        
         upload_btn = widgets.Button(description=t['button_upload'], button_style='info', layout=widgets.Layout(width='120px'))
         upload_status = widgets.HTML(value='')
+        
+        # Auto-update output filename when input changes
+        if output_widget and postfix_widget:
+            def on_input_change(change):
+                if change['new']:
+                    output_widget.value = generate_output_filename(change['new'], postfix_widget.value, extension)
+            dropdown.observe(on_input_change, names='value')
+            
+            def on_postfix_change(change):
+                if dropdown.value:
+                    output_widget.value = generate_output_filename(dropdown.value, change['new'], extension)
+            postfix_widget.observe(on_postfix_change, names='value')
         
         def on_upload(b):
             uploaded = files.upload()
             if uploaded:
                 filename = list(uploaded.keys())[0]
-                dropdown.options = [''] + sorted(glob.glob(file_types))
+                # Refresh ALL dropdowns so uploaded files appear everywhere
+                refresh_all_dropdowns()
+                # Set value on current dropdown
                 dropdown.value = filename
                 upload_status.value = f'✅ {filename}'
         
@@ -137,14 +191,20 @@ def show_ui(lang='en'):
     tab = widgets.Tab()
     
     # ===== MERGE TAB =====
-    merge_original_box, merge_original = create_file_picker(t['label_original'])
-    merge_helpers_box, merge_helpers = create_file_picker(t['label_helper'])
+    merge_postfix = widgets.Text(
+        value='_merged',
+        description=t['label_postfix'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='300px')
+    )
     merge_output = widgets.Text(
         value='merged_output.json',
         description=t['label_output'],
         style={'description_width': '150px'},
         layout=widgets.Layout(width='500px')
     )
+    merge_original_box, merge_original = create_file_picker(t['label_original'], output_widget=merge_output, postfix_widget=merge_postfix, extension='json')
+    merge_helpers_box, merge_helpers = create_file_picker(t['label_helper'])
     merge_skip_sync = widgets.Checkbox(description=t['checkbox_skip_sync'], value=False)
     merge_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     merge_button = widgets.Button(description=t['button_process'], button_style='primary')
@@ -185,10 +245,13 @@ def show_ui(lang='en'):
     
     merge_button.on_click(on_merge_click)
     
+    # Output filename row with postfix
+    merge_output_row = widgets.HBox([merge_output, merge_postfix])
+    
     merge_tab = widgets.VBox([
         merge_original_box,
         merge_helpers_box,
-        merge_output,
+        merge_output_row,
         merge_skip_sync,
         merge_auto_dl,
         merge_button,
@@ -196,14 +259,20 @@ def show_ui(lang='en'):
     ], layout=widgets.Layout(padding='10px'))
     
     # ===== OVERLAPS TAB =====
-    overlaps_input_box, overlaps_input = create_file_picker(t['label_input'])
-    overlaps_reference_box, overlaps_reference = create_file_picker(t['label_reference'])
+    overlaps_postfix = widgets.Text(
+        value='_fixed',
+        description=t['label_postfix'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='300px')
+    )
     overlaps_output = widgets.Text(
         value='fixed_overlaps.srt',
         description=t['label_output'],
         style={'description_width': '150px'},
         layout=widgets.Layout(width='500px')
     )
+    overlaps_input_box, overlaps_input = create_file_picker(t['label_input'], output_widget=overlaps_output, postfix_widget=overlaps_postfix, extension='srt')
+    overlaps_reference_box, overlaps_reference = create_file_picker(t['label_reference'])
     overlaps_window = widgets.IntSlider(
         description=t['label_window'],
         min=1, max=20, value=5,
@@ -250,10 +319,13 @@ def show_ui(lang='en'):
     
     overlaps_button.on_click(on_overlaps_click)
     
+    # Output filename row with postfix
+    overlaps_output_row = widgets.HBox([overlaps_output, overlaps_postfix])
+    
     overlaps_tab = widgets.VBox([
         overlaps_input_box,
         overlaps_reference_box,
-        overlaps_output,
+        overlaps_output_row,
         overlaps_window,
         overlaps_preprocess,
         overlaps_auto_dl,
@@ -262,7 +334,19 @@ def show_ui(lang='en'):
     ], layout=widgets.Layout(padding='10px'))
     
     # ===== CORRECTIONS TAB =====
-    corrections_input_box, corrections_input = create_file_picker(t['label_input'])
+    corrections_postfix = widgets.Text(
+        value='_corrected',
+        description=t['label_postfix'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='300px')
+    )
+    corrections_output = widgets.Text(
+        value='corrected.srt',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    corrections_input_box, corrections_input = create_file_picker(t['label_input'], output_widget=corrections_output, postfix_widget=corrections_postfix, extension='srt')
     
     # JSON file OR paste
     corrections_file_box, corrections_file = create_file_picker(t['label_corrections_file'], '*.json')
@@ -273,12 +357,6 @@ def show_ui(lang='en'):
         layout=widgets.Layout(width='500px', height='100px')
     )
     
-    corrections_output = widgets.Text(
-        value='corrected.srt',
-        description=t['label_output'],
-        style={'description_width': '150px'},
-        layout=widgets.Layout(width='500px')
-    )
     corrections_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     corrections_button = widgets.Button(description=t['button_process'], button_style='primary')
     corrections_output_area = widgets.Output()
@@ -343,11 +421,14 @@ def show_ui(lang='en'):
     
     corrections_button.on_click(on_corrections_click)
     
+    # Output filename row with postfix
+    corrections_output_row = widgets.HBox([corrections_output, corrections_postfix])
+    
     corrections_tab = widgets.VBox([
         corrections_input_box,
         corrections_file_box,
         corrections_json,
-        corrections_output,
+        corrections_output_row,
         corrections_auto_dl,
         corrections_button,
         corrections_output_area
@@ -370,6 +451,7 @@ def show_ui(lang='en'):
                 border-radius: 5px; border-left: 4px solid #1a73e8;">
         <b>💡 Tip:</b> Use the file browser (left) or Upload buttons to add files. 
         Files already in /content/ will appear in the dropdown menus.
+        Uploaded files will automatically appear in all tabs.
     </div>
     """))
 
