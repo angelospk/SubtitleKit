@@ -134,6 +134,70 @@ def find_matching_entry(original: pysrt.SubRipItem,
     return None
 
 
+def find_all_matching_entries(original: pysrt.SubRipItem, 
+                              helpers: List[pysrt.SubRipItem],
+                              min_overlap: float = 0.1) -> List[pysrt.SubRipItem]:
+    """
+    Find ALL helper subtitle entries that overlap with the original entry.
+    
+    This collects all helpers that have temporal overlap with the original,
+    sorted by their start time.
+    
+    Args:
+        original: Original subtitle entry
+        helpers: List of helper subtitle entries
+        min_overlap: Minimum overlap in seconds to consider a match
+        
+    Returns:
+        List of matching helper entries, sorted by start time
+    """
+    matches = []
+    
+    for helper in helpers:
+        overlap = calculate_overlap(
+            original.start, original.end,
+            helper.start, helper.end
+        )
+        
+        if overlap > min_overlap:
+            matches.append((helper.start.ordinal, helper, overlap))
+    
+    # Sort by start time
+    matches.sort(key=lambda x: x[0])
+    
+    # Return just the entries
+    return [m[1] for m in matches]
+
+
+def combine_helper_texts(entries: List[pysrt.SubRipItem]) -> str:
+    """
+    Combine text from multiple helper entries into one string.
+    
+    Removes duplicate lines and preserves order.
+    
+    Args:
+        entries: List of helper subtitle entries
+        
+    Returns:
+        Combined text with duplicates removed
+    """
+    if not entries:
+        return ""
+    
+    seen_lines = set()
+    result_lines = []
+    
+    for entry in entries:
+        # Split by newlines and add unique lines
+        for line in entry.text.split('\n'):
+            line_clean = line.strip()
+            if line_clean and line_clean not in seen_lines:
+                seen_lines.add(line_clean)
+                result_lines.append(line)
+    
+    return '\n'.join(result_lines)
+
+
 def format_timing(start, end) -> str:
     """
     Format timing in SRT format.
@@ -287,18 +351,28 @@ def process_subtitles(original_path: str, helper_paths: List[str],
     for original_entry in original_subs:
         helper_texts = []
         
-        # Find matching helper entry from each helper file
+        # Find ALL matching helper entries from each helper file
         for helper_idx, helper_subs in enumerate(all_helper_subs):
-            matched_helper = find_matching_entry(original_entry, helper_subs)
-            helper_text = matched_helper.text if matched_helper else ""
+            matched_helpers = find_all_matching_entries(original_entry, helper_subs)
+            
+            # Combine all matching helper texts
+            helper_text = combine_helper_texts(matched_helpers)
             helper_texts.append(helper_text)
             
             # Track which helper entries were matched
-            if matched_helper:
+            for matched_helper in matched_helpers:
                 matched_helper_indices[helper_idx].add(matched_helper.index)
         
         # Create JSON entry
         json_entry = create_json_entry(original_entry, helper_texts)
+        
+        # Calculate and add CPS
+        try:
+            from subtitlekit.tools.reading_speed import calculate_entry_cps
+            json_entry['cps'] = round(calculate_entry_cps(json_entry), 1)
+        except ImportError:
+            pass  # reading_speed module not available
+        
         # Store with start time for sorting
         all_entries.append((original_entry.start.ordinal, json_entry))
     
@@ -329,6 +403,7 @@ def process_subtitles(original_path: str, helper_paths: List[str],
         results.append(entry)
     
     return results
+
 
 
 if __name__ == "__main__":

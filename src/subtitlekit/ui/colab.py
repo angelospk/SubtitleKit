@@ -5,11 +5,12 @@ This module provides a Jupyter/Colab-friendly interface for subtitle processing
 with file pickers, JSON paste, and better dark mode support.
 """
 import ipywidgets as widgets
-from IPython.display import display, HTML
+from IPython.display import display, HTML, Javascript
 from google.colab import files
 import json
 import os
 import glob
+import shutil
 
 
 def show_ui(lang='en'):
@@ -28,6 +29,15 @@ def show_ui(lang='en'):
         print("⚠️ Could not import subtitlekit. Make sure it's installed: pip install subtitlekit")
         return
     
+    # Try to import optional apply_annotations
+    try:
+        from subtitlekit.tools.apply_annotations import (
+            load_json, apply_annotations_to_entries, entries_to_srt
+        )
+        has_annotations = True
+    except ImportError:
+        has_annotations = False
+    
     # Translations
     translations = {
         'en': {
@@ -35,52 +45,66 @@ def show_ui(lang='en'):
             'tab_merge': 'Merge Subtitles',
             'tab_overlaps': 'Fix Overlaps',
             'tab_corrections': 'Apply Corrections',
+            'tab_annotations': 'Apply Annotations',
             'label_original': 'Original subtitle:',
             'label_helper': 'Helper subtitles (comma-separated):',
             'label_input': 'Input subtitle:',
             'label_reference': 'Reference subtitle:',
             'label_corrections_file': 'Corrections file:',
             'label_corrections_json': 'Or paste JSON:',
+            'label_json_data': 'Merged JSON file:',
+            'label_annotations_file': 'Annotations JSON:',
+            'label_annotations_json': 'Or paste annotations:',
             'label_output': 'Output filename:',
             'label_postfix': 'Output postfix:',
             'label_window': 'Window size:',
-            'button_upload': 'Upload File',
+            'button_upload': '📁 Upload',
             'button_process': 'Process',
+            'button_reset': '🗑️ Clear All Files',
             'checkbox_skip_sync': 'Skip synchronization',
             'checkbox_preprocess': 'Preprocess input',
             'checkbox_auto_download': 'Auto-download result',
+            'checkbox_lenient': 'Lenient matching (ignore timing mismatch)',
             'status_upload': 'Click Upload to select file',
             'status_processing': '⏳ Processing...',
             'status_success': '✅ Success!',
             'status_error': '❌ Error: ',
             'msg_no_files': 'Please select or upload files first',
             'msg_json_error': '❌ JSON parse error: ',
+            'msg_reset': '🗑️ All files cleared!',
         },
         'el': {
             'title': '📝 SubtitleKit - Επεξεργασία Υποτίτλων',
             'tab_merge': 'Ένωση Υποτίτλων',
             'tab_overlaps': 'Διόρθωση Χρονισμών',
             'tab_corrections': 'Εφαρμογή Διορθώσεων',
+            'tab_annotations': 'Εφαρμογή Annotations',
             'label_original': 'Αρχικός υπότιτλος:',
             'label_helper': 'Βοηθητικοί υπότιτλοι (με κόμμα):',
             'label_input': 'Υπότιτλος εισόδου:',
             'label_reference': 'Υπότιτλος αναφοράς:',
             'label_corrections_file': 'Αρχείο διορθώσεων:',
             'label_corrections_json': 'Ή επικόλληση JSON:',
+            'label_json_data': 'Merged JSON αρχείο:',
+            'label_annotations_file': 'Annotations JSON:',
+            'label_annotations_json': 'Ή επικόλληση annotations:',
             'label_output': 'Όνομα αρχείου εξόδου:',
             'label_postfix': 'Κατάληξη εξόδου:',
             'label_window': 'Μέγεθος παραθύρου:',
-            'button_upload': 'Ανέβασμα Αρχείου',
+            'button_upload': '📁 Ανέβασμα',
             'button_process': 'Επεξεργασία',
+            'button_reset': '🗑️ Καθαρισμός Αρχείων',
             'checkbox_skip_sync': 'Παράλειψη συγχρονισμού',
             'checkbox_preprocess': 'Προεπεξεργασία',
             'checkbox_auto_download': 'Αυτόματο κατέβασμα',
+            'checkbox_lenient': 'Χαλαρό ταίριασμα (αγνόησε timing)',
             'status_upload': 'Κλικ για ανέβασμα',
             'status_processing': '⏳ Επεξεργασία...',
             'status_success': '✅ Επιτυχία!',
             'status_error': '❌ Σφάλμα: ',
             'msg_no_files': 'Παρακαλώ επιλέξτε ή ανεβάστε αρχεία',
             'msg_json_error': '❌ Σφάλμα JSON: ',
+            'msg_reset': '🗑️ Όλα τα αρχεία διαγράφηκαν!',
         }
     }
     
@@ -100,12 +124,17 @@ def show_ui(lang='en'):
         color: white !important;
         border: none !important;
     }
+    .widget-button.danger {
+        background-color: #ea4335 !important;
+    }
     .output_area { 
         background-color: var(--colab-secondary-surface-color, #f8f9fa) !important;
         color: var(--colab-primary-text-color, #202124) !important;
         padding: 10px !important;
         border-radius: 4px !important;
     }
+    /* Hide the extra upload text that colab adds */
+    .p-Widget.jupyter-widgets.widget-upload > .widget-label { display: none !important; }
     </style>
     """))
     
@@ -115,6 +144,9 @@ def show_ui(lang='en'):
     # Shared list of all dropdowns for refreshing
     all_srt_dropdowns = []
     all_json_dropdowns = []
+    
+    # Global output area for reset messages
+    global_output = widgets.Output()
     
     def refresh_all_dropdowns():
         """Refresh file options in all dropdowns"""
@@ -140,9 +172,14 @@ def show_ui(lang='en'):
         basename = os.path.splitext(input_filename)[0]
         return f"{basename}{postfix}.{extension}"
     
-    # Helper: File picker widget
+    def save_and_download(filepath, auto_download):
+        """Save file locally and optionally download (only once)"""
+        if auto_download and os.path.exists(filepath):
+            files.download(filepath)
+    
+    # Helper: File picker widget with direct upload
     def create_file_picker(label, file_types='*.srt', output_widget=None, postfix_widget=None, extension='srt'):
-        """Create a file picker with upload option"""
+        """Create a file picker with direct upload button"""
         is_json = file_types == '*.json'
         options = [''] + sorted(glob.glob(file_types))
         
@@ -150,7 +187,7 @@ def show_ui(lang='en'):
             options=options,
             description=label,
             style={'description_width': '150px'},
-            layout=widgets.Layout(width='500px')
+            layout=widgets.Layout(width='450px')
         )
         
         # Track dropdown based on type
@@ -159,7 +196,15 @@ def show_ui(lang='en'):
         else:
             all_srt_dropdowns.append(dropdown)
         
-        upload_btn = widgets.Button(description=t['button_upload'], button_style='info', layout=widgets.Layout(width='120px'))
+        # Use FileUpload widget for direct file dialog
+        upload_widget = widgets.FileUpload(
+            accept='.srt' if not is_json else '.json',
+            multiple=False,
+            description=t['button_upload'],
+            button_style='info',
+            layout=widgets.Layout(width='120px')
+        )
+        
         upload_status = widgets.HTML(value='')
         
         # Auto-update output filename when input changes
@@ -174,18 +219,45 @@ def show_ui(lang='en'):
                     output_widget.value = generate_output_filename(dropdown.value, change['new'], extension)
             postfix_widget.observe(on_postfix_change, names='value')
         
-        def on_upload(b):
-            uploaded = files.upload()
-            if uploaded:
-                filename = list(uploaded.keys())[0]
-                # Refresh ALL dropdowns so uploaded files appear everywhere
-                refresh_all_dropdowns()
-                # Set value on current dropdown
-                dropdown.value = filename
-                upload_status.value = f'✅ {filename}'
+        def on_upload_change(change):
+            """Handle file upload directly"""
+            if change['new']:
+                for filename, file_info in change['new'].items():
+                    # Save file locally
+                    content = file_info['content']
+                    with open(filename, 'wb') as f:
+                        f.write(content)
+                    
+                    # Refresh ALL dropdowns
+                    refresh_all_dropdowns()
+                    # Set value on current dropdown
+                    dropdown.value = filename
+                    upload_status.value = f'✅ {filename}'
+                    break
         
-        upload_btn.on_click(on_upload)
-        return widgets.HBox([dropdown, upload_btn, upload_status]), dropdown
+        upload_widget.observe(on_upload_change, names='value')
+        return widgets.HBox([dropdown, upload_widget, upload_status]), dropdown
+    
+    # Reset button
+    reset_button = widgets.Button(
+        description=t['button_reset'], 
+        button_style='danger',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    def on_reset_click(b):
+        with global_output:
+            global_output.clear_output()
+            # Delete all .srt and .json files in current directory
+            for f in glob.glob('*.srt') + glob.glob('*.json'):
+                try:
+                    os.remove(f)
+                except:
+                    pass
+            refresh_all_dropdowns()
+            print(t['msg_reset'])
+    
+    reset_button.on_click(on_reset_click)
     
     # Create tabs
     tab = widgets.Tab()
@@ -227,18 +299,20 @@ def show_ui(lang='en'):
                 # Process
                 results = process_subtitles(original, helpers, skip_sync=merge_skip_sync.value)
                 
-                # Save
+                # Save locally
                 with open(output, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 
                 print(f"{t['status_success']}")
-                print(f"📁 {output}")
+                print(f"📁 Saved: {output}")
                 print(f"📊 {len(results)} entries")
                 
-                # Auto download
+                # Refresh dropdowns so new file appears
+                refresh_all_dropdowns()
+                
+                # Download if requested (only once)
                 if merge_auto_dl.value:
                     files.download(output)
-                    print(f"⬇️ Downloaded!")
                 
             except Exception as e:
                 print(f"{t['status_error']}{e}")
@@ -307,12 +381,14 @@ def show_ui(lang='en'):
                 )
                 
                 print(f"{t['status_success']}")
-                print(f"📁 {output}")
+                print(f"📁 Saved: {output}")
                 
-                # Auto download
+                # Refresh dropdowns
+                refresh_all_dropdowns()
+                
+                # Download if requested (only once)
                 if overlaps_auto_dl.value:
                     files.download(output)
-                    print(f"⬇️ Downloaded!")
                 
             except Exception as e:
                 print(f"{t['status_error']}{e}")
@@ -404,13 +480,15 @@ def show_ui(lang='en'):
                 )
                 
                 print(f"{t['status_success']}")
-                print(f"📁 {output}")
+                print(f"📁 Saved: {output}")
                 print(f"📊 {stats['applied']}/{stats['total']} corrections applied")
                 
-                # Auto download
+                # Refresh dropdowns
+                refresh_all_dropdowns()
+                
+                # Download if requested (only once)
                 if corrections_auto_dl.value:
                     files.download(output)
-                    print(f"⬇️ Downloaded!")
                 
                 # Cleanup temp file
                 if corrections_json.value.strip() and os.path.exists('_temp_corrections.json'):
@@ -434,13 +512,128 @@ def show_ui(lang='en'):
         corrections_output_area
     ], layout=widgets.Layout(padding='10px'))
     
-    # Add tabs
-    tab.children = [merge_tab, overlaps_tab, corrections_tab]
-    tab.set_title(0, t['tab_merge'])
-    tab.set_title(1, t['tab_overlaps'])
-    tab.set_title(2, t['tab_corrections'])
+    # ===== ANNOTATIONS TAB =====
+    annotations_postfix = widgets.Text(
+        value='_annotated',
+        description=t['label_postfix'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='300px')
+    )
+    annotations_output = widgets.Text(
+        value='annotated.srt',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    annotations_json_box, annotations_json_file = create_file_picker(
+        t['label_json_data'], '*.json', 
+        output_widget=annotations_output, postfix_widget=annotations_postfix, extension='srt'
+    )
+    annotations_file_box, annotations_file = create_file_picker(t['label_annotations_file'], '*.json')
+    annotations_paste = widgets.Textarea(
+        description=t['label_annotations_json'],
+        placeholder='[{"id": 1, "t": "00:00:01,000 --> 00:00:02,000", "note": "{M} male speaker"}]',
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px', height='100px')
+    )
+    annotations_lenient = widgets.Checkbox(description=t['checkbox_lenient'], value=False)
+    annotations_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
+    annotations_button = widgets.Button(description=t['button_process'], button_style='primary')
+    annotations_output_area = widgets.Output()
     
-    # Display
+    def on_annotations_click(b):
+        with annotations_output_area:
+            annotations_output_area.clear_output()
+            
+            if not has_annotations:
+                print("❌ apply_annotations module not available. Update subtitlekit.")
+                return
+            
+            print(t['status_processing'])
+            
+            try:
+                json_data_file = annotations_json_file.value.strip()
+                output = annotations_output.value.strip() or 'annotated.srt'
+                
+                if not json_data_file:
+                    print(t['msg_no_files'])
+                    return
+                
+                # Load JSON data
+                entries = load_json(json_data_file)
+                
+                # Get annotations from file OR paste
+                if annotations_paste.value.strip():
+                    try:
+                        annotations = json.loads(annotations_paste.value)
+                    except json.JSONDecodeError as e:
+                        print(f"{t['msg_json_error']}{e}")
+                        return
+                else:
+                    ann_file = annotations_file.value.strip()
+                    if not ann_file:
+                        print(t['msg_no_files'])
+                        return
+                    annotations = load_json(ann_file)
+                
+                # Apply annotations
+                modified_entries, stats = apply_annotations_to_entries(
+                    entries, annotations, strict=not annotations_lenient.value
+                )
+                
+                # Convert to SRT
+                srt_content = entries_to_srt(modified_entries)
+                with open(output, 'w', encoding='utf-8') as f:
+                    f.write(srt_content)
+                
+                print(f"{t['status_success']}")
+                print(f"📁 Saved: {output}")
+                print(f"✓ Matched: {stats['matched']}/{len(annotations)}")
+                
+                if stats['mismatched']:
+                    print(f"⚠ Mismatched: {len(stats['mismatched'])}")
+                
+                # Refresh dropdowns
+                refresh_all_dropdowns()
+                
+                # Download if requested (only once)
+                if annotations_auto_dl.value:
+                    files.download(output)
+                
+            except Exception as e:
+                print(f"{t['status_error']}{e}")
+    
+    annotations_button.on_click(on_annotations_click)
+    
+    # Output filename row with postfix
+    annotations_output_row = widgets.HBox([annotations_output, annotations_postfix])
+    
+    annotations_tab = widgets.VBox([
+        annotations_json_box,
+        annotations_file_box,
+        annotations_paste,
+        annotations_output_row,
+        annotations_lenient,
+        annotations_auto_dl,
+        annotations_button,
+        annotations_output_area
+    ], layout=widgets.Layout(padding='10px'))
+    
+    # Add tabs
+    if has_annotations:
+        tab.children = [merge_tab, overlaps_tab, corrections_tab, annotations_tab]
+        tab.set_title(0, t['tab_merge'])
+        tab.set_title(1, t['tab_overlaps'])
+        tab.set_title(2, t['tab_corrections'])
+        tab.set_title(3, t['tab_annotations'])
+    else:
+        tab.children = [merge_tab, overlaps_tab, corrections_tab]
+        tab.set_title(0, t['tab_merge'])
+        tab.set_title(1, t['tab_overlaps'])
+        tab.set_title(2, t['tab_corrections'])
+    
+    # Display reset button and tabs
+    display(widgets.HBox([reset_button, global_output]))
     display(tab)
     
     # Add usage hint
@@ -449,9 +642,10 @@ def show_ui(lang='en'):
                 background-color: var(--colab-highlighted-surface-color, #e8f0fe); 
                 color: var(--colab-primary-text-color, #202124);
                 border-radius: 5px; border-left: 4px solid #1a73e8;">
-        <b>💡 Tip:</b> Use the file browser (left) or Upload buttons to add files. 
-        Files already in /content/ will appear in the dropdown menus.
-        Uploaded files will automatically appear in all tabs.
+        <b>💡 Tips:</b><br>
+        • Click the blue "📁 Upload" button to select a file directly<br>
+        • Files are saved locally and appear in all tabs<br>
+        • Use "🗑️ Clear All Files" to reset and start fresh
     </div>
     """))
 
