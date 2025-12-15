@@ -13,6 +13,23 @@ from pathlib import Path
 from subtitlekit.core.encoding import read_srt_with_fallback
 
 
+def remove_annotations(text):
+    """
+    Remove {annotation} patterns from subtitle text.
+    
+    These are speaker/context annotations added in previous steps that
+    AI sometimes accidentally rewrites. We remove them before processing.
+    
+    Args:
+        text: Subtitle text that may contain {annotations}
+        
+    Returns:
+        Text with all {annotations} removed
+    """
+    # Remove {anything} followed by optional whitespace
+    return re.sub(r'\{[^}]+\}\s*', '', text)
+
+
 def extract_text_signature(sub: pysrt.SubRipItem) -> str:
     """
     Extract a simplified text signature for matching.
@@ -200,6 +217,18 @@ def fix_problematic_timings(input_path: str,
     print(f"Loading input: {Path(actual_input_path).name}")
     input_content = read_srt_with_fallback(actual_input_path)
     input_subs = pysrt.from_string(input_content)
+    
+    # Clean annotations from input subtitles
+    annotation_count = 0
+    for subtitle in input_subs:
+        original_text = subtitle.text
+        cleaned_text = remove_annotations(original_text)
+        if cleaned_text != original_text:
+            annotation_count += 1
+            subtitle.text = cleaned_text
+    
+    if annotation_count > 0:
+        print(f"Removed annotations from {annotation_count} subtitles")
     
     print(f"Loading reference: {reference_path}")
     ref_content = read_srt_with_fallback(reference_path)

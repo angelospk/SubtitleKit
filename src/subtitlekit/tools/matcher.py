@@ -310,23 +310,86 @@ def create_extra_entry(entry: pysrt.SubRipItem, helper_text: str, entry_id: str)
     }
 
 
-def process_subtitles(original_path: str, helper_paths: List[str], 
-                     skip_sync: bool = False) -> List[Dict[str, Any]]:
+def process_subtitles(original_path: str, helper_paths: Optional[List[str]] = None, 
+                     skip_sync: bool = False, save_preprocessed: bool = True) -> Dict[str, Any]:
     """
-    Main processing function: sync, match, and create JSON output.
+    Main processing function: preprocess, sync, match, and create JSON output.
     
     Args:
         original_path: Path to original subtitle file
-        helper_paths: List of paths to helper subtitle files
+        helper_paths: Optional list of paths to helper subtitle files. If None or empty,
+                     runs in standalone mode (preprocessing only)
         skip_sync: If True, skip ffsubsync (for testing)
+        save_preprocessed: If True, save preprocessed original to file
         
     Returns:
-        List of JSON entries with matched subtitles, plus extra entries for unmatched all-caps,
-        sorted chronologically with sequential IDs
+        Dictionary with:
+        - 'entries': List of JSON entries with matched subtitles
+        - 'preprocessing': Dictionary with preprocessing statistics
+        - 'preprocessed_path': Path to preprocessed SRT file (if saved)
     """
-    # Parse original subtitles
-    original_subs = parse_subtitle_file(original_path)
+    from subtitlekit.core.cleaner import clean_subtitle_file
+    import os
     
+    # Preprocess original subtitle file
+    print("Preprocessing original subtitle...")
+    preprocessed_path = clean_subtitle_file(original_path)
+    
+    # Save preprocessed file if requested
+    saved_preprocessed_path = None
+    if save_preprocessed:
+        # Save with _preprocessed suffix
+        orig_path = Path(original_path)
+        saved_preprocessed_path = str(orig_path.parent / f"{orig_path.stem}_preprocessed.srt")
+        
+        # Copy temp file to permanent location
+        import shutil
+        shutil.copy(preprocessed_path, saved_preprocessed_path)
+        print(f"Saved preprocessed file to: {saved_preprocessed_path}")
+    
+    # Parse preprocessed subtitles
+    original_subs = parse_subtitle_file(preprocessed_path)
+    
+    # Track preprocessing changes
+    preprocessing_stats = {
+        "total_entries": len(original_subs),
+        "preprocessed": True
+    }
+    
+    # Standalone mode: no helpers provided
+    if not helper_paths or len(helper_paths) == 0:
+        print("Running in standalone mode (no helper subtitles)")
+        
+        # Create JSON entries from preprocessed original only
+        entries = []
+        for entry in original_subs:
+            json_entry = {
+                "id": entry.index,
+                "t": format_timing(entry.start, entry.end),
+                "trans": entry.text
+            }
+            
+            # Calculate and add CPS
+            try:
+                from subtitlekit.tools.reading_speed import calculate_entry_cps
+                json_entry['cps'] = round(calculate_entry_cps(json_entry), 1)
+            except ImportError:
+                pass
+            
+            entries.append(json_entry)
+        
+        result = {
+            "entries": entries,
+            "preprocessing": preprocessing_stats
+        }
+        
+        if saved_preprocessed_path:
+            result["preprocessed_path"] = saved_preprocessed_path
+        
+        return result
+    
+    
+    # Helper mode: process with helper subtitles
     # Process each helper file
     all_helper_subs = []
     matched_helper_indices = []  # Track which helpers were matched
@@ -397,12 +460,20 @@ def process_subtitles(original_path: str, helper_paths: List[str],
     all_entries.sort(key=lambda x: x[0])
     
     # Re-number all entries sequentially starting from 1
-    results = []
+    entries = []
     for idx, (_, entry) in enumerate(all_entries, start=1):
         entry['id'] = idx
-        results.append(entry)
+        entries.append(entry)
     
-    return results
+    result = {
+        "entries": entries,
+        "preprocessing": preprocessing_stats
+    }
+    
+    if saved_preprocessed_path:
+        result["preprocessed_path"] = saved_preprocessed_path
+    
+    return result
 
 
 

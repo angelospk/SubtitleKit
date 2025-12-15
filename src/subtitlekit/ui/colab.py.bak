@@ -282,6 +282,7 @@ def show_ui(lang='en'):
     merge_button = widgets.Button(description=t['button_process'], button_style='primary')
     merge_output_area = widgets.Output()
     
+    merge_button.on_click(on_merge_click)
     
     def on_merge_click(b):
         with merge_output_area:

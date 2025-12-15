@@ -29,6 +29,60 @@ def is_dialogue_subtitle(text_lines):
     return dash_count >= 2
 
 
+def remove_extraneous_dashes(text_lines):
+    """
+    Remove extraneous dashes from beginning/end of lines when NOT dialogue.
+    
+    Removes:
+    - "- " (dash + space) at line start/end
+    - "-" (dash without space) at line start/end
+    
+    Only when NOT a dialogue subtitle (dialogue detected by 2+ lines starting with '-').
+    
+    Args:
+        text_lines: List of text lines
+        
+    Returns:
+        Cleaned list of text lines
+    """
+    if not text_lines:
+        return text_lines
+    
+    # Don't touch dialogue subtitles
+    if is_dialogue_subtitle(text_lines):
+        return text_lines
+    
+    cleaned_lines = []
+    
+    for line in text_lines:
+        cleaned = line
+        
+        # Remove leading "- " (dash + space)
+        if cleaned.lstrip().startswith('- '):
+            # Preserve leading whitespace
+            leading_space = len(cleaned) - len(cleaned.lstrip())
+            cleaned = cleaned[:leading_space] + cleaned.lstrip()[2:]
+        
+        # Remove leading "-" (dash without space) if followed by non-dash character
+        elif cleaned.lstrip().startswith('-') and len(cleaned.lstrip()) > 1 and cleaned.lstrip()[1] != '-':
+            leading_space = len(cleaned) - len(cleaned.lstrip())
+            cleaned = cleaned[:leading_space] + cleaned.lstrip()[1:]
+        
+        # Remove trailing "- " (dash + space)
+        if cleaned.rstrip().endswith(' -'):
+            trailing_space_count = len(cleaned) - len(cleaned.rstrip())
+            cleaned = cleaned.rstrip()[:-2] + cleaned[len(cleaned.rstrip()):]
+        
+        # Remove trailing "-" (dash without space) if preceded by non-dash character
+        elif cleaned.rstrip().endswith('-') and len(cleaned.rstrip()) > 1 and cleaned.rstrip()[-2] != '-':
+            trailing_space_count = len(cleaned) - len(cleaned.rstrip())
+            cleaned = cleaned.rstrip()[:-1] + cleaned[len(cleaned.rstrip()):]
+        
+        cleaned_lines.append(cleaned.strip() if cleaned.strip() else line)
+    
+    return cleaned_lines
+
+
 def clean_hyphen_line_breaks(text_lines):
     """
     Remove hyphens at line breaks when they represent continuation, not dialogue.
@@ -131,6 +185,9 @@ def clean_subtitle_file(input_path):
     for sub in subs:
         # Get text lines
         text_lines = sub.text.split('\n')
+        
+        # Remove extraneous dashes (but preserve dialogue dashes)
+        text_lines = remove_extraneous_dashes(text_lines)
         
         # Clean hyphen line breaks
         text_lines = clean_hyphen_line_breaks(text_lines)

@@ -6,6 +6,24 @@ Smart subtitle correction with fuzzy matching preserving original newlines
 import json
 import pysrt
 import difflib
+import re
+
+
+def remove_annotations(text):
+    """
+    Remove {annotation} patterns from subtitle text.
+    
+    These are speaker/context annotations added in previous steps that
+    AI sometimes accidentally rewrites. We remove them before correction.
+    
+    Args:
+        text: Subtitle text that may contain {annotations}
+        
+    Returns:
+        Text with all {annotations} removed
+    """
+    # Remove {anything} followed by optional whitespace
+    return re.sub(r'\{[^}]+\}\s*', '', text)
 
 def normalize_for_comparison(text):
     """Normalize text for comparison by removing newline variations."""
@@ -173,6 +191,18 @@ def apply_corrections_from_file(input_file, corrections_file, output_file, verbo
     
     with open(corrections_file, 'r', encoding='utf-8') as f:
         corrections = json.load(f)
+    
+    # Clean annotations from all subtitles first
+    annotation_count = 0
+    for subtitle in subs:
+        original_text = subtitle.text
+        cleaned_text = remove_annotations(original_text)
+        if cleaned_text != original_text:
+            annotation_count += 1
+            subtitle.text = cleaned_text
+    
+    if verbose and annotation_count > 0:
+        print(f"Removed annotations from {annotation_count} subtitles\n")
     
     if verbose:
         print(f"Loaded {len(subs)} subtitles and {len(corrections)} corrections\n")
