@@ -23,7 +23,7 @@ def test_pipeline_all_local_phases():
     # Combined: 61 chars / 2.1s = 29.0 CPS. (Wait, still > 25)
     # Target: 30.0 CPS.
     subs = pysrt.SubRipFile([
-        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Uh, this is a very long and fast subtitle segment."),
+        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Uh, this is a very long and fast subtitle segment"),
         pysrt.SubRipItem(index=2, start='00:00:02,100', end='00:00:03,100', text="Short.")
     ])
     

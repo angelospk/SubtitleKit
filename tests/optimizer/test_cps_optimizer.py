@@ -30,7 +30,7 @@ def test_optimize_cps_merge():
     # 24.19 <= 25.0 (True)
     # 24.19 < 34.6 (True)
     subs = pysrt.SubRipFile([
-        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,500', text="This is a relatively long subtitle for a short time."),
+        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,500', text="This is a relatively long subtitle for a short time"),
         pysrt.SubRipItem(index=2, start='00:00:02,600', end='00:00:04,100', text="And another short one.")
     ])
     
@@ -40,3 +40,18 @@ def test_optimize_cps_merge():
     assert len(optimized) == 1
     assert "relatively long" in optimized[0].text
     assert "short one" in optimized[0].text
+
+def test_optimize_cps_no_merge_sentence_boundary():
+    # Even if CPS would improve, we shouldn't merge across a sentence boundary.
+    subs = pysrt.SubRipFile([
+        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,500', text="This is a long sentence ending with a dot."),
+        pysrt.SubRipItem(index=2, start='00:00:02,600', end='00:00:04,100', text="And this is another sentence.")
+    ])
+    
+    options = OptimizationOptions(cps_optimization=True, cps_target=25.0, max_chars=90, max_lines=2, max_duration=7.0)
+    optimized = optimize_cps(subs, options)
+    
+    # Should stay as 2 subtitles because of the '.'
+    assert len(optimized) == 2
+    assert "dot." in optimized[0].text
+    assert "another" in optimized[1].text

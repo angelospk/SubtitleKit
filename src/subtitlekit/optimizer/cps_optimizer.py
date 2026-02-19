@@ -56,6 +56,11 @@ def can_merge(
     options: OptimizationOptions
 ) -> bool:
     """Check if two subtitles can be merged."""
+    # Prevent merging if sub1 ends a sentence/thought (ends with . ! or ?)
+    strip_text = sub1.text.strip()
+    if strip_text and strip_text[-1] in ('.', '!', '?'):
+        return False
+
     # Check combined char count
     combined_text = f"{sub1.text}\n{sub2.text}"
     # Strip HTML for counting if needed, but pysrt handles it or we use reading_speed helpers
