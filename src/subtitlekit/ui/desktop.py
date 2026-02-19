@@ -80,6 +80,8 @@ class SubtitleKitApp:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label=self.i18n.t('menu_file'), menu=file_menu)
+        file_menu.add_command(label=self.i18n.t('menu_settings'), command=self.show_settings)
+        file_menu.add_separator()
         file_menu.add_command(label=self.i18n.t('menu_exit'), command=self.root.quit)
         
         # Help menu
@@ -97,15 +99,18 @@ class SubtitleKitApp:
         self.merge_frame = ttk.Frame(self.notebook)
         self.overlaps_frame = ttk.Frame(self.notebook)
         self.corrections_frame = ttk.Frame(self.notebook)
+        self.optimizer_frame = ttk.Frame(self.notebook)
         
         self.notebook.add(self.merge_frame, text=self.i18n.t('tab_merge'))
         self.notebook.add(self.overlaps_frame, text=self.i18n.t('tab_overlaps'))
         self.notebook.add(self.corrections_frame, text=self.i18n.t('tab_corrections'))
+        self.notebook.add(self.optimizer_frame, text=self.i18n.t('tab_optimizer'))
         
         # Build each tab
         self.build_merge_tab()
         self.build_overlaps_tab()
         self.build_corrections_tab()
+        self.build_optimizer_tab()
     
     def build_merge_tab(self):
         """Build merge subtitles tab"""
@@ -219,6 +224,53 @@ class SubtitleKitApp:
         # Process button
         ttk.Button(frame, text=self.i18n.t('button_process'), 
                   command=self.process_corrections).grid(row=4, column=1, pady=20)
+
+
+    def build_optimizer_tab(self):
+        """Build subtitle optimizer tab"""
+        frame = self.optimizer_frame
+        
+        # Input file
+        ttk.Label(frame, text=self.i18n.t('label_input')).grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        self.opt_input = ttk.Entry(frame, width=50)
+        self.opt_input.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(frame, text=self.i18n.t('button_browse'), 
+                  command=lambda: self.browse_file(self.opt_input, [('SRT files', '*.srt')])).grid(row=0, column=2, padx=5)
+        
+        # Output file
+        ttk.Label(frame, text=self.i18n.t('label_output')).grid(row=1, column=0, sticky='w', padx=5, pady=5)
+        self.opt_output = ttk.Entry(frame, width=50)
+        self.opt_output.grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(frame, text=self.i18n.t('button_browse'), 
+                  command=lambda: self.browse_save_file(self.opt_output, [('SRT files', '*.srt')])).grid(row=1, column=2, padx=5)
+        
+        # Phase checkboxes
+        cb_frame = ttk.LabelFrame(frame, text="Optimization Phases", padding=10)
+        cb_frame.grid(row=2, column=1, sticky='we', padx=5, pady=10)
+        
+        self.opt_line_reduction = tk.BooleanVar()
+        self.opt_cps = tk.BooleanVar()
+        self.opt_interjections = tk.BooleanVar()
+        self.opt_llm = tk.BooleanVar()
+        self.opt_simplify = tk.BooleanVar()
+        
+        ttk.Checkbutton(cb_frame, text=self.i18n.t('checkbox_line_reduction'), variable=self.opt_line_reduction).pack(anchor='w')
+        ttk.Checkbutton(cb_frame, text=self.i18n.t('checkbox_cps'), variable=self.opt_cps).pack(anchor='w')
+        ttk.Checkbutton(cb_frame, text=self.i18n.t('checkbox_interjections'), variable=self.opt_interjections).pack(anchor='w')
+        ttk.Checkbutton(cb_frame, text=self.i18n.t('checkbox_llm'), variable=self.opt_llm).pack(anchor='w')
+        ttk.Checkbutton(cb_frame, text=self.i18n.t('checkbox_simplify'), variable=self.opt_simplify).pack(anchor='w', padx=20)
+        
+        # Language selector
+        lang_frame = ttk.Frame(frame)
+        lang_frame.grid(row=3, column=1, sticky='w', padx=5)
+        ttk.Label(lang_frame, text=self.i18n.t('label_lang')).pack(side=tk.LEFT)
+        self.opt_lang = ttk.Combobox(lang_frame, values=['en', 'el', 'es', 'fr', 'de'], width=5)
+        self.opt_lang.set('en')
+        self.opt_lang.pack(side=tk.LEFT, padx=5)
+        
+        # Process button
+        ttk.Button(frame, text=self.i18n.t('button_optimize'), 
+                  command=self.process_optimization).grid(row=4, column=1, pady=20)
     
     def create_status_bar(self):
         """Create status bar at bottom"""
@@ -350,6 +402,109 @@ class SubtitleKitApp:
                 messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
         
         threading.Thread(target=run, daemon=True).start()
+
+    def process_optimization(self):
+        """Process subtitle optimization"""
+        input_file = self.opt_input.get()
+        output = self.opt_output.get() or input_file.replace(".srt", "_optimized.srt")
+        
+        if not input_file:
+            messagebox.showerror("Error", self.i18n.t('msg_select_files'))
+            return
+
+        from subtitlekit.optimizer.config import get_setting
+
+        # Check API key if LLM is enabled
+        api_key = get_setting("gemini_api_key")
+        if self.opt_llm.get() and not api_key:
+            messagebox.showerror("Error", self.i18n.t('msg_api_key_required'))
+            return
+
+        def run():
+            try:
+                self.status_bar.config(text=self.i18n.t('status_processing'))
+                import pysrt
+                from subtitlekit.optimizer import OptimizerPipeline, OptimizationOptions
+                
+                options = OptimizationOptions(
+                    line_reduction=self.opt_line_reduction.get(),
+                    cps_optimization=self.opt_cps.get(),
+                    interjection_removal=self.opt_interjections.get(),
+                    llm_shortening=self.opt_llm.get(),
+                    simplify=self.opt_simplify.get(),
+                    lang=self.opt_lang.get(),
+                    cps_target=get_setting("cps_target", 20.0),
+                    max_chars=get_setting("max_chars", 90),
+                    max_lines=get_setting("max_lines", 2),
+                    max_duration=get_setting("max_duration", 7.0),
+                    api_key=api_key,
+                    model=get_setting("gemini_model", "gemini-2.0-flash")
+                )
+                
+                subs = pysrt.open(input_file)
+                pipeline = OptimizerPipeline(options)
+                results = pipeline.run(subs)
+                results.save(output, encoding='utf-8')
+                
+                self.status_bar.config(text=self.i18n.t('status_success'))
+                messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                
+            except Exception as e:
+                self.status_bar.config(text=self.i18n.t('status_error'))
+                messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
+        
+        threading.Thread(target=run, daemon=True).start()
+
+    def show_settings(self):
+        """Show settings dialog"""
+        from subtitlekit.optimizer.config import get_setting, set_setting
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.i18n.t('title_settings'))
+        dialog.geometry('400x350')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Grid layout
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill='both', expand=True)
+        
+        # API Key
+        ttk.Label(frame, text=self.i18n.t('label_gemini_key')).grid(row=0, column=0, sticky='w', pady=5)
+        key_entry = ttk.Entry(frame, width=30, show='*')
+        key_entry.grid(row=0, column=1, pady=5)
+        key_entry.insert(0, get_setting('gemini_api_key', ''))
+        
+        # Model
+        ttk.Label(frame, text=self.i18n.t('label_gemini_model')).grid(row=1, column=0, sticky='w', pady=5)
+        model_entry = ttk.Entry(frame, width=30)
+        model_entry.grid(row=1, column=1, pady=5)
+        model_entry.insert(0, get_setting('gemini_model', 'gemini-2.0-flash'))
+        
+        # Target CPS
+        ttk.Label(frame, text=self.i18n.t('label_cps_target')).grid(row=2, column=0, sticky='w', pady=5)
+        cps_entry = ttk.Entry(frame, width=10)
+        cps_entry.grid(row=2, column=1, sticky='w', pady=5)
+        cps_entry.insert(0, str(get_setting('cps_target', 20.0)))
+        
+        # Max Duration
+        ttk.Label(frame, text=self.i18n.t('label_max_duration')).grid(row=3, column=0, sticky='w', pady=5)
+        dur_entry = ttk.Entry(frame, width=10)
+        dur_entry.grid(row=3, column=1, sticky='w', pady=5)
+        dur_entry.insert(0, str(get_setting('max_duration', 7.0)))
+        
+        # Save button
+        def save():
+            set_setting('gemini_api_key', key_entry.get())
+            set_setting('gemini_model', model_entry.get())
+            try:
+                set_setting('cps_target', float(cps_entry.get()))
+                set_setting('max_duration', float(dur_entry.get()))
+            except ValueError:
+                pass
+            dialog.destroy()
+            
+        ttk.Button(frame, text=self.i18n.t('button_save'), command=save).grid(row=10, column=1, pady=20, sticky='e')
     
     def show_about(self):
         """Show about dialog"""

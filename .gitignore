@@ -9,6 +9,8 @@
 /output_*.json
 /test_*.json
 /annot_new.json
+AGENTS.md
+openspec/
 
 # Specific JSON files to keep/manage
 /annot.json

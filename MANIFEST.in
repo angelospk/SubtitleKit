@@ -8,6 +8,9 @@ include requirements.txt
 # Include all locale files
 recursive-include src/subtitlekit/ui/locales *.json
 
+# Include interjection word lists
+recursive-include src/subtitlekit/optimizer/interjections *.txt
+
 # Exclude compiled files and caches
 global-exclude __pycache__
 global-exclude *.py[co]

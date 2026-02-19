@@ -79,6 +79,7 @@ def show_ui(lang='en'):
             'tab_overlaps': 'Διόρθωση Χρονισμών',
             'tab_corrections': 'Εφαρμογή Διορθώσεων',
             'tab_annotations': 'Εφαρμογή Annotations',
+            'tab_optimizer': 'Βελτιστοποίηση (Optimizer)',
             'label_original': 'Αρχικός υπότιτλος:',
             'label_helper': 'Βοηθητικοί υπότιτλοι (με κόμμα):',
             'label_input': 'Υπότιτλος εισόδου:',
@@ -91,9 +92,19 @@ def show_ui(lang='en'):
             'label_output': 'Όνομα αρχείου εξόδου:',
             'label_postfix': 'Κατάληξη εξόδου:',
             'label_window': 'Μέγεθος παραθύρου:',
+            'label_lang': 'Γλώσσα:',
+            'label_gemini_key': 'Κλειδί Gemini API:',
+            'label_gemini_model': 'Μοντέλο:',
+            'label_cps_target': 'Στόχος CPS:',
             'button_upload': '📁 Ανέβασμα',
             'button_process': 'Επεξεργασία',
+            'button_optimize': 'Optimize',
             'button_reset': '🗑️ Καθαρισμός Αρχείων',
+            'checkbox_line_reduction': 'Μείωση Γραμμών',
+            'checkbox_cps': 'Βελτιστοποίηση CPS',
+            'checkbox_interjections': 'Αφαίρεση Επιφωνημάτων',
+            'checkbox_llm': 'Σύμπτυξη μέσω AI',
+            'checkbox_simplify': 'Πειραματικό: Απλοποίηση',
             'checkbox_skip_sync': 'Παράλειψη συγχρονισμού',
             'checkbox_preprocess': 'Προεπεξεργασία',
             'checkbox_auto_download': 'Αυτόματο κατέβασμα',
@@ -108,6 +119,21 @@ def show_ui(lang='en'):
         }
     }
     
+    # Add English optimizer strings
+    translations['en'].update({
+        'tab_optimizer': 'Optimizer',
+        'label_lang': 'Language:',
+        'label_gemini_key': 'Gemini API Key:',
+        'label_gemini_model': 'Model:',
+        'label_cps_target': 'Target CPS:',
+        'button_optimize': 'Optimize',
+        'checkbox_line_reduction': 'Line Reduction',
+        'checkbox_cps': 'CPS Optimization',
+        'checkbox_interjections': 'Interjection Removal',
+        'checkbox_llm': 'LLM Shortening',
+        'checkbox_simplify': 'Experimental: Simplify',
+    })
+
     t = translations.get(lang, translations['en'])
     
     # Custom CSS for better dark mode support
@@ -640,18 +666,157 @@ def show_ui(lang='en'):
         annotations_output_area
     ], layout=widgets.Layout(padding='10px'))
     
+    # ===== OPTIMIZER TAB =====
+    opt_postfix = widgets.Text(
+        value='_optimized',
+        description=t['label_postfix'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='300px')
+    )
+    opt_output = widgets.Text(
+        value='optimized.srt',
+        description=t['label_output'],
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    opt_input_box, opt_input = create_file_picker(
+        t['label_input'], output_widget=opt_output, 
+        postfix_widget=opt_postfix, extension='srt'
+    )
+    
+    # Optimizer settings from config
+    from subtitlekit.optimizer.config import get_setting, set_setting
+    
+    opt_api_key = widgets.Password(
+        description=t['label_gemini_key'],
+        value=get_setting('gemini_api_key', ''),
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    
+    opt_model = widgets.Dropdown(
+        description=t['label_gemini_model'],
+        options=[get_setting('gemini_model', 'gemini-2.0-flash')],
+        value=get_setting('gemini_model', 'gemini-2.0-flash'),
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='500px')
+    )
+    
+    opt_cps_target = widgets.FloatText(
+        description=t['label_cps_target'],
+        value=get_setting('cps_target', 20.0),
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='200px')
+    )
+
+    opt_lang_code = widgets.Dropdown(
+        description=t['label_lang'],
+        options=['en', 'el', 'es', 'fr', 'de'],
+        value='en',
+        style={'description_width': '150px'},
+        layout=widgets.Layout(width='200px')
+    )
+    
+    opt_line_red = widgets.Checkbox(description=t['checkbox_line_reduction'], value=True)
+    opt_cps_opt = widgets.Checkbox(description=t['checkbox_cps'], value=True)
+    opt_inter_rem = widgets.Checkbox(description=t['checkbox_interjections'], value=True)
+    opt_llm_short = widgets.Checkbox(description=t['checkbox_llm'], value=False)
+    opt_simpl = widgets.Checkbox(description=t['checkbox_simplify'], value=False)
+    
+    opt_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
+    opt_button = widgets.Button(description=t['button_optimize'], button_style='primary')
+    opt_output_area = widgets.Output()
+
+    def fetch_models(b=None):
+        """Fetch available Gemini models (async placeholder/simplified)"""
+        import threading
+        def run_fetch():
+            key = opt_api_key.value.strip()
+            if not key: return
+            try:
+                from google import genai
+                client = genai.Client(api_key=key)
+                models = [m.name.replace("models/", "") for m in client.models.list() if "gemini" in m.name.lower()]
+                if models:
+                    opt_model.options = sorted(list(set(models + [opt_model.value])))
+            except:
+                pass
+        threading.Thread(target=run_fetch, daemon=True).start()
+
+    opt_api_key.observe(lambda change: fetch_models() if change['new'] else None, names='value')
+
+    def on_optimize_click(b):
+        with opt_output_area:
+            opt_output_area.clear_output()
+            print(t['status_processing'])
+            
+            # Save settings
+            set_setting('gemini_api_key', opt_api_key.value)
+            set_setting('gemini_model', opt_model.value)
+            set_setting('cps_target', opt_cps_target.value)
+
+            try:
+                input_file = opt_input.value.strip()
+                output = opt_output.value.strip() or 'optimized.srt'
+                
+                if not input_file:
+                    print(t['msg_no_files'])
+                    return
+                
+                import pysrt
+                from subtitlekit.optimizer import OptimizerPipeline, OptimizationOptions
+                
+                options = OptimizationOptions(
+                    line_reduction=opt_line_red.value,
+                    cps_optimization=opt_cps_opt.value,
+                    interjection_removal=opt_inter_rem.value,
+                    llm_shortening=opt_llm_short.value,
+                    simplify=opt_simpl.value,
+                    lang=opt_lang_code.value,
+                    cps_target=opt_cps_target.value,
+                    api_key=opt_api_key.value,
+                    model=opt_model.value
+                )
+                
+                subs = pysrt.open(input_file)
+                pipeline = OptimizerPipeline(options)
+                results = pipeline.run(subs)
+                results.save(output, encoding='utf-8')
+                
+                print(f"{t['status_success']}")
+                print(f"📁 Saved: {output}")
+                
+                refresh_all_dropdowns()
+                if opt_auto_dl.value:
+                    files.download(output)
+                
+            except Exception as e:
+                print(f"{t['status_error']}{e}")
+    
+    opt_button.on_click(on_optimize_click)
+    
+    opt_tab = widgets.VBox([
+        opt_input_box,
+        opt_output,
+        widgets.HBox([opt_api_key, opt_model]),
+        widgets.HBox([opt_cps_target, opt_lang_code]),
+        widgets.VBox([opt_line_red, opt_cps_opt, opt_inter_rem, opt_llm_short, opt_simpl]),
+        opt_auto_dl,
+        opt_button,
+        opt_output_area
+    ], layout=widgets.Layout(padding='10px'))
+
     # Add tabs
+    tab_children = [merge_tab, overlaps_tab, corrections_tab, opt_tab]
+    tab_titles = [t['tab_merge'], t['tab_overlaps'], t['tab_corrections'], t['tab_optimizer']]
+    
     if has_annotations:
-        tab.children = [merge_tab, overlaps_tab, corrections_tab, annotations_tab]
-        tab.set_title(0, t['tab_merge'])
-        tab.set_title(1, t['tab_overlaps'])
-        tab.set_title(2, t['tab_corrections'])
-        tab.set_title(3, t['tab_annotations'])
-    else:
-        tab.children = [merge_tab, overlaps_tab, corrections_tab]
-        tab.set_title(0, t['tab_merge'])
-        tab.set_title(1, t['tab_overlaps'])
-        tab.set_title(2, t['tab_corrections'])
+        tab_children.append(annotations_tab)
+        tab_titles.append(t['tab_annotations'])
+    
+    tab.children = tab_children
+    for i, title in enumerate(tab_titles):
+        tab.set_title(i, title)
     
     # Display reset button and tabs
     display(widgets.HBox([reset_button, global_output]))

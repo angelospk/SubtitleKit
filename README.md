@@ -11,6 +11,7 @@ Comprehensive Python library and desktop application for subtitle processing, sy
 - **Merge & Sync**: Combine subtitle files with automatic synchronization
 - **Fix Overlaps**: Detect and correct timing issues and overlaps  
 - **Apply Corrections**: Apply text corrections from JSON files
+- **Subtitle Optimizer**: Automatic CPS optimization, line reduction, filler word removal, and AI-powered shortening (via Gemini API)
 - **LLM Integration**: Generate optimized JSON for translation workflows
 - **Desktop App**: Cross-platform GUI (Windows, macOS, Linux)
 - **Colab Ready**: Works seamlessly in Google Colab notebooks
@@ -62,6 +63,9 @@ subtitlekit overlaps --input input.srt --reference ref.srt --output fixed.srt
 
 # Apply corrections
 subtitlekit corrections --input input.srt --corrections fixes.json --output corrected.srt
+
+# Optimize subtitles
+subtitlekit optimize input.srt --interjections --line-reduction --cps --llm
 ```
 
 ### Desktop App
@@ -126,18 +130,25 @@ subtitlekit corrections \
   --output corrected.srt
 ```
 
-**Corrections JSON format:**
-```json
-[
-  {
-    "id": 1,
-    "rx": "text to find",
-    "sb": "replacement text",
-    "rate": 8,
-    "type": "grammar"
-  }
-]
+### Subtitle Optimizer
+
+Automated pipeline to improve subtitle readability and timing. Supports multiple languages (English, Greek, etc.) for interjection removal.
+
+```bash
+subtitlekit optimize movie.srt \
+  --interjections \
+  --line-reduction \
+  --cps \
+  --llm \
+  --api-key YOUR_GEMINI_API_KEY
 ```
+
+**Optimization Phases:**
+1. **Interjection Removal**: Removes filler words (e.g., "Uh,", "Well,").
+2. **Line Reduction**: Collapses 3+ line entries into 2 lines for better layout.
+3. **CPS Optimization**: Extends timing and merges short subtitles to hit target Characters Per Second (default: 20.0).
+4. **LLM Shortening**: Uses Gemini AI to shorten entries that still exceed CPS limits.
+5. **Translation Prep**: Experimental `--simplify` flag to simplify text for easier translation.
 
 ## 🌍 I18n Support
 

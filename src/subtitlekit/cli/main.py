@@ -6,6 +6,7 @@ Usage:
     subtitlekit merge --original FILE --helper FILE [--helper FILE ...] --output FILE
     subtitlekit overlaps --input FILE --reference FILE --output FILE [--window N]
     subtitlekit corrections --input FILE --corrections FILE --output FILE
+    subtitlekit optimize INPUT [--output FILE] [--line-reduction] [--cps] [--interjections] [--llm]
 """
 
 import argparse
@@ -94,6 +95,53 @@ def cmd_corrections(args):
         print(f"✅ Applied {stats['applied']}/{stats['total']} corrections")
 
 
+def cmd_optimize(args):
+    """Optimize subtitle files"""
+    import pysrt
+    from subtitlekit.optimizer import OptimizerPipeline, OptimizationOptions
+    from subtitlekit.optimizer.config import get_setting
+
+    print(f"Optimizing subtitles...")
+    print(f"  Input: {args.input}")
+    output_path = args.output or args.input.replace(".srt", "_optimized.srt")
+    print(f"  Output: {output_path}")
+
+    # Initialize options from CLI + Config
+    options = OptimizationOptions(
+        line_reduction=args.line_reduction,
+        cps_optimization=args.cps,
+        interjection_removal=args.interjections,
+        llm_shortening=args.llm,
+        simplify=args.simplify,
+        lang=args.lang,
+        cps_target=args.cps_target or get_setting("cps_target", 20.0),
+        max_chars=args.max_chars or get_setting("max_chars", 90),
+        max_lines=args.max_lines or get_setting("max_lines", 2),
+        max_duration=args.max_duration or get_setting("max_duration", 7.0),
+        api_key=args.api_key or get_setting("gemini_api_key"),
+        model=args.model or get_setting("gemini_model", "gemini-2.0-flash")
+    )
+
+    if options.llm_shortening and not options.api_key:
+        print("\n❌ Error: Gemini API key is required for LLM shortening.")
+        print("Please provide it via --api-key or save it in the UI/Config.")
+        sys.exit(1)
+
+    # Load and process
+    try:
+        subs = pysrt.open(args.input)
+        pipeline = OptimizerPipeline(options)
+        
+        print("\nExecuting optimization phases...")
+        results = pipeline.run(subs)
+        
+        results.save(output_path, encoding='utf-8')
+        print(f"\n✅ Success! Optimized subtitle saved to: {output_path}")
+    except Exception as e:
+        print(f"\n❌ Error during optimization: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -132,6 +180,31 @@ def main():
     corrections_parser.add_argument('--quiet', '-q', action='store_true', 
                                    help='Quiet mode (minimal output)')
     corrections_parser.set_defaults(func=cmd_corrections)
+    
+    # Optimize command
+    optimize_parser = subparsers.add_parser('optimize', help='Optimize subtitle durations and text')
+    optimize_parser.add_argument('input', help='Input subtitle file (.srt)')
+    optimize_parser.add_argument('--output', '-o', help='Output subtitle file (optional)')
+    
+    # Flags
+    optimize_parser.add_argument('--line-reduction', action='store_true', help='Reduce 3+ line entries to 2')
+    optimize_parser.add_argument('--cps', action='store_true', help='Optimize CPS via timing and merging')
+    optimize_parser.add_argument('--interjections', action='store_true', help='Remove filler words')
+    optimize_parser.add_argument('--llm', action='store_true', help='Use Gemini AI to shorten high-CPS text')
+    optimize_parser.add_argument('--simplify', action='store_true', help='Experimental: Simplify for translation (LLM only)')
+    
+    # Params
+    optimize_parser.add_argument('--lang', default='en', help='Language for interjections (default: en)')
+    optimize_parser.add_argument('--cps-target', type=float, help='Target CPS (default: 20.0 or from config)')
+    optimize_parser.add_argument('--max-chars', type=int, help='Max characters per entry (default: 90)')
+    optimize_parser.add_argument('--max-lines', type=int, help='Max lines per entry (default: 2)')
+    optimize_parser.add_argument('--max-duration', type=float, help='Max duration in seconds (default: 7.0)')
+    
+    # LLM Params
+    optimize_parser.add_argument('--api-key', help='Gemini API Key')
+    optimize_parser.add_argument('--model', help='Gemini Model Name')
+    
+    optimize_parser.set_defaults(func=cmd_optimize)
     
     # Parse and execute
     args = parser.parse_args()
