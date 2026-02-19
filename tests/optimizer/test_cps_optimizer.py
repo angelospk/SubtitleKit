@@ -3,20 +3,25 @@ from subtitlekit.optimizer.options import OptimizationOptions
 from subtitlekit.optimizer.cps_optimizer import optimize_cps, extend_timing
 
 def test_extend_timing():
-    sub1 = pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Hello")
+    # Text length: 50 chars. target_cps: 10. Ideal dur: 5.0s.
+    # Current dur: 1.0s. Next starts at 5s. Gap: 3s. Max dur: 7s.
+    # It can only extend up to 5.0s - min_gap(0.12s) = 4.88s end time.
+    sub1 = pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="A very long text that requires a lot of time to read properly.")
     sub2 = pysrt.SubRipItem(index=2, start='00:00:05,000', end='00:00:06,000', text="World")
     
-    # 1s duration. Max 7s. Next starts at 5s. Min gap 0.1s.
-    extend_timing(sub1, sub2, max_duration=7.0, min_gap=0.1)
-    # Should extend to 4.9s (5s - 0.1s)
-    assert sub1.end.ordinal == 4900
+    extend_timing(sub1, sub2, target_cps=10.0, max_duration=7.0, min_gap=0.12)
+    # Should extend to 4.88s (5s - 0.12s)
+    assert sub1.end.ordinal == 4880
 
 def test_extend_timing_max_duration():
-    sub1 = pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Hello")
+    # Text length: 80 chars. target_cps: 10. Ideal dur: 8.0s.
+    # Gap is huge. Max duration is 7.0s. So it should cap at exactly 7.0s duration.
+    # Ends at 1s + 7.0s = 8.0s.
+    sub1 = pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Another very long text that requires more time than the maximum allowed duration.")
     # Huge gap
     sub2 = pysrt.SubRipItem(index=2, start='00:00:20,000', end='00:00:21,000', text="World")
     
-    extend_timing(sub1, sub2, max_duration=7.0, min_gap=0.1)
+    extend_timing(sub1, sub2, target_cps=10.0, max_duration=7.0, min_gap=0.12)
     # Should extend to 8s (1s + 7s)
     assert sub1.end.ordinal == 8000
 

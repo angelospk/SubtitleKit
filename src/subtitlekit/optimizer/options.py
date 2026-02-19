@@ -18,7 +18,7 @@ class OptimizationOptions:
     max_lines: int = 2
     max_duration: float = 7.0
     min_duration: float = 0.833  # 5/6 second
-    min_gap: float = 0.1  # Minimum gap between subtitles
+    min_gap: float = 0.12  # Minimum gap between subtitles
 
     # LLM settings
     api_key: Optional[str] = None

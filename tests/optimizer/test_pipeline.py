@@ -42,3 +42,24 @@ def test_pipeline_all_local_phases():
     assert "fast subtitle" in result[0].text.lower()
     assert "short" in result[0].text.lower()
     assert "uh" not in result[0].text.lower()
+
+def test_progress_callback_fires_per_phase():
+    calls = []
+    options = OptimizationOptions(
+        interjection_removal=True,
+        line_reduction=True,
+        cps_optimization=False,
+        llm_shortening=False
+    )
+    pipeline = OptimizerPipeline(options, progress_callback=calls.append)
+    
+    subs = pysrt.SubRipFile([
+        pysrt.SubRipItem(index=1, start='00:00:01,000', end='00:00:02,000', text="Hello World")
+    ])
+    pipeline.run(subs)
+    
+    # We enabled 2 phases, so it should have been called twice
+    assert len(calls) == 2
+    assert "interjections" in calls
+    assert "lines" in calls
+

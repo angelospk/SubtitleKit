@@ -11,7 +11,7 @@
 /annot_new.json
 AGENTS.md
 openspec/
-
+.agent/
 # Specific JSON files to keep/manage
 /annot.json
 /apply_annotations.py

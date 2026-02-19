@@ -118,6 +118,54 @@ def show_ui(lang='en'):
             'msg_no_files': 'Παρακαλώ επιλέξτε ή ανεβάστε αρχεία',
             'msg_json_error': '❌ Σφάλμα JSON: ',
             'msg_reset': '🗑️ Όλα τα αρχεία διαγράφηκαν!',
+            'msg_opt_phase_interjections': '🧹 Αφαίρεση επιφωνημάτων...',
+            'msg_opt_phase_lines': '✂️ Μείωση γραμμών...',
+            'msg_opt_phase_cps': '⏱️ Βελτιστοποίηση CPS...',
+            'msg_opt_phase_llm': '🤖 Σύμπτυξη μέσω AI (αυτό μπορεί να πάρει λίγο)...',
+            
+            # Advanced Settings
+            'acc_settings_title': '⚙️ Προχωρημένες Ρυθμίσεις',
+            'label_max_lines': 'Μέγ. Γραμμές:',
+            'label_max_chars': 'Μέγ. Χαρακτήρες:',
+            'label_max_dur': 'Μέγ. Διάρκεια (sec):',
+            'label_min_dur': 'Ελάχ. Διάρκεια (sec):',
+            'label_min_gap': 'Ελάχ. Κενό (sec):',
+            
+            # Comparison Tab
+            'tab_comparison': 'Σύγκριση',
+            'comp_title': 'Ανάλυση και Σύγκριση Υποτίτλων',
+            'comp_existing_file': 'Ανεβασμένο αρχείο:',
+            'comp_add_to_compare': 'Φόρτωση & Ανάλυση',
+            'comp_load_upload': 'Ανέβασμα νέου',
+            'comp_loaded_files': 'Φορτωμένα Αρχεία:',
+            'comp_analyze': 'Ανάλυση (1 Αρχείο)',
+            'comp_compare': 'Σύγκριση (2+ Αρχεία)',
+            'comp_export': 'Εξαγωγή CSV',
+            'comp_clear': 'Καθαρισμός λίστας',
+            'comp_added': 'Αναλύθηκε και προστέθηκε:',
+            'comp_err_single_only': 'Παρακαλώ επιλέξτε ακριβώς ένα αρχείο.',
+            'comp_err_multi_only': 'Παρακαλώ επιλέξτε τουλάχιστον δύο αρχεία.',
+            'comp_cleared': 'Η λίστα σύγκρισης καθαρίστηκε.',
+            
+            # Chart Labels
+            'chart_single_title': 'Ανάλυση: ',
+            'chart_freq': 'Συχνότητα',
+            'chart_cps_dist': 'Κατανομή CPS',
+            'chart_line_num': 'Αριθμός Γραμμής',
+            'chart_cps_per_line': 'CPS ανά Γραμμή',
+            'chart_current': 'Τρέχον',
+            'chart_ideal': 'Ιδανικό',
+            'chart_line': 'Γραμμή',
+            'chart_current_vs_ideal': 'Τρέχον έναντι Ιδανικού CPS',
+            'chart_prob_percent': 'Ποσοστό Προβληματικών Γραμμών',
+            'chart_comp_title': 'Σύγκριση Υποτίτλων',
+            'chart_cps_dist_comp': 'Σύγκριση Κατανομής CPS',
+            'chart_pos_pct': 'Θέση στο αρχείο (%)',
+            'chart_cps_time_comp': 'Σύγκριση CPS διαχρονικά',
+            'chart_box_comp': 'Σύγκριση Box Plot CPS',
+            'chart_bar_avg': 'Μέσο CPS',
+            'chart_val': 'Τιμή',
+            'chart_stat_comp': 'Σύγκριση Στατιστικών',
         }
     }
     
@@ -134,6 +182,54 @@ def show_ui(lang='en'):
         'checkbox_interjections': 'Interjection Removal',
         'checkbox_llm': 'LLM Shortening',
         'checkbox_simplify': 'Experimental: Simplify',
+        'msg_opt_phase_interjections': '🧹 Removing interjections...',
+        'msg_opt_phase_lines': '✂️ Reducing lines...',
+        'msg_opt_phase_cps': '⏱️ Optimizing CPS...',
+        'msg_opt_phase_llm': '🤖 Compacting via AI (this might take a while)...',
+        
+        # Advanced Settings
+        'acc_settings_title': '⚙️ Advanced Settings',
+        'label_max_lines': 'Max Lines:',
+        'label_max_chars': 'Max Chars:',
+        'label_max_dur': 'Max Duration (sec):',
+        'label_min_dur': 'Min Duration (sec):',
+        'label_min_gap': 'Min Gap (sec):',
+        
+        # Comparison Tab
+        'tab_comparison': 'Comparison',
+        'comp_title': 'Subtitle Analysis and Comparison',
+        'comp_existing_file': 'Uploaded File:',
+        'comp_add_to_compare': 'Load & Analyze',
+        'comp_load_upload': 'Upload New',
+        'comp_loaded_files': 'Loaded Files:',
+        'comp_analyze': 'Analyze (1 File)',
+        'comp_compare': 'Compare (2+ Files)',
+        'comp_export': 'Export CSV',
+        'comp_clear': 'Clear List',
+        'comp_added': 'Parsed and added:',
+        'comp_err_single_only': 'Please select exactly one file for single analysis.',
+        'comp_err_multi_only': 'Please select at least two files for comparison.',
+        'comp_cleared': 'Comparison list cleared.',
+        
+        # Chart Labels
+        'chart_single_title': 'Analysis: ',
+        'chart_freq': 'Frequency',
+        'chart_cps_dist': 'CPS Distribution',
+        'chart_line_num': 'Line Number',
+        'chart_cps_per_line': 'CPS per Line',
+        'chart_current': 'Current',
+        'chart_ideal': 'Ideal',
+        'chart_line': 'Line',
+        'chart_current_vs_ideal': 'Current vs Ideal CPS',
+        'chart_prob_percent': 'Problematic Lines Percent',
+        'chart_comp_title': 'Subtitles Comparison',
+        'chart_cps_dist_comp': 'CPS Dist. Comparison',
+        'chart_pos_pct': 'Position in file (%)',
+        'chart_cps_time_comp': 'CPS over time comparison',
+        'chart_box_comp': 'CPS Box Plot Comparison',
+        'chart_bar_avg': 'Avg CPS',
+        'chart_val': 'Value',
+        'chart_stat_comp': 'Statistics Comparison',
     })
 
     t = translations.get(lang, translations['en'])
@@ -742,6 +838,22 @@ def show_ui(lang='en'):
     opt_llm_short = widgets.Checkbox(description=t['checkbox_llm'], value=False)
     opt_simpl = widgets.Checkbox(description=t['checkbox_simplify'], value=False)
     
+    # Advanced settings (Accordion)
+    opt_max_lines = widgets.IntText(value=2, description=t['label_max_lines'], style={'description_width': 'initial'}, layout=widgets.Layout(width='150px'))
+    opt_max_chars = widgets.IntText(value=90, description=t['label_max_chars'], style={'description_width': 'initial'}, layout=widgets.Layout(width='150px'))
+    opt_max_dur = widgets.FloatText(value=7.0, description=t['label_max_dur'], style={'description_width': 'initial'}, layout=widgets.Layout(width='180px'))
+    opt_min_dur = widgets.FloatText(value=0.833, description=t['label_min_dur'], style={'description_width': 'initial'}, layout=widgets.Layout(width='180px'))
+    opt_min_gap = widgets.FloatText(value=0.12, description=t['label_min_gap'], style={'description_width': 'initial'}, layout=widgets.Layout(width='150px'))
+    
+    advanced_settings_box = widgets.VBox([
+        widgets.HBox([opt_max_lines, opt_max_chars]),
+        widgets.HBox([opt_max_dur, opt_min_dur, opt_min_gap])
+    ])
+    
+    opt_advanced_accordion = widgets.Accordion(children=[advanced_settings_box])
+    opt_advanced_accordion.set_title(0, t['acc_settings_title'])
+    opt_advanced_accordion.selected_index = None # Start closed
+    
     opt_auto_dl = widgets.Checkbox(description=t['checkbox_auto_download'], value=True)
     opt_button = widgets.Button(description=t['button_optimize'], button_style='primary')
     opt_output_area = widgets.Output()
@@ -798,12 +910,20 @@ def show_ui(lang='en'):
                     simplify=opt_simpl.value,
                     lang=opt_lang_code.value,
                     cps_target=opt_cps_target.value,
+                    max_lines=opt_max_lines.value,
+                    max_chars=opt_max_chars.value,
+                    max_duration=opt_max_dur.value,
+                    min_duration=opt_min_dur.value,
+                    min_gap=opt_min_gap.value,
                     api_key=opt_api_key.value,
                     model=opt_model.value
                 )
                 
                 subs = pysrt.open(input_file)
-                pipeline = OptimizerPipeline(options)
+                pipeline = OptimizerPipeline(
+                    options,
+                    progress_callback=lambda phase: print(t.get(f'msg_opt_phase_{phase}', phase))
+                )
                 results = pipeline.run(subs)
                 results.save(output, encoding='utf-8')
                 
@@ -826,14 +946,152 @@ def show_ui(lang='en'):
         widgets.HBox([opt_model, opt_refresh_btn]),
         widgets.HBox([opt_cps_target, opt_lang_code]),
         widgets.VBox([opt_line_red, opt_cps_opt, opt_inter_rem, opt_llm_short, opt_simpl]),
+        opt_advanced_accordion,
         opt_auto_dl,
         opt_button,
         opt_output_area
     ], layout=widgets.Layout(padding='10px'))
 
+    # ---------------------------------------------------------
+    # Comparison Tab
+    # ---------------------------------------------------------
+    from subtitlekit.tools.subtitle_stats import SubtitleStorage, analyze_subtitles_from_bytes, create_single_file_chart, create_comparison_chart
+    import matplotlib.pyplot as plt
+    
+    comp_storage = SubtitleStorage()
+    
+    comp_title = widgets.HTML(f"<h3 style='color: var(--colab-primary-text-color, #202124);'>{t['comp_title']}</h3>")
+    
+    # Upload new file
+    comp_upload = widgets.FileUpload(accept='.srt', multiple=False, description=t['comp_load_upload'])
+    
+    # Load from existing dropdown
+    comp_existing_dropdown = widgets.Dropdown(options=[''] + sorted(glob.glob('*.srt')), description=t['comp_existing_file'])
+    all_srt_dropdowns.append(comp_existing_dropdown)
+    comp_load_existing_btn = widgets.Button(description=t['comp_add_to_compare'], button_style='primary')
+    
+    comp_loaded_list = widgets.SelectMultiple(options=[], description=t['comp_loaded_files'], layout={'width': 'max-content'})
+    
+    comp_analyze_btn = widgets.Button(description=t['comp_analyze'], button_style='success')
+    comp_compare_btn = widgets.Button(description=t['comp_compare'], button_style='warning')
+    comp_export_btn = widgets.Button(description=t['comp_export'])
+    comp_clear_btn = widgets.Button(description=t['comp_clear'], button_style='danger')
+    
+    comp_output = widgets.Output()
+    
+    def refresh_comp_list():
+        comp_loaded_list.options = comp_storage.list_files()
+        
+    def on_comp_load_existing(b):
+        file_path = comp_existing_dropdown.value
+        if not file_path: return
+        with comp_output:
+            comp_output.clear_output()
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                df, stats = analyze_subtitles_from_bytes(content, file_path)
+                comp_storage.add(file_path, content, df, stats)
+                refresh_comp_list()
+                print(f"✅ {t['comp_added']} {file_path}")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+                
+    comp_load_existing_btn.on_click(on_comp_load_existing)
+    
+    def on_comp_upload(change):
+        if not comp_upload.value: return
+        # Same upload logic as other tabs
+        # Handle dict format in older ipywidgets or newer
+        try:
+            items = comp_upload.value.items()
+        except AttributeError:
+            items = [(comp_upload.value[0]['name'], comp_upload.value[0])]
+            
+        for filename, file_info in items:
+            content = file_info['content'] if isinstance(file_info, dict) and 'content' in file_info else file_info
+            with open(filename, 'wb') as f:
+                f.write(content)
+            
+            with comp_output:
+                try:
+                    df, stats = analyze_subtitles_from_bytes(content, filename)
+                    comp_storage.add(filename, content, df, stats)
+                    refresh_comp_list()
+                    print(f"✅ {t['comp_added']} {filename}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
+                    
+        comp_upload.value.clear()
+        refresh_all_dropdowns()  # Important: refresh everywhere
+        
+    comp_upload.observe(on_comp_upload, names='value')
+
+    def on_comp_analyze(b):
+        selected = comp_loaded_list.value
+        with comp_output:
+            comp_output.clear_output()
+            if not selected:
+                print(t['msg_no_files'])
+                return
+            if len(selected) > 1:
+                print(t['comp_err_single_only'])
+                return
+            sub_data = comp_storage.get(selected[0])
+            if sub_data:
+                fig = create_single_file_chart(sub_data, t)
+                plt.show(fig)
+                
+    comp_analyze_btn.on_click(on_comp_analyze)
+    
+    def on_comp_compare(b):
+        selected = comp_loaded_list.value
+        with comp_output:
+            comp_output.clear_output()
+            if len(selected) < 2:
+                print(t['comp_err_multi_only'])
+                return
+            data_list = [comp_storage.get(f) for f in selected if comp_storage.get(f)]
+            if data_list:
+                fig = create_comparison_chart(data_list, t)
+                plt.show(fig)
+                
+    comp_compare_btn.on_click(on_comp_compare)
+    
+    def on_comp_export(b):
+        selected = comp_loaded_list.value
+        with comp_output:
+            if not selected: return
+            for f in selected:
+                sub_data = comp_storage.get(f)
+                csv_path = f"{os.path.splitext(f)[0]}_analysis.csv"
+                sub_data.dataframe.to_csv(csv_path, index=False)
+                print(f"✅ Exported: {csv_path}")
+                files.download(csv_path)
+
+    comp_export_btn.on_click(on_comp_export)
+    
+    def on_comp_clear(b):
+        comp_storage.clear()
+        refresh_comp_list()
+        with comp_output:
+            comp_output.clear_output()
+            print(t['comp_cleared'])
+            
+    comp_clear_btn.on_click(on_comp_clear)
+    
+    comp_tab = widgets.VBox([
+        comp_title,
+        widgets.HBox([comp_existing_dropdown, comp_load_existing_btn]),
+        widgets.HBox([comp_upload]),
+        widgets.HTML("<hr>"),
+        widgets.HBox([comp_loaded_list, widgets.VBox([comp_analyze_btn, comp_compare_btn, comp_export_btn, comp_clear_btn])]),
+        comp_output
+    ], layout=widgets.Layout(padding='10px'))
+
     # Add tabs
-    tab_children = [merge_tab, overlaps_tab, corrections_tab, opt_tab]
-    tab_titles = [t['tab_merge'], t['tab_overlaps'], t['tab_corrections'], t['tab_optimizer']]
+    tab_children = [merge_tab, overlaps_tab, corrections_tab, opt_tab, comp_tab]
+    tab_titles = [t['tab_merge'], t['tab_overlaps'], t['tab_corrections'], t['tab_optimizer'], t['tab_comparison']]
     
     if has_annotations:
         tab_children.append(annotations_tab)

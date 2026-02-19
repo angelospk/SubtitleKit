@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Callable
 import pysrt
 import logging
 
@@ -15,8 +15,9 @@ class OptimizerPipeline:
     Orchestrates the subtitle optimization phases.
     """
     
-    def __init__(self, options: Optional[OptimizationOptions] = None):
+    def __init__(self, options: Optional[OptimizationOptions] = None, progress_callback: Optional[Callable[[str], None]] = None):
         self.options = options or OptimizationOptions()
+        self.progress_callback = progress_callback
         self.interjection_remover = InterjectionRemover(self.options.lang)
     
     def run(self, subtitles: pysrt.SubRipFile) -> pysrt.SubRipFile:
@@ -30,24 +31,32 @@ class OptimizerPipeline:
         
         # 1. Interjection Removal
         if self.options.interjection_removal:
+            if self.progress_callback:
+                self.progress_callback("interjections")
             logger.info(f"Running interjection removal for lang: {self.options.lang}")
             processed = self.interjection_remover.process(current_subs)
             current_subs = pysrt.SubRipFile(processed)
             
         # 2. Line Reduction
         if self.options.line_reduction:
+            if self.progress_callback:
+                self.progress_callback("lines")
             logger.info(f"Running line reduction (max {self.options.max_lines})")
             for sub in current_subs:
                 reduce_lines(sub, self.options.max_lines)
                 
         # 3. CPS Optimization (Timing & Merging)
         if self.options.cps_optimization:
+            if self.progress_callback:
+                self.progress_callback("cps")
             logger.info(f"Running CPS optimization (target: {self.options.cps_target})")
             processed = optimize_cps(current_subs, self.options)
             current_subs = pysrt.SubRipFile(processed)
             
         # 4. LLM Shortening
         if self.options.llm_shortening:
+            if self.progress_callback:
+                self.progress_callback("llm")
             logger.info(f"Running LLM shortening (model: {self.options.model})")
             segments = find_high_cps_segments(current_subs, self.options)
             if segments:

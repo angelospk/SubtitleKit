@@ -8,15 +8,17 @@ from .options import OptimizationOptions
 def extend_timing(
     sub: pysrt.SubRipItem,
     next_sub: Optional[pysrt.SubRipItem],
+    target_cps: float = 20.0,
     max_duration: float = 7.0,
-    min_gap: float = 0.1
+    min_gap: float = 0.12
 ) -> None:
     """
-    Extend end time of a subtitle if room is available.
+    Extend end time of a subtitle if room is available, up to the target CPS.
     
     Args:
         sub: The subtitle to extend.
         next_sub: The following subtitle (None if last).
+        target_cps: The ideal CPS to reach.
         max_duration: Maximum duration allowed.
         min_gap: Minimum gap to maintain before next subtitle.
     """
@@ -24,12 +26,21 @@ def extend_timing(
     current_end = sub.end.ordinal / 1000.0
     current_duration = current_end - current_start
 
-    # Already at max duration
-    if current_duration >= max_duration:
+    # Calculate our ideal duration to hit the target CPS
+    from ..tools.reading_speed import strip_html_tags
+    char_count = len(strip_html_tags(sub.text))
+    if char_count == 0:
+        return
+        
+    ideal_duration = char_count / target_cps
+    
+    # If we are already at or above ideal duration, don't over-extend
+    if current_duration >= ideal_duration:
         return
 
-    # Calculate maximum possible end time (seconds)
-    max_end_by_duration = current_start + max_duration
+    # Calculate maximum possible end time (seconds) based on max_duration
+    # and also bound it by ideal_duration
+    max_end_by_duration = current_start + min(max_duration, ideal_duration)
 
     if next_sub is None:
         # Last subtitle - extend to max duration
@@ -112,7 +123,7 @@ def optimize_cps(
         current_cps = calculate_cps(sub.text, duration)
 
         if current_cps > options.cps_target:
-            extend_timing(sub, next_sub, options.max_duration, options.min_gap)
+            extend_timing(sub, next_sub, options.cps_target, options.max_duration, options.min_gap)
 
     # Second pass: try merging
     result = []

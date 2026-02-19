@@ -42,12 +42,17 @@ class InterjectionRemover:
             result = re.sub(pattern, '', result, flags=re.IGNORECASE)
         
         # Cleanup extra spaces left behind
-        result = re.sub(r' +', ' ', result).strip()
-        # Handle cases like " , " or beginning of line ", "
-        result = re.sub(r'^, ', '', result)
-        result = re.sub(r' ,', ',', result)
+        result = re.sub(r' +', ' ', result)
         
-        return result
+        # Cleanup pass 2: orphaned punctuation
+        # 1. Remove ", " immediately before sentence-end punctuation (.;!?)
+        result = re.sub(r',\s*([;.!?])', r'\1', result)
+        # 2. Remove leading commas/spaces
+        result = re.sub(r'^[,\s]+', '', result)
+        # 3. Handle double commas just in case
+        result = re.sub(r',\s*,', ',', result)
+        
+        return result.strip()
 
     def process(self, subtitles: pysrt.SubRipFile) -> List[pysrt.SubRipItem]:
         """Apply interjection removal to all subtitles."""
