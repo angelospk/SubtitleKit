@@ -166,13 +166,17 @@ cd subtitlekit
 # Install in development mode
 pip install -e .
 
-# Run tests
+# Install pre-commit hooks (Mandatory for contributing)
+pip install pre-commit
+pre-commit install
+
+# Run tests manually
 pytest -v
 ```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please ensure all tests pass before submitting a Pull Request. We use `pre-commit` to enforce running `pytest` automatically before every commit to prevent breaking changes.
 
 ## 📄 License
 
