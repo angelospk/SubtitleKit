@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 CONFIG_DIR = Path.home() / ".subtitlekit"
 CONFIG_FILE = CONFIG_DIR / "config.json"
