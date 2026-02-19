@@ -1,10 +1,18 @@
-# Subtitle files (except test fixtures)
-*.srt
-!test_fixtures/*.srt
+# Root test scripts and logs
+/test_*.py
+*.log
 
-# Generated JSON files (except test fixtures and locales)
-*.json
-!test_fixtures/*.json
+# Subtitle files
+*.srt
+
+# Root JSON files (output files)
+/output_*.json
+/test_*.json
+/annot_new.json
+
+# Specific JSON files to keep/manage
+/annot.json
+/apply_annotations.py
 !src/subtitlekit/ui/locales/*.json
 
 # Generated version file (created by setuptools-scm)
