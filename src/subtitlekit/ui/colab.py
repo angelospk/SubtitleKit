@@ -61,6 +61,7 @@ def show_ui(lang='en'):
             'button_upload': '📁 Upload',
             'button_process': 'Process',
             'button_reset': '🗑️ Clear All Files',
+            'button_refresh_models': '🔄 Refresh Models',
             'checkbox_skip_sync': 'Skip synchronization',
             'checkbox_preprocess': 'Preprocess input',
             'checkbox_auto_download': 'Auto-download result',
@@ -100,6 +101,7 @@ def show_ui(lang='en'):
             'button_process': 'Επεξεργασία',
             'button_optimize': 'Optimize',
             'button_reset': '🗑️ Καθαρισμός Αρχείων',
+            'button_refresh_models': '🔄 Ανανέωση Μοντέλων',
             'checkbox_line_reduction': 'Μείωση Γραμμών',
             'checkbox_cps': 'Βελτιστοποίηση CPS',
             'checkbox_interjections': 'Αφαίρεση Επιφωνημάτων',
@@ -687,9 +689,19 @@ def show_ui(lang='en'):
     # Optimizer settings from config
     from subtitlekit.optimizer.config import get_setting, set_setting
     
+    # Try to load API key from Colab secrets if available
+    default_key = get_setting('gemini_api_key', '')
+    try:
+        from google.colab import userdata
+        colab_key = userdata.get('GEMINI_API_KEY')
+        if colab_key:
+            default_key = colab_key
+    except Exception:
+        pass
+    
     opt_api_key = widgets.Password(
         description=t['label_gemini_key'],
-        value=get_setting('gemini_api_key', ''),
+        value=default_key,
         style={'description_width': '150px'},
         layout=widgets.Layout(width='500px')
     )
@@ -699,7 +711,14 @@ def show_ui(lang='en'):
         options=[get_setting('gemini_model', 'gemini-2.0-flash')],
         value=get_setting('gemini_model', 'gemini-2.0-flash'),
         style={'description_width': '150px'},
-        layout=widgets.Layout(width='500px')
+        layout=widgets.Layout(width='350px')
+    )
+    
+    opt_refresh_btn = widgets.Button(
+        description=t['button_refresh_models'],
+        button_style='info',
+        tooltip='Fetch available models from Gemini API',
+        layout=widgets.Layout(width='150px')
     )
     
     opt_cps_target = widgets.FloatText(
@@ -728,22 +747,27 @@ def show_ui(lang='en'):
     opt_output_area = widgets.Output()
 
     def fetch_models(b=None):
-        """Fetch available Gemini models (async placeholder/simplified)"""
-        import threading
-        def run_fetch():
-            key = opt_api_key.value.strip()
-            if not key: return
-            try:
-                from google import genai
-                client = genai.Client(api_key=key)
-                models = [m.name.replace("models/", "") for m in client.models.list() if "gemini" in m.name.lower()]
-                if models:
-                    opt_model.options = sorted(list(set(models + [opt_model.value])))
-            except:
-                pass
-        threading.Thread(target=run_fetch, daemon=True).start()
+        """Fetch available Gemini models synchronously so ipywidgets updates correctly."""
+        key = opt_api_key.value.strip()
+        if not key: return
+        
+        # Give visual feedback that it's fetching
+        old_desc = opt_refresh_btn.description
+        opt_refresh_btn.description = "⏳..."
+        
+        try:
+            from google import genai
+            client = genai.Client(api_key=key)
+            models = [m.name.replace("models/", "") for m in client.models.list() if "gemini" in m.name.lower()]
+            if models:
+                opt_model.options = sorted(list(set(models + [opt_model.value])))
+        except Exception as e:
+            print(f"Error fetching models: {e}")
+        finally:
+            opt_refresh_btn.description = old_desc
 
     opt_api_key.observe(lambda change: fetch_models() if change['new'] else None, names='value')
+    opt_refresh_btn.on_click(lambda b: fetch_models())
 
     def on_optimize_click(b):
         with opt_output_area:
@@ -798,7 +822,8 @@ def show_ui(lang='en'):
     opt_tab = widgets.VBox([
         opt_input_box,
         opt_output,
-        widgets.HBox([opt_api_key, opt_model]),
+        opt_api_key,
+        widgets.HBox([opt_model, opt_refresh_btn]),
         widgets.HBox([opt_cps_target, opt_lang_code]),
         widgets.VBox([opt_line_red, opt_cps_opt, opt_inter_rem, opt_llm_short, opt_simpl]),
         opt_auto_dl,
