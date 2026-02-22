@@ -197,8 +197,8 @@ def merge_duplicate_entries(blocks: List[str]) -> List[str]:
                 score = 0
                 
                 # Has complete timing?
-                timing_pattern = r'\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}'
-                if re.match(timing_pattern, lines[1]):
+                timing_pattern = r'^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}'
+                if re.match(timing_pattern, lines[1].strip()):
                     score += 100
                 
                 # Text length
@@ -322,27 +322,37 @@ def preprocess_srt_file(input_path: str, output_path: str = None) -> str:
     try:
         # Write to temp file
         import tempfile
+        import os
         with tempfile.NamedTemporaryFile(mode='w', suffix='.srt', delete=False, encoding='utf-8') as tmp:
             tmp.write(cleaned_content)
             temp_path = tmp.name
         
-        # Parse with pysrt (validates format)
-        subs = pysrt.open(temp_path, encoding='utf-8')
-        
-        # Renumber entries sequentially
-        for i, sub in enumerate(subs):
-            sub.index = i + 1
-        
-        # Save to output path
-        if output_path is None:
-            output_path = temp_path
-        
-        subs.save(output_path, encoding='utf-8')
-        
-        print(f"  ✅ Cleaned file saved: {len(subs)} entries")
-        
-        return output_path
-        
+        try:
+            # Parse with pysrt (validates format)
+            subs = pysrt.open(temp_path, encoding='utf-8')
+            
+            # Renumber entries sequentially
+            for i, sub in enumerate(subs):
+                sub.index = i + 1
+            
+            # Save to output path
+            if output_path is None:
+                output_path = temp_path
+            else:
+                subs.save(output_path, encoding='utf-8')
+                os.unlink(temp_path)  # Clean up temp file
+                
+            if output_path == temp_path:
+                subs.save(output_path, encoding='utf-8')
+            
+            print(f"  ✅ Cleaned file saved: {len(subs)} entries")
+            
+            return output_path
+        except Exception:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)  # Clean up on error
+            raise
+            
     except Exception as e:
         print(f"  ❌ Error during validation: {e}")
         # Fallback: just save the cleaned content
@@ -360,13 +370,19 @@ def preprocess_srt_file(input_path: str, output_path: str = None) -> str:
 
 if __name__ == "__main__":
     import sys
+    import os
     
     if len(sys.argv) < 2:
-        print("Usage: python srt_preprocessor.py <input.srt> [output.srt]")
+        print("Usage: python preprocessor.py <input.srt> [output.srt]")
         sys.exit(1)
     
     input_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else input_file.replace('.srt', '_cleaned.srt')
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
+    else:
+        base, ext = os.path.splitext(input_file)
+        ext = ext if ext else ".srt"
+        output_file = f"{base}_cleaned{ext}"
     
     result_path = preprocess_srt_file(input_file, output_file)
     print(f"\n✅ Done! Cleaned file: {result_path}")

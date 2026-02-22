@@ -60,6 +60,7 @@ def test_progress_callback_fires_per_phase():
     
     # We enabled 2 phases, so it should have been called twice
     assert len(calls) == 2
+    # The callback currently yields plain string phase names
     assert "interjections" in calls
     assert "lines" in calls
 

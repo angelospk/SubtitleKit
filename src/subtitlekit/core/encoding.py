@@ -3,10 +3,10 @@ Utilities for robust encoding detection and handling.
 """
 
 import chardet
-from typing import Tuple
+from typing import Tuple, Optional
 
 
-def detect_file_encoding(file_path: str) -> Tuple[str, float]:
+def detect_file_encoding(file_path: str) -> Tuple[Optional[str], float]:
     """
     Detect the encoding of a file using chardet.
     
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) < 2:
-        print("Usage: python encoding_utils.py <file.srt>")
+        print("Usage: python encoding.py <file.srt>")
         sys.exit(1)
     
     file_path = sys.argv[1]

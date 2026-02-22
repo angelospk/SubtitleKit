@@ -1022,7 +1022,11 @@ def show_ui(lang='en'):
                 except Exception as e:
                     print(f"❌ Error: {e}")
                     
-        comp_upload.value.clear()
+        if hasattr(comp_upload.value, 'clear'):
+            comp_upload.value.clear()
+        elif isinstance(comp_upload.value, tuple):
+            comp_upload.value = ()
+            
         refresh_all_dropdowns()  # Important: refresh everywhere
         
     comp_upload.observe(on_comp_upload, names='value')

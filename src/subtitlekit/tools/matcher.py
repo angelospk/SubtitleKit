@@ -396,11 +396,17 @@ def process_subtitles(original_path: str, helper_paths: Optional[List[str]] = No
     
     for helper_path in helper_paths:
         # Sync helper subtitles if not skipped
+        synced_path = None
         if not skip_sync:
             with tempfile.NamedTemporaryFile(suffix='.srt', delete=False) as tmp:
                 synced_path = tmp.name
-            synced_path = sync_subtitles(original_path, helper_path, synced_path)
-            helper_subs = parse_subtitle_file(synced_path)
+            try:
+                synced_path_out = sync_subtitles(original_path, helper_path, synced_path)
+                helper_subs = parse_subtitle_file(synced_path_out)
+            finally:
+                if synced_path and os.path.exists(synced_path):
+                    import os
+                    os.unlink(synced_path)
         else:
             helper_subs = parse_subtitle_file(helper_path)
         
@@ -489,7 +495,7 @@ if __name__ == "__main__":
     output = sys.argv[3]
     
     print(f"Processing {original} and {helper}...")
-    results = process_subtitles(original, helper)
+    results = process_subtitles(original, [helper])
     
     print(f"Writing {len(results)} entries to {output}...")
     with open(output, 'w', encoding='utf-8') as f:

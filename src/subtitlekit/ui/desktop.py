@@ -48,7 +48,10 @@ class I18n:
         """Translate key"""
         text = self.translations.get(key, key)
         if kwargs:
-            text = text.format(**kwargs)
+            try:
+                text = text.format(**kwargs)
+            except KeyError:
+                pass
         return text
 
 
@@ -286,7 +289,8 @@ class SubtitleKitApp:
     
     def browse_save_file(self, entry_widget, filetypes):
         """Browse for output file"""
-        filename = filedialog.asksaveasfilename(filetypes=filetypes, defaultextension=filetypes[0][1])
+        ext = filetypes[0][1].replace('*', '')
+        filename = filedialog.asksaveasfilename(filetypes=filetypes, defaultextension=ext)
         if filename:
             entry_widget.delete(0, tk.END)
             entry_widget.insert(0, filename)
@@ -318,7 +322,7 @@ class SubtitleKitApp:
         # Run in thread to avoid freezing UI
         def run():
             try:
-                self.status_bar.config(text=self.i18n.t('status_processing'))
+                self.root.after(0, lambda: self.status_bar.config(text=self.i18n.t('status_processing')))
                 from subtitlekit.tools.matcher import process_subtitles
                 
                 results = process_subtitles(
@@ -331,12 +335,17 @@ class SubtitleKitApp:
                 with open(output, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 
-                self.status_bar.config(text=self.i18n.t('status_success'))
-                messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                def on_success():
+                    self.status_bar.config(text=self.i18n.t('status_success'))
+                    messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                self.root.after(0, on_success)
                 
             except Exception as e:
-                self.status_bar.config(text=self.i18n.t('status_error'))
-                messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
+                error_msg = str(e)
+                def on_error():
+                    self.status_bar.config(text=self.i18n.t('status_error'))
+                    messagebox.showerror("Error", self.i18n.t('msg_error', error=error_msg))
+                self.root.after(0, on_error)
         
         threading.Thread(target=run, daemon=True).start()
     
@@ -352,7 +361,7 @@ class SubtitleKitApp:
         
         def run():
             try:
-                self.status_bar.config(text=self.i18n.t('status_processing'))
+                self.root.after(0, lambda: self.status_bar.config(text=self.i18n.t('status_processing')))
                 from subtitlekit.tools.overlaps import fix_problematic_timings
                 
                 fix_problematic_timings(
@@ -363,12 +372,17 @@ class SubtitleKitApp:
                     preprocess=self.overlaps_preprocess.get()
                 )
                 
-                self.status_bar.config(text=self.i18n.t('status_success'))
-                messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                def on_success():
+                    self.status_bar.config(text=self.i18n.t('status_success'))
+                    messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                self.root.after(0, on_success)
                 
             except Exception as e:
-                self.status_bar.config(text=self.i18n.t('status_error'))
-                messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
+                error_msg = str(e)
+                def on_error():
+                    self.status_bar.config(text=self.i18n.t('status_error'))
+                    messagebox.showerror("Error", self.i18n.t('msg_error', error=error_msg))
+                self.root.after(0, on_error)
         
         threading.Thread(target=run, daemon=True).start()
     
@@ -384,7 +398,7 @@ class SubtitleKitApp:
         
         def run():
             try:
-                self.status_bar.config(text=self.i18n.t('status_processing'))
+                self.root.after(0, lambda: self.status_bar.config(text=self.i18n.t('status_processing')))
                 from subtitlekit.tools.corrections import apply_corrections_from_file
                 
                 apply_corrections_from_file(
@@ -394,12 +408,17 @@ class SubtitleKitApp:
                     verbose=not self.corrections_quiet.get()
                 )
                 
-                self.status_bar.config(text=self.i18n.t('status_success'))
-                messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                def on_success():
+                    self.status_bar.config(text=self.i18n.t('status_success'))
+                    messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                self.root.after(0, on_success)
                 
             except Exception as e:
-                self.status_bar.config(text=self.i18n.t('status_error'))
-                messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
+                error_msg = str(e)
+                def on_error():
+                    self.status_bar.config(text=self.i18n.t('status_error'))
+                    messagebox.showerror("Error", self.i18n.t('msg_error', error=error_msg))
+                self.root.after(0, on_error)
         
         threading.Thread(target=run, daemon=True).start()
 
@@ -422,7 +441,7 @@ class SubtitleKitApp:
 
         def run():
             try:
-                self.status_bar.config(text=self.i18n.t('status_processing'))
+                self.root.after(0, lambda: self.status_bar.config(text=self.i18n.t('status_processing')))
                 import pysrt
                 from subtitlekit.optimizer import OptimizerPipeline, OptimizationOptions
                 
@@ -446,12 +465,17 @@ class SubtitleKitApp:
                 results = pipeline.run(subs)
                 results.save(output, encoding='utf-8')
                 
-                self.status_bar.config(text=self.i18n.t('status_success'))
-                messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                def on_success():
+                    self.status_bar.config(text=self.i18n.t('status_success'))
+                    messagebox.showinfo("Success", self.i18n.t('msg_complete', path=output))
+                self.root.after(0, on_success)
                 
             except Exception as e:
-                self.status_bar.config(text=self.i18n.t('status_error'))
-                messagebox.showerror("Error", self.i18n.t('msg_error', error=str(e)))
+                error_msg = str(e)
+                def on_error():
+                    self.status_bar.config(text=self.i18n.t('status_error'))
+                    messagebox.showerror("Error", self.i18n.t('msg_error', error=error_msg))
+                self.root.after(0, on_error)
         
         threading.Thread(target=run, daemon=True).start()
 
@@ -500,9 +524,9 @@ class SubtitleKitApp:
             try:
                 set_setting('cps_target', float(cps_entry.get()))
                 set_setting('max_duration', float(dur_entry.get()))
+                dialog.destroy()
             except ValueError:
-                pass
-            dialog.destroy()
+                messagebox.showwarning("Warning", "Invalid numeric value. CPS and duration settings were not saved.")
             
         ttk.Button(frame, text=self.i18n.t('button_save'), command=save).grid(row=10, column=1, pady=20, sticky='e')
     
@@ -520,7 +544,7 @@ class SubtitleKitApp:
             if has_update:
                 # Show notification in UI thread
                 self.root.after(1000, lambda: self.show_update_notification(latest, url))
-        except:
+        except Exception:
             pass  # Silently fail
     
     def check_updates(self):

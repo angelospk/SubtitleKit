@@ -28,11 +28,19 @@ def save_config(config: Dict[str, Any]):
     ensure_config_dir()
     
     try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f, indent=4)
-        CONFIG_FILE.chmod(0o600)
-    except IOError:
-        pass
+        import tempfile
+        fd, temp_path = tempfile.mkstemp(dir=CONFIG_DIR, prefix='config_tmp', suffix='.json', text=True)
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(config, f, indent=4)
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, CONFIG_FILE)
+        except Exception:
+            os.unlink(temp_path)
+            raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to save config: {e}")
 
 def get_setting(key: str, default: Any = None) -> Any:
     """Get a specific setting from the config."""

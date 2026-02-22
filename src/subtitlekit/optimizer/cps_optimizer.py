@@ -32,6 +32,9 @@ def extend_timing(
     if char_count == 0:
         return
         
+    if target_cps <= 0:
+        return
+        
     ideal_duration = char_count / target_cps
     
     # If we are already at or above ideal duration, don't over-extend

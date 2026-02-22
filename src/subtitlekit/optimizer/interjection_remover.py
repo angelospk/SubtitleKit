@@ -59,8 +59,16 @@ class InterjectionRemover:
         if not self.interjections:
             return list(subtitles)
             
+        result = []
         for sub in subtitles:
-            sub.text = self.remove_interjections(sub.text)
-            
-        # Filter out subtitles that became empty
-        return [sub for sub in subtitles if sub.text.strip()]
+            new_text = self.remove_interjections(sub.text)
+            if new_text.strip():
+                # Create a copy to avoid mutating the original
+                new_sub = pysrt.SubRipItem(
+                    index=sub.index,
+                    start=sub.start,
+                    end=sub.end,
+                    text=new_text
+                )
+                result.append(new_sub)
+        return result

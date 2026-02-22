@@ -32,9 +32,9 @@ pyinstaller SubtitleKit.spec
 - ✅ **Manual**: Μπορείς να το τρέξεις χειροκίνητα από το Actions tab
 
 ### Builds:
-- 🪟 **Windows**: `subtitlekit-windows.exe`
-- 🍎 **macOS**: `subtitlekit-macos`
-- 🐧 **Linux**: `subtitlekit-linux`
+- 🪟 **Windows**: `SubtitleKit.exe`
+- 🍎 **macOS**: `SubtitleKit`
+- 🐧 **Linux**: `SubtitleKit`
 
 ### Output Location:
 Τα executables ανεβαίνουν:
@@ -61,8 +61,8 @@ git push origin v0.1.0
 
 ```bash
 # After download
-chmod +x subtitlekit-macos  # macOS/Linux only
-./subtitlekit-macos
+chmod +x SubtitleKit  # macOS/Linux only
+./SubtitleKit
 
 # Windows - just double click .exe
 ```

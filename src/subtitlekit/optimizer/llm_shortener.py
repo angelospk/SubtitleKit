@@ -38,7 +38,7 @@ def find_high_cps_segments(
             continue
 
         # Calculate how many chars need to be reduced
-        current_chars = len(sub.text) # Should we use stripped? pysrt does some of it
+        current_chars = len(sub.text.replace('\n', '').replace('\r', ''))
         target_chars = int(options.cps_target * duration)
         chars_to_reduce = current_chars - target_chars
 

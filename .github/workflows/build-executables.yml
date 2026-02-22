@@ -17,7 +17,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: subtitlekit-linux
+            artifact_name: SubtitleKit
             asset_name: subtitlekit-linux
           - os: windows-latest
             artifact_name: SubtitleKit.exe

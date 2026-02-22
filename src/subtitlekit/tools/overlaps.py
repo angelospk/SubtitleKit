@@ -71,64 +71,6 @@ def detect_unreasonable_durations(subs: pysrt.SubRipFile, max_duration_sec: floa
             problems.append(i)
     return problems
 
-
-def detect_chronological_issues(subs: pysrt.SubRipFile) -> List[int]:
-    """
-    Detect out-of-order subtitle entries.
-    
-    Returns list of indices where:
-    - start_time < previous_end_time (marks the current entry as problematic)
-    Note: Equal timestamps (start == prev_end) are allowed as players handle them correctly.
-    """
-    issues = []
-    
-    for i in range(len(subs)):
-        # Check if start is strictly before previous end (this entry is the problem)
-        # Equal timestamps are OK (start == prev_end)
-        if i > 0 and subs[i].start < subs[i-1].end:
-            if i not in issues:
-                issues.append(i)
-        # Note: We don't check if end > next_start here because that would be
-        # caught by the next iteration checking if next.start < this.end
-    
-    return issues
-
-
-def calculate_context_similarity(input_subs: pysrt.SubRipFile, 
-                                 input_idx: int,
-                                 ref_subs: pysrt.SubRipFile,
-                                 ref_idx: int,
-                                 window: int = 3) -> float:
-    """
-    Calculate similarity score between contexts around two indices.
-    
-    Compares text signatures of surrounding subtitles.
-    Returns a score between 0.0 and 1.0.
-    """
-    matches = 0
-    comparisons = 0
-    
-    for offset in range(-window, window + 1):
-        input_pos = input_idx + offset
-        ref_pos = ref_idx + offset
-        
-        # Skip if out of bounds
-        if input_pos < 0 or input_pos >= len(input_subs):
-            continue
-        if ref_pos < 0 or ref_pos >= len(ref_subs):
-            continue
-        
-        input_sig = extract_text_signature(input_subs[input_pos])
-        ref_sig = extract_text_signature(ref_subs[ref_pos])
-        
-        # Simple match - could be improved with fuzzy matching
-        if input_sig == ref_sig:
-            matches += 1
-        comparisons += 1
-    
-    return matches / comparisons if comparisons > 0 else 0.0
-
-
 def find_matching_context(problem_idx: int,
                           input_subs: pysrt.SubRipFile,
                           ref_subs: pysrt.SubRipFile,
@@ -198,6 +140,7 @@ def fix_problematic_timings(input_path: str,
     """
     # Preprocess input if requested
     actual_input_path = input_path
+    temp_cleaned_path = None
     if preprocess:
         print("\n📋 Preprocessing input file...")
         from subtitlekit.core.preprocessor import preprocess_srt_file
@@ -213,9 +156,13 @@ def fix_problematic_timings(input_path: str,
             print(f"  ⚠️  Preprocessing failed: {e}")
             print(f"  ℹ️  Continuing with original file...\n")
             actual_input_path = input_path
-    
+
     print(f"Loading input: {Path(actual_input_path).name}")
     input_content = read_srt_with_fallback(actual_input_path)
+    
+    if temp_cleaned_path and os.path.exists(temp_cleaned_path):
+        os.unlink(temp_cleaned_path)
+        
     input_subs = pysrt.from_string(input_content)
     
     # Clean annotations from input subtitles
@@ -237,12 +184,10 @@ def fix_problematic_timings(input_path: str,
     # Detect problems
     print("\nDetecting timing issues...")
     overlaps = set(detect_overlaps(input_subs))
-    chronological = set(detect_chronological_issues(input_subs))
     durations = set(detect_unreasonable_durations(input_subs))
-    problems = sorted(overlaps | chronological | durations)
+    problems = sorted(overlaps | durations)
     
-    print(f"  Found {len(overlaps)} overlaps")
-    print(f"  Found {len(chronological)} chronological issues")
+    print(f"  Found {len(overlaps)} overlaps (including chronological issues)")
     print(f"  Found {len(durations)} unreasonable durations")
     print(f"  Total problematic lines: {len(problems)}")
     
@@ -304,7 +249,7 @@ def fix_problematic_timings(input_path: str,
     # Validate
     print("\nValidating result...")
     no_overlaps = validate_no_overlaps(input_subs)
-    chronological_order = validate_chronological_order(input_subs)
+    chronological_order = validate_sorted_by_start(input_subs)
     no_duplicates = validate_no_duplicates(input_subs)
     
     print(f"  No overlaps: {'✓' if no_overlaps else '✗'}")
@@ -318,7 +263,7 @@ def fix_problematic_timings(input_path: str,
         'problems_unfixed': unfixed_count,
         'validation': {
             'no_overlaps': no_overlaps,
-            'chronological_order': chronological_order,
+            'sorted_by_start': chronological_order,
             'no_duplicates': no_duplicates
         }
     }
@@ -329,8 +274,8 @@ def validate_no_overlaps(subs: pysrt.SubRipFile) -> bool:
     return len(detect_overlaps(subs)) == 0
 
 
-def validate_chronological_order(subs: pysrt.SubRipFile) -> bool:
-    """Validate that all subtitles are in chronological order."""
+def validate_sorted_by_start(subs: pysrt.SubRipFile) -> bool:
+    """Validate that all subtitles are sorted by start time."""
     for i in range(1, len(subs)):
         if subs[i].start < subs[i-1].start:
             return False

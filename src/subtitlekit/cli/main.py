@@ -103,7 +103,15 @@ def cmd_optimize(args):
 
     print(f"Optimizing subtitles...")
     print(f"  Input: {args.input}")
-    output_path = args.output or args.input.replace(".srt", "_optimized.srt")
+    
+    import os
+    if args.output:
+        output_path = args.output
+    else:
+        base, ext = os.path.splitext(args.input)
+        ext = ext if ext else ".srt"
+        output_path = f"{base}_optimized{ext}"
+        
     print(f"  Output: {output_path}")
 
     # Initialize options from CLI + Config
@@ -148,6 +156,7 @@ def main():
         prog='subtitlekit',
         description='Subtitle processing toolkit: merge, sync, fix, and correct subtitles'
     )
+    parser.add_argument('--verbose', '-v', action='store_true', help='Show full traceback on errors')
     
     subparsers = parser.add_subparsers(dest='command', help='Commands')
     
@@ -218,7 +227,7 @@ def main():
         return 0
     except Exception as e:
         print(f"\n❌ Error: {e}", file=sys.stderr)
-        if '--verbose' in sys.argv:
+        if args.verbose:
             raise
         return 1
 

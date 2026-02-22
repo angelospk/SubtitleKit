@@ -74,9 +74,13 @@ def apply_annotations_to_entries(entries: List[Dict],
     Returns:
         Tuple of (modified entries, match stats dict)
     """
-    # Create lookup by ID
-    entry_lookup = {e.get('id'): e for e in entries}
-    
+    # Create lookup by ID with duplicate checking
+    entry_lookup = {}
+    for e in entries:
+        eid = e.get('id')
+        if eid in entry_lookup:
+            raise ValueError(f"Duplicate entry ID {eid} found in entries")
+        entry_lookup[eid] = e
     stats = {
         'matched': 0,
         'mismatched': [],
@@ -222,9 +226,18 @@ def main():
     # Load files
     try:
         entries = load_json(args.json)
+        if isinstance(entries, dict) and 'entries' in entries:
+            entries = entries['entries']
+        if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+            raise ValueError(f"{args.json} must contain a list of dictionaries")
+            
         annotations = load_json(args.annotations)
+        if isinstance(annotations, dict) and 'annotations' in annotations:
+            annotations = annotations['annotations']
+        if not isinstance(annotations, list) or not all(isinstance(a, dict) for a in annotations):
+            raise ValueError(f"{args.annotations} must contain a list of dictionaries")
     except Exception as e:
-        print(f"Error loading files: {e}", file=sys.stderr)
+        print(f"Error loading/validating files: {e}", file=sys.stderr)
         sys.exit(1)
     
     # Apply annotations with validation

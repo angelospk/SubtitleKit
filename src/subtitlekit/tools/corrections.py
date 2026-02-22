@@ -56,8 +56,6 @@ def find_words_diff(text1, text2):
     
     return changes
 
-import re
-
 def map_words_to_positions(text):
     """
     Map words to their (start, end) character positions in the text.
@@ -218,14 +216,15 @@ def apply_corrections_from_file(input_file, corrections_file, output_file, verbo
         
         # Search globally in ALL subtitles
         found = False
+        any_replaced = False
+        any_no_change = False
         
         for i, subtitle in enumerate(subs):
             new_text, status = smart_replace(subtitle.text, search_text, replacement_text)
             
             if status == "applied":
                 subtitle.text = new_text
-                found = True
-                applied_count += 1
+                any_replaced = True
                 if verbose:
                     actual_id = i + 1
                     offset = actual_id - corr_id
@@ -234,8 +233,14 @@ def apply_corrections_from_file(input_file, corrections_file, output_file, verbo
                     else:
                         print(f"✓ ID {corr_id}: Applied")
             elif status == "no_change":
-                skipped_count += 1
-                found = True
+                any_no_change = True
+                
+        if any_replaced:
+            applied_count += 1
+            found = True
+        elif any_no_change:
+            skipped_count += 1
+            found = True
         
         if not found:
             not_found_count += 1
@@ -268,65 +273,7 @@ def apply_corrections_from_file(input_file, corrections_file, output_file, verbo
 
 
 def main():
-    print("Loading files...")
-    subs = pysrt.open('greek_fixed.srt', encoding='utf-8')
-    
-    with open('corrections.json', 'r', encoding='utf-8') as f:
-        corrections = json.load(f)
-    
-    print(f"Loaded {len(subs)} subtitles and {len(corrections)} corrections\n")
-    
-    applied_count = 0
-    not_found_count = 0
-    skipped_count = 0
-    
-    for correction in corrections:
-        corr_id = correction['id']
-        search_text = correction['rx']
-        replacement_text = correction['sb']
-        
-        # Search globally in ALL subtitles
-        found = False
-        
-        for i, subtitle in enumerate(subs):
-            new_text, status = smart_replace(subtitle.text, search_text, replacement_text)
-            
-            if status == "applied":
-                subtitle.text = new_text
-                found = True
-                applied_count += 1
-                actual_id = i + 1
-                offset = actual_id - corr_id
-                if offset != 0:
-                    print(f"✓ ID {corr_id} → Applied at subtitle #{actual_id} (offset: {offset:+d})")
-                else:
-                    print(f"✓ ID {corr_id}: Applied")
-                # Continue searching for other occurrences
-            elif status == "no_change":
-                skipped_count += 1
-                found = True
-                # Continue searching
-
-        
-        if not found:
-            not_found_count += 1
-            preview = search_text.replace('\n', '↵')[:60]
-            print(f"✗ ID {corr_id}: NOT FOUND - '{preview}...'")
-    
-    # Save the corrected file
-    output_file = 'corrected_greek_fixed.srt'
-    print(f"\nSaving to {output_file}...")
-    subs.save(output_file, encoding='utf-8')
-    
-    print(f"\n{'='*80}")
-    print(f"SUMMARY")
-    print(f"{'='*80}")
-    print(f"Total corrections: {len(corrections)}")
-    print(f"✓ Applied: {applied_count}")
-    if skipped_count > 0:
-        print(f"⊘ Skipped (no-op): {skipped_count}")
-    print(f"✗ Not found: {not_found_count}")
-    print(f"\nOutput saved to: {output_file}\n")
+    apply_corrections_from_file('greek_fixed.srt', 'corrections.json', 'corrected_greek_fixed.srt', verbose=True)
 
 if __name__ == '__main__':
     main()

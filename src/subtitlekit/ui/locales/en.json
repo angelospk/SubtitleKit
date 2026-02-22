@@ -46,8 +46,8 @@
   "msg_api_key_required": "Gemini API key is required for LLM shortening.",
   "title_about": "About SubtitleKit",
   "title_settings": "SubtitleKit Settings",
-  "about_text": "SubtitleKit v{version}\\n\\nSubtitle processing toolkit for merging, fixing, and correcting subtitles.\\n\\n© 2025 SubtitleKit Contributors",
+  "about_text": "SubtitleKit v{version}\n\nSubtitle processing toolkit for merging, fixing, and correcting subtitles.\n\n© 2025 SubtitleKit Contributors",
   "title_update_available": "Update Available",
-  "update_message": "A new version (v{version}) is available!\\n\\nWould you like to download it?",
+  "update_message": "A new version (v{version}) is available!\n\nWould you like to download it?",
   "update_no_updates": "You're running the latest version!"
 }

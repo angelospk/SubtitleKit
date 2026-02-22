@@ -11,6 +11,7 @@ def reduce_lines(sub: pysrt.SubRipItem, max_lines: int = 2) -> pysrt.SubRipItem:
     Returns:
         The modified SubRipItem.
     """
+    max_lines = max(1, max_lines)
     lines = sub.text.split('\n')
 
     if len(lines) <= max_lines:
@@ -19,6 +20,8 @@ def reduce_lines(sub: pysrt.SubRipItem, max_lines: int = 2) -> pysrt.SubRipItem:
     # Combine lines to reduce count
     # Strategy: combine shortest consecutive lines
     while len(lines) > max_lines:
+        if len(lines) < 2:
+            break
         # Find the best pair to combine (shortest combined length)
         best_idx = 0
         best_len = float('inf')

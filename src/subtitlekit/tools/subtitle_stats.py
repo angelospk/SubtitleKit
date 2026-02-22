@@ -96,11 +96,10 @@ def calculate_ideal_cps(text: str, current_duration: float, gap_to_next: float, 
         return current_cps, current_duration
 
     ideal_duration = chars / target_cps
-    max_extension = min(gap_to_next, max_duration - current_duration)
+    max_extension = max(0.0, min(gap_to_next, max_duration - current_duration))
     max_possible_duration = current_duration + max_extension
 
-    final_duration = min(ideal_duration, max_possible_duration)
-    final_duration = min(final_duration, max_duration)
+    final_duration = max(current_duration, min(ideal_duration, max_possible_duration))
     ideal_cps = chars / final_duration if final_duration > 0 else current_cps
 
     return ideal_cps, final_duration
@@ -112,11 +111,15 @@ def analyze_subtitles_from_bytes(content: bytes, filename: str) -> Tuple[pd.Data
     for encoding in encodings:
         try:
             text = content.decode(encoding)
+            temp_path = None
             with tempfile.NamedTemporaryFile(mode='w', suffix='.srt', delete=False, encoding='utf-8') as f:
                 f.write(text)
                 temp_path = f.name
-            subs = pysrt.open(temp_path, encoding='utf-8')
-            os.unlink(temp_path)
+            try:
+                subs = pysrt.open(temp_path, encoding='utf-8')
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    os.unlink(temp_path)
             break
         except Exception:
             continue

@@ -38,16 +38,16 @@ def extract_punctuation_pattern(text: str) -> Dict[str, int]:
     Returns:
         Dictionary with counts of different punctuation marks
     """
-    # Remove HTML tags first
-    clean_text = re.sub(r'</?[ib]>', '', text)
+    # Remove all HTML tags first
+    clean_text = re.sub(r'<[^>]+>', '', text)
     
     pattern = {
-        'periods': text.count('.'),
-        'questions': text.count('?') + text.count(';'),  # Greek uses ; for questions
-        'exclamations': text.count('!'),
-        'commas': text.count(','),
+        'periods': clean_text.count('.'),
+        'questions': clean_text.count('?') + clean_text.count(';'),  # Greek uses ; for questions
+        'exclamations': clean_text.count('!'),
+        'commas': clean_text.count(','),
         'dialogue_dashes': len([line for line in clean_text.split('\n') if line.strip().startswith('-')]),
-        'line_count': len([line for line in text.split('\n') if line.strip()])
+        'line_count': len([line for line in clean_text.split('\n') if line.strip()])
     }
     
     return pattern
@@ -261,9 +261,7 @@ def sequence_length_pattern(entry_idx: int, entry_len: int, ref_len: int,
 def calculate_match_score(entry: pysrt.SubRipItem, 
                           ref: pysrt.SubRipItem,
                           entry_idx: int,
-                          total_entries: int = 100,
-                          input_subs: pysrt.SubRipFile = None,
-                          reference_subs: pysrt.SubRipFile = None) -> float:
+                          total_entries: int = 100) -> float:
     """
     Calculate overall match score combining multiple signals.
     
@@ -272,8 +270,6 @@ def calculate_match_score(entry: pysrt.SubRipItem,
         ref: Reference subtitle entry
         entry_idx: Index of entry (0-based)
         total_entries: Total number of entries
-        input_subs: Optional full input subtitles (for sequence pattern)
-        reference_subs: Optional full reference subtitles (for sequence pattern)
         
     Returns:
         Combined match score between 0.0 and 1.0
@@ -393,8 +389,7 @@ def fix_corrupted_timings(input_subs: pysrt.SubRipFile,
         # Find best matching reference entry
         for ref in reference_subs:
             score = calculate_match_score(
-                entry, ref, entry_idx, len(input_subs),
-                input_subs, reference_subs  # Pass for sequence pattern
+                entry, ref, entry_idx, len(input_subs)
             )
             
             if score > min_score:
@@ -505,10 +500,15 @@ def fix_corrupted_timings(input_subs: pysrt.SubRipFile,
     
     # Print statistics
     total = len(input_subs)
-    print(f"\nConservative Matching Statistics:")
-    print(f"  Matched (used top match): {stats['matched']} ({stats['matched']/total*100:.1f}%)")
-    print(f"  Used alternative match: {stats['used_alternative']} ({stats['used_alternative']/total*100:.1f}%)")
-    print(f"  Kept original timing: {stats['kept_original']} ({stats['kept_original']/total*100:.1f}%)")
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if total > 0:
+        logger.info("\nConservative Matching Statistics:")
+        logger.info(f"  Matched (used top match): {stats['matched']} ({stats['matched']/total*100:.1f}%)")
+        logger.info(f"  Used alternative match: {stats['used_alternative']} ({stats['used_alternative']/total*100:.1f}%)")
+        logger.info(f"  Kept original timing: {stats['kept_original']} ({stats['kept_original']/total*100:.1f}%)")
     
     return fixed_subs
 

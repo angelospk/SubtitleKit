@@ -70,15 +70,13 @@ def remove_extraneous_dashes(text_lines):
         
         # Remove trailing "- " (dash + space)
         if cleaned.rstrip().endswith(' -'):
-            trailing_space_count = len(cleaned) - len(cleaned.rstrip())
             cleaned = cleaned.rstrip()[:-2] + cleaned[len(cleaned.rstrip()):]
         
         # Remove trailing "-" (dash without space) if preceded by non-dash character
         elif cleaned.rstrip().endswith('-') and len(cleaned.rstrip()) > 1 and cleaned.rstrip()[-2] != '-':
-            trailing_space_count = len(cleaned) - len(cleaned.rstrip())
             cleaned = cleaned.rstrip()[:-1] + cleaned[len(cleaned.rstrip()):]
         
-        cleaned_lines.append(cleaned.strip() if cleaned.strip() else line)
+        cleaned_lines.append(cleaned if cleaned.strip() else line)
     
     return cleaned_lines
 

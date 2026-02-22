@@ -111,7 +111,11 @@ def has_speaker_change(text: str) -> bool:
     dash_count = sum(1 for line in lines if starts_with_dialogue_dash(line))
     
     # If 2+ lines have dashes, or if one line has dash and text is multiline
-    return dash_count >= 2
+    if dash_count >= 2:
+        return True
+    if dash_count == 1 and len(lines) > 1:
+        return True
+    return False
 
 
 def can_merge_entries(entry1: Dict[str, Any], entry2: Dict[str, Any],
@@ -217,7 +221,12 @@ def parse_srt_time_to_ms(time_str: str) -> int:
     minutes = int(parts[1])
     seconds_parts = parts[2].split('.')
     seconds = int(seconds_parts[0])
-    milliseconds = int(seconds_parts[1]) if len(seconds_parts) > 1 else 0
+    
+    if len(seconds_parts) > 1:
+        ms_str = seconds_parts[1][:3].ljust(3, '0')
+        milliseconds = int(ms_str)
+    else:
+        milliseconds = 0
     
     total_ms = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
     return total_ms
