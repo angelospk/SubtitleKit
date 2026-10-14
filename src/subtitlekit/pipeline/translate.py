@@ -52,9 +52,11 @@ class TranslationResult:
 
 
 def prepare_source(cues: Sequence[Cue]) -> (List[Cue], List[str]):
-    """Drop ads/credits and HI-only cues, renumber 1..n. Returns (cues, notes)."""
+    """Drop ads/credits and HI-only cues, sort by start, renumber 1..n. Returns (cues, notes)."""
     kept, notes = [], []
-    for c in cues:
+    if any(b.start_ms < a.start_ms for a, b in zip(cues, cues[1:])):
+        notes.append("source cues were out of order; sorted by start time")
+    for c in sorted(cues, key=lambda c: c.start_ms):
         text = visible_text(c.text).strip()
         if not text:
             notes.append(f"dropped empty cue {c.index}")

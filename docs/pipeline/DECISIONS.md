@@ -74,3 +74,41 @@ where asked. Dead ends are logged too.
   natural (names transliterated: Catherine → Κάθριν).
 - Why: timing never passes through the LLM, so it cannot be corrupted.
 - Not reused: the SvelteKit app's resume/continue loop (not needed with chunks).
+
+## D8: Fix stage design
+- Order: resync (optional, needs a reference subtitle of the target release)
+  → timing (overlaps, min gap 84 ms = 2 frames, min duration 833 ms, extend
+  end times toward 17 CPS, max 7 s) → reflow (≤ 42 chars, ≤ 2 lines,
+  balanced, two-speaker dialogue untouched) → LLM condensation of cues still
+  > 20 CPS.
+- Every sub-stage passes `validate_structure` (count, 1..n order,
+  chronological order, no overlaps, positive durations, bounded shift); a
+  failing sub-stage is reverted as a whole and flagged.
+- Each condensed line passes rule checks (shorter, ≥ 45 % of the original,
+  same numbers, negation kept, question kept, names kept, dialogue dash kept)
+  and then a batched LLM fidelity check; any failure — including the
+  fidelity call itself failing — reverts that line and flags it.
+- Embedding fidelity check: not done. No free local embedding model is set up;
+  the LLM check is the semantic gate. Logged as an open question.
+- Only end times move during timing fixes, except when an overlap cannot be
+  cleared without shrinking a cue below 500 ms; then the next start moves.
+- QA for AI-translation errors: translated/source length > 1.6×, numbers
+  differ, repeated previous line → flags for review.
+
+## D9: Resync (cross-lingual) instead of vendoring dtw_syncer
+- Options: vendor `dtw_syncer.py` (pure-Python O(n·m), ~400 lines with deps);
+  ffsubsync per window (needs the video or audio); activity-signal
+  cross-correlation with numpy.
+- Choice: activity-signal correlation (FFT), global offset + drift scan, then
+  per-window offsets **only against the reference cropped to ± buffer around
+  the global offset** (the fix for the documented segmented-sync bug), linear
+  fit `a + b·t`, outlier drop, confidence gates. Not confident → source timing
+  kept and a flag raised.
+- Implemented by a sonnet-worker against tests I wrote; worker deviation:
+  added a drift scan to the global step (a 4.3 % frame-rate drift smeared the
+  plain correlation to score 0.10). Accepted: the unrelated-reference test
+  still fails the gate (score ≈ 0.2).
+- Real data: Housemaid WEB → AMZN: offset +834 ms, score 0.84, 1.1 s; cues
+  starting within 200 ms of an AMZN cue 3 % → 57 % (different segmentation).
+  Housemaid TS → AMZN: score 0.36 → refused (TS rip has a different edit).
+  Piecewise (non-linear) sync for edited/TS releases is out of scope.
