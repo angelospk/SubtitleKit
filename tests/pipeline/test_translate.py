@@ -201,3 +201,47 @@ def test_translate_cues_puts_hints_before_the_input():
     plain = []
     translate_cues(cues, MockBackend(replies=lambda q: plain.append(q) or reply(q)))
     assert "Hints JSON:" not in plain[0]
+
+
+def test_char_budgets_use_the_time_available_until_the_next_cue():
+    from subtitlekit.pipeline.translate import char_budgets
+
+    cues = [
+        Cue(1, 0, 2000, "a"),        # next starts at 5000: 4916 ms available → 17 × 4.916 = 83
+        Cue(2, 5000, 6000, "b"),     # next starts at 6000 (no gap): own duration 1000 ms → 17
+        Cue(3, 6000, 7000, "c"),     # last cue: up to 7 s → 119, capped at 2 × 42 = 84
+    ]
+    assert char_budgets(cues, cps=17, min_gap_ms=84, max_duration_ms=7000, max_chars=84) == {1: 83, 2: 17, 3: 84}
+
+
+def test_translate_cues_sends_budgets_before_the_input_only_when_asked():
+    from subtitlekit.pipeline.translate import translate_cues
+
+    prompts = []
+
+    def reply(prompt):
+        prompts.append(prompt)
+        return json.dumps({k: "Γεια σου, φίλε μου." for k in prompt_payload(prompt)}, ensure_ascii=False)
+
+    cues = [Cue(1, 0, 1000, "Hello, my friend."), Cue(2, 3000, 4000, "Hello again, friend.")]
+    translate_cues(cues, MockBackend(replies=reply), budget_cps=17)
+    p = prompts[0]
+    assert "Budget JSON:" in p and p.index("Budget JSON:") < p.index("Input JSON:")
+    assert '"1": 49' in p  # 17 × (3000 - 84) / 1000 = 49.6 → 49
+    assert prompt_payload(p) == {"1": "Hello, my friend.", "2": "Hello again, friend."}
+    translate_cues(cues, MockBackend(replies=reply))
+    assert "Budget JSON:" not in prompts[-1]
+
+
+def test_char_budgets_never_go_negative_and_reject_bad_cps():
+    import math
+
+    import pytest
+
+    from subtitlekit.pipeline.translate import char_budgets, translate_cues
+
+    bad = [Cue(1, 1000, 500, "x"), Cue(2, 1000, 2000, "y")]  # negative duration, next starts at the same time
+    assert char_budgets(bad, cps=17)[1] == 0
+    for cps in (0, -5, math.nan, math.inf):
+        with pytest.raises(ValueError):
+            translate_cues([Cue(1, 0, 1000, "Hi there, friend.")], MockBackend(replies=lambda p: "{}"), budget_cps=cps)

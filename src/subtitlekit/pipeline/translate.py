@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -132,6 +133,25 @@ NAME_RULES = {
 }
 DEFAULT_NAME_RULE = "Do not translate character names; transliterate only if that is the {target} convention."
 
+def char_budgets(
+    cues: Sequence[Cue], cps: float, min_gap_ms: int = 84, max_duration_ms: int = 7000, max_chars: int = 84,
+) -> Dict[int, int]:
+    """Per-cue character budget ``{index: chars}`` from the time each cue can occupy.
+
+    The timing stage can extend a cue up to the next one, so the budget uses the available time
+    (until ``min_gap_ms`` before the next cue, at most ``max_duration_ms`` from the start), not the
+    current duration. ``cues`` is the full list in time order; the last cue has no next cue.
+    """
+    out: Dict[int, int] = {}
+    for k, c in enumerate(cues):
+        limit = c.start_ms + max_duration_ms
+        if k + 1 < len(cues):
+            limit = min(cues[k + 1].start_ms - min_gap_ms, limit)
+        available_ms = max(0, c.duration_ms, limit - c.start_ms)
+        out[c.index] = min(max_chars, int(cps * available_ms / 1000))
+    return out
+
+
 PROMPT = """You are a professional subtitle translator. Translate the subtitle lines below from {source} into {target}.
 {movie}
 Rules:
@@ -140,7 +160,7 @@ Rules:
 - At most 2 lines per subtitle; mark a line break with "\\n". Keep a leading "-" for dialogue lines.
 - Keep names, numbers and units unchanged in meaning. {names_rule}
 - Keep <i>...</i> tags where the source has them.
-{glossary}{context}{hints}
+{glossary}{context}{hints}{budget}
 Input JSON:
 {payload}"""
 
@@ -149,6 +169,7 @@ def build_prompt(
     chunk: Sequence[Cue], meta: FilmMeta, source_lang: str, target_lang: str,
     names: Sequence[str], context: Sequence[tuple],
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
+    budgets: Optional[Dict[int, int]] = None,
 ) -> str:
     movie = ""
     if meta.title:
@@ -175,11 +196,20 @@ def build_prompt(
             "address. Translate the meaning of the input, not the hint word by word.\nHints JSON:\n"
             + json.dumps(chunk_hints, ensure_ascii=False, indent=0) + "\n"
         )
+    budget_block = ""
+    chunk_budgets = {str(c.index): budgets[c.index] for c in chunk if budgets and c.index in budgets}
+    if chunk_budgets:
+        budget_block = (
+            "\nCharacter budget per subtitle (Budget JSON): the maximum number of visible characters, spaces "
+            "included, line breaks excluded. Fit each translation into its budget: keep the essential meaning; "
+            "drop filler, hesitations, repetitions, tag questions and names used only in address.\nBudget JSON:\n"
+            + json.dumps(chunk_budgets) + "\n"
+        )
     payload = json.dumps({str(c.index): c.text for c in chunk}, ensure_ascii=False, indent=0)
     target = LANG_NAMES.get(target_lang, target_lang)
     return PROMPT.format(
         source=LANG_NAMES.get(source_lang, source_lang), target=LANG_NAMES.get(target_lang, target_lang),
-        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, hints=hint_block, payload=payload,
+        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, hints=hint_block, budget=budget_block, payload=payload,
         names_rule=NAME_RULES.get(target_lang, DEFAULT_NAME_RULE.format(target=target)),
     )
 
@@ -246,8 +276,12 @@ def translate_cues(
     context_lines: int = 4, max_attempts: int = 2, max_consecutive_errors: int = 4,
     progress: Optional[Callable[[int, int], None]] = None,
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
+    budget_cps: Optional[float] = None,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
+    if budget_cps is not None and not (math.isfinite(budget_cps) and budget_cps > 0):
+        raise ValueError(f"budget_cps must be a positive number or None, got {budget_cps!r}")
+    budgets = char_budgets(cues, budget_cps) if budget_cps is not None else None
     names = extract_names(cues)
     done: Dict[int, str] = {}
     result = TranslationResult(cues=[])
@@ -263,7 +297,7 @@ def translate_cues(
         for attempt in range(1, max_attempts + 1):
             prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
             prompt = build_prompt(pending, meta, source_lang, target_lang, names,
-                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang)
+                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += f"\n\nRetry {attempt}: your previous answer was rejected ({last_problem[:200]}). Follow the rules exactly."

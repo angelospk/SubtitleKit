@@ -3,15 +3,20 @@ Run with the worktree venv (imports subtitlekit for the no-judge coverage pass).
 import glob, json, sys, os
 from subtitlekit.pipeline.compare import compare_subtitles
 from subtitlekit.pipeline.srt import load_srt
-REF = os.path.expanduser("~/Downloads/Subtitles-1/43c52854aee2ff8b/Euphoria.US.S03E01.1080p.WEB.h264-ETHEL_track9_[gre].srt")
+REFS = {
+    "Euphoria.S03E01": "~/Downloads/Subtitles-1/43c52854aee2ff8b/Euphoria.US.S03E01.1080p.WEB.h264-ETHEL_track9_[gre].srt",
+    "Stranger.Things.S05E08": "~/Downloads/Subtitles/8023c67d80b190ea/Stranger.Things.S05E08.1080p.WEB.h264-ETHEL_track9_[gre].srt",
+}
 base = os.path.expanduser("~/pipeline-demo/eval")
-variants = sys.argv[1:]
+variants = sys.argv[1:]  # eval folders of ONE film: <film>.<variant>
+film = variants[0].rsplit(".", 1)[0]
+assert all(v.rsplit(".", 1)[0] == film for v in variants), "one film per table"
 res = {v: json.load(open(f"{base}/compare/{v}/compare.json")) for v in variants}
 common = set.intersection(*[{s["anchor_ms"] for s in r["samples"] if (s.get("verdict") or {}).get("winner")} for r in res.values()])
 print(f"anchors judged in all variants: {len(common)}")
-ref_cues = load_srt(REF)
+ref_cues = load_srt(os.path.expanduser(REFS[film]))
 def coverage(v):
-    ours = load_srt(glob.glob(f"{base}/out/Euphoria.S03E01.{v}/*.el.srt")[0])
+    ours = load_srt(glob.glob(f"{base}/out/{v}/*.el.srt")[0])
     return compare_subtitles(ours, ref_cues, sample=60, seed=0)["coverage"]
 print(f"{'var':6} {'miss':>4} {'big':>4} {'ours':>4} {'ref':>4} {'tie':>4} {'fail':>4}  {'chars':>5} {'cps95':>5} {'>17':>5} {'>20':>5}  errors(ours)")
 for v, r in res.items():

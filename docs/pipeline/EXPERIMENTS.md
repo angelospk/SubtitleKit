@@ -34,6 +34,13 @@ experiment; keep them short and concrete. Details and tables live in
    not reach the output, and treat a loss above 1 % as a bug.
 10. **Compare variants on the anchors that all of them judged**
     (`docs/pipeline/eval/summary.py`).
+11. **Budget the length before translation, not after.** A per-cue
+    character budget in the prompt brings reading speed to the professional
+    level without a loss the judge can see (E3). The condensation pass
+    after translation is then almost idle.
+12. **Check each new release type for shared timing.** Netflix tracks of
+    one release share the cue timing (start difference 0 ms), so every
+    source keeps the professional segmentation; HBO tracks do not.
 
 ## E1: French vs English source (2026-10-14, Euphoria S03E01)
 
@@ -89,3 +96,57 @@ experiment; keep them short and concrete. Details and tables live in
 - Next: English source + an explicit per-cue character budget
   (17 CPS × duration) in the translation prompt, then condensation; no hint
   track. Then a second film to check that the ranking holds.
+
+## E3: per-cue character budget + a second film (2026-10-14)
+
+- Hypotheses:
+  1. A per-cue character budget in the translation prompt (17 CPS × the
+     time to the next cue, max 7 s, max 84 characters) brings English-source
+     reading speed close to the professional track and keeps the meaning.
+  2. The E2 ranking (English source ahead of European sources) holds on a
+     second film from another platform.
+- Setup: Haiku 5.5, `translate.budget_cps: 17` ("enb") vs no budget ("en",
+  same prompt otherwise). Euphoria S03E01 (HBO) en baseline reused from E2.
+  Stranger Things S05E08 (Netflix, 2 h): en, enb, pt (European Portuguese),
+  de. Anchored judge as in E2. All E3 runs started at the same time.
+- Result, Euphoria S03E01 (56 common anchors; ours / pro / tie):
+
+  | Source | Judge | Our top errors | Chars vs pro | CPS p95 | > 17 | > 20 | Over budget |
+  |---|---|---|---|---|---|---|---|
+  | en | 40 / 6 / 10 | naturalness 4 | 1.14 | 21.1 | 26 % | 6 % | 15 % |
+  | **enb** | **38 / 8 / 10** | meaning 5 | **1.03** | **17.0** | **15 %** | **1 %** | **4 %** |
+  | professional | | | 1.00 | 17.1 | 5 % | 0 % | |
+
+- Result, Stranger Things S05E08 (49 common anchors):
+
+  | Source | Judge | Our top errors | Chars vs pro | CPS p95 | > 17 | > 20 | Over budget |
+  |---|---|---|---|---|---|---|---|
+  | en | 23 / 8 / 18 | readability 5 | 1.18 | 19.2 | 21 % | 3 % | 12 % |
+  | **enb** | **25 / 5 / 19** | naturalness 4 | **1.08** | **17.0** | **10 %** | **0 %** | **1 %** |
+  | de | 21 / 11 / 17 | meaning 6 | 1.03 | 17.5 | 13 % | 1 % | |
+  | pt | 17 / 18 / 14 | meaning 8 | 1.04 | 17.9 | 15 % | 1 % | |
+  | professional | | | 1.00 | 16.8 | 0 % | 0 % | |
+
+  "Over budget" = share of our cues longer than their 17-CPS budget. The pt
+  judge run lost one batch (10 of 60 anchors), so this table has 49.
+
+- Hypothesis 1: **confirmed on both films.** The judge score is a tie
+  (difference ≤ 2 wins), CPS p95 drops to 17.0 on both films, and cues over
+  20 CPS drop from 6 % to 1 % and from 3 % to 0 %. The condensation pass
+  after translation had little left to do: 18 instead of 73 condensations
+  (Euphoria), 5 instead of 95 (Stranger Things).
+- Hypothesis 2: **holds, with a smaller gap.** English still leads, but
+  German on Netflix is within the noise rule (21 vs 23–25 wins). Netflix
+  tracks share the timing of the Greek track (1:1 segments 1103–1151, start
+  difference 0 ms), so a European source does not cost segmentation there.
+  The judge still compares against the English text (lesson 7).
+- Problems seen: the pt run left 2 cues in Portuguese ("Quero ser o Dungeon
+  Master!"); enb left "A sugar baby?" in English (the other 2 untranslated
+  cues are a "USA!" chant). The pipeline flagged all of them and sent the
+  films to human review, but a retry would fix them. German "erledigt"
+  became a nonsense word (caught by the fidelity check).
+- Lessons: 11–12 above.
+- Next: turn the budget on by default (Harold's call: it trades a little
+  completeness for easier reading); retry untranslated cues once; then a
+  film whose Greek track is not built on the same template.
+

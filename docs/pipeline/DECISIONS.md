@@ -428,3 +428,33 @@ Codex `review` lane, 2 rounds (cap reached), then fixes without a round 3:
 - A worker changed the report's `analysis.chosen` from path to dict; reverted
   (the test was wrong, not the schema).
 - CodeRabbit: 0 findings.
+
+## D19: Per-cue character budget (E3)
+
+Details and lessons: `EXPERIMENTS.md` E3.
+
+- New: `translate.budget_cps` (default null = off). When set, the
+  translation prompt gets a "Budget JSON" block: for each cue, the maximum
+  characters = budget_cps × the time until the next cue starts (minus an
+  84 ms gap, at most 7 s, never less than the cue's own duration), capped
+  at 84. `budget_cps` must be a finite positive number; anything else
+  raises `ValueError`.
+- Result with `budget_cps: 17`, English source: judge score unchanged on
+  two films (Euphoria 38 vs 40 wins, Stranger Things 25 vs 23), CPS p95 21.1
+  → 17.0 and 19.2 → 17.0, cues over 20 CPS 6 % → 1 % and 3 % → 0 %.
+- Decision: keep the default off in this change; recommend `17` as the
+  default (Harold decides). The eval scripts take `<film>.<variant>`
+  folders; a variant ending in `.enb` runs with the budget config.
+
+### Review log (D19)
+
+Codex `review` lane, 2 rounds (cap reached), then fixes without a round 3:
+- Round 1 REVISE, 4 findings, all fixed: a negative-duration cue could get
+  a budget of -1 (clamped to ≥ 0); `budget_cps` 0/negative/NaN/Infinity
+  now raise; both eval scripts now wait on every job and exit non-zero if
+  one fails.
+- Round 2 REVISE: 4 confirmed fixed. 2 new, fixed after the round:
+  `run_sweep.sh` with no arguments crashed on Bash 3.2 (now a usage error);
+  `run_compare.sh` checks every folder name before it starts any job.
+- CodeRabbit: 0 findings.
+

@@ -262,3 +262,12 @@ def test_hybrid_applies_the_worth_it_gate_to_the_meaning_track(tmp_path):
                    str(out), log=lambda m: None)
     assert rep.decision == SKIP
     assert any("< 70" in r for r in rep.reasons)
+
+
+def test_budget_cps_in_config_reaches_the_translation_prompt(tmp_path):
+    film = make_film(tmp_path)
+    out = tmp_path / "out"
+    backend = greek_backend()
+    run_film(str(film), cfg(translate={"budget_cps": 17}), backend, str(out), log=lambda m: None)
+    assert any("Budget JSON:" in p for p in backend.prompts)
+    assert DEFAULTS["translate"]["budget_cps"] is None  # off unless configured

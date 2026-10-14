@@ -229,7 +229,7 @@ def run_film(
         source, backend, FilmMeta.from_dict(meta), chosen.language, cfg["target_language"],
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
-        hints=hints, hint_lang=hint_lang,
+        hints=hints, hint_lang=hint_lang, budget_cps=cfg["translate"].get("budget_cps"),
     ) if backend else _no_llm(source)
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
