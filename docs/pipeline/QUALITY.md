@@ -203,3 +203,27 @@ note. Judged by Claude (Opus), rough serious-error counts:
 E13 run (`cfg-Ffree.yaml`): an all-free pipeline. muse-spark translates;
 big-pickle is the main model (glossary, fidelity check), the corrector, the
 hard-lines model and the reviewer, so another model checks the translator.
+
+## E12 / E13 interim (2026-10-15 02:00)
+
+| Run | Euphoria | Kumail | Stranger Things |
+|---|---|---|---|
+| Ospark: muse-spark + Opus corrector + sol review | 0.0 (17.1) | 3.19 (24.5) | running |
+| Opickle: big-pickle + Opus + sol | invalid: 33 serious from a shifted block | running | queued |
+| Omimo: mimo flash + Opus + sol | failed: translator returned no text, 706 cues untranslated | stopped | stopped |
+| Ffree: all free (spark translates, pickle checks) | 2.01 (15.1) | running | queued |
+
+Findings:
+- Free translators reach 0-2 serious/hour on drama but 2-3x Opus's
+  noticeable errors, and comedy (Kumail) is their weak point (lost puns).
+- big-pickle shifted cues 406-461 by one in a translation chunk (the keys
+  matched, the texts did not). The fidelity check and the review pass flagged
+  33 of them, but the fixes were rejected as too long. 479 meaning fixes
+  across all runs were rejected for length (median 1.21x the budget), so
+  fixes may now run 25% over the budget (`FIX_SLACK`).
+- muse-spark writes "κι" before consonants ("Κι σκέφτηκα"); `fix_forms` now
+  writes "και" there.
+- mimo flash returned no text on 300- and 150-cue chunks four times in a row
+  and the run was stopped; with the screen result it is not worth more runs.
+- E14 (Kumail only, all free, new code): Ffree2 (min_sev 3) and Ffree2b
+  (review also fixes noticeable errors, min_sev 2).
