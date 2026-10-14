@@ -65,7 +65,8 @@ fps: 23.976" \
 # E7: every model variant translates with the same glossary (the one the encg run built).
 for name in Euphoria.S03E01 Stranger.Things.S05E08; do
   g=~/pipeline-demo/eval/out/$name.encg/glossary.json
-  [ -f "$g" ] || { echo "missing $g (run encg first)" >&2; exit 1; }
+  # A fresh eval tree has no encg run yet: rerun this script after it.
+  [ -f "$g" ] || { echo "note: $g missing; run encg, then this script again for the E7 variants" >&2; continue; }
   for v in mhaiku msonnet mflash moss mluna; do
     cp "$g" "$F/$name.$v/glossary.json"
     echo "glossary: glossary.json" >> "$F/$name.$v/film.yaml"

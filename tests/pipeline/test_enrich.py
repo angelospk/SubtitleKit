@@ -131,3 +131,46 @@ def test_enrich_uses_the_film_glossary_names(tmp_path):
     assert rep.data["correction"]["applied"] == 0  # a glossary name added by the correction is rejected
     caps_prompt = next(p for p in b.prompts if p.startswith("You translate on-screen text"))
     assert '"Daisy": "Ντέιζι"' in caps_prompt
+
+
+def test_enrich_never_writes_the_input_through_a_report_file_alias(tmp_path):
+    import os
+
+    import pytest
+
+    d = make_film(tmp_path)
+    greek = d / "Film.2025.WEB.gre.srt"
+    original = greek.read_text(encoding="utf-8")
+    out = tmp_path / "review" / "Film.2025"
+    out.mkdir(parents=True)
+    for name in ("enrich.json", "enrich.md"):
+        link = out / name
+        os.symlink(greek, link)
+        with pytest.raises(ValueError):
+            enrich_film(str(d), str(greek), cfg(), None, str(tmp_path / "review"), log=lambda m: None)
+        link.unlink()
+    assert greek.read_text(encoding="utf-8") == original
+
+
+def test_enrich_report_lists_every_correction_with_final_cue_numbers_and_full_text(tmp_path):
+    d = make_film(tmp_path)
+    eng = [Cue(i, i * 3000, i * 3000 + 2000, f"Line {i}, my friend.") for i in range(1, 11)]
+    # a caption at 1.0-2.5 s goes before cue 1, so every corrected cue moves down by one
+    for lang, sign in (("fre", "HÔTEL DE LA PLAGE"), ("spa", "HOTEL DE LA PLAYA"), ("ger", "STRANDHOTEL")):
+        cues = [Cue(1, 500, 2500, sign)] + [Cue(i + 1, c.start_ms, c.end_ms, f"Ligne {i}.") for i, c in enumerate(eng, 1)]
+        (d / f"Film.2025.WEB.{lang}.srt").write_text(format_srt(cues), encoding="utf-8")
+
+    def reply(prompt):
+        if prompt.startswith("You correct Greek subtitles"):
+            return json.dumps([{"id": i, "rx": "φίλε μου", "sb": "φίλε", "type": "γραμματική"} for i in range(1, 11)],
+                              ensure_ascii=False)
+        return backend().replies(prompt)
+
+    rep = enrich_film(str(d), str(d / "Film.2025.WEB.gre.srt"), cfg(), MockBackend(replies=reply, name="t"),
+                      str(tmp_path / "review"), log=lambda m: None)
+    items = rep.data["correction"]["items"]
+    assert rep.data["captions"]["added"] == 1 and len(items) == 10
+    first = items[0]
+    assert first["cue"] == 2 and first["before"] == "Γραμμή 1, φίλε μου." and first["after"] == "Γραμμή 1, φίλε."
+    md = (tmp_path / "review" / "Film.2025" / "enrich.md").read_text(encoding="utf-8")
+    assert "cue 2: Γραμμή 1, φίλε μου. -> Γραμμή 1, φίλε." in md and "cue 11:" in md

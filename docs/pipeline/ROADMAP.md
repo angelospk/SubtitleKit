@@ -109,3 +109,9 @@ Defaults chosen without an answer from Harold (change if he says so):
 - E7 Flash (with AGY_TEXT_ONLY): Euphoria 45 / 9 / 6 in 29 min; inside noise
   of Haiku 42 / 11 / 7. Flash judges: E10 13/6 + 19/13, E9 16/3 + 24/6.
   Every step of the goal is done.
+- Final CodeRabbit (both commits): 5 findings. Fixed with tests: report
+  files could follow a link to the input (all three outputs are checked and
+  written fresh); enrich.md listed only 50 edits with old cue numbers (now
+  every corrected cue, full before/after, final numbers); setup_eval.sh
+  stopped on a fresh tree. Rejected: "other Greek tracks vote as foreign":
+  discover_candidates maps gre to el, so the target filter removes them.

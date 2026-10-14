@@ -607,7 +607,9 @@ Details: `EXPERIMENTS.md` E9.
   `review/<film>/` (`.el.enriched.srt`, `enrich.json`, `enrich.md`).
 - Never uploads (`upload: "not uploaded: a human checks and uploads this
   file"`). Never writes the input, also not through a symlink or hard link
-  (checked before any LLM call). The film glossary (film.yaml) feeds the
+  from any of the three output files (checked before any LLM call; the
+  outputs are written as new files). `enrich.md` lists every corrected cue
+  with the full text before and after, under its final cue number. The film glossary (film.yaml) feeds the
   name checks and the captions.
 - Notification: ntfy POST only when `SUBTITLEKIT_NTFY_TOPIC` is set; the
   topic lives only in the environment, never in the repo. A failed POST

@@ -64,6 +64,10 @@ def _ts(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
 
 
+def _one_line(text: str) -> str:
+    return text.replace("\n", " / ")
+
+
 def _summary(data: Dict[str, Any], added: List[Cue], output: str) -> str:
     cap, cor = data["captions"], data["correction"]
     lines = [f"# {data['film']}: enriched subtitle", "", f"- input: {data['input']}", f"- output: {output}",
@@ -75,7 +79,7 @@ def _summary(data: Dict[str, Any], added: List[Cue], output: str) -> str:
         lines += [f"- {_ts(c.start_ms)} --> {_ts(c.end_ms)}: {c.text}" for c in added]
     if cor.get("items"):
         lines += ["", "## Applied corrections", ""]
-        lines += [f"- cue {i['cue']}: {i['rx']} -> {i['sb']}" for i in cor["items"]]
+        lines += [f"- cue {i['cue']}: {_one_line(i['before'])} -> {_one_line(i['after'])}" for i in cor["items"]]
     lines += ["", data["upload"], ""]
     return "\n".join(lines)
 
@@ -90,9 +94,11 @@ def enrich_film(film_dir: str, greek_path: str, cfg: Dict[str, Any], backend: Op
     target = cfg["target_language"]
     film_out = Path(out_dir) / film
     out_path = str(film_out / f"{film}.{target}.enriched.srt")
-    if os.path.realpath(out_path) == os.path.realpath(greek_path) or (
-            os.path.exists(out_path) and os.path.samefile(out_path, greek_path)):
-        raise ValueError(f"the output would overwrite the input: {greek_path}")
+    outputs = [out_path, str(film_out / "enrich.json"), str(film_out / "enrich.md")]
+    for path in outputs:
+        if os.path.realpath(path) == os.path.realpath(greek_path) or (
+                os.path.exists(path) and os.path.samefile(path, greek_path)):
+            raise ValueError(f"the output {path} would overwrite the input: {greek_path}")
     greek = load_srt(greek_path)
     # Film glossary (film.yaml "glossary:"), as in run_film: names for the correction checks and the captions.
     from .runner import load_film_meta
@@ -131,6 +137,10 @@ def enrich_film(film_dir: str, greek_path: str, cfg: Dict[str, Any], backend: Op
                 data["correction"] = crep.to_dict()
                 fixed = {c.index: c for c in crep.cues}
                 cues = [fixed.get(c.index, c) for c in greek]
+                # The review record: every corrected cue, full text before and after (to_dict keeps 50 edits).
+                before = {c.index: c.text for c in greek}
+                done = sorted({a.cue for a in crep.applied})
+                data["correction"]["items"] = [{"cue": i, "before": before[i], "after": fixed[i].text} for i in done]
         else:
             data["notes"].append("no English track: correction skipped")
         ccfg = cfg["captions"]
@@ -141,12 +151,17 @@ def enrich_film(film_dir: str, greek_path: str, cfg: Dict[str, Any], backend: Op
             res = insert_captions(cues, [(c, t) for c, t in zip(caps, texts) if t], min_ms=ccfg["min_ms"])
             cues = res.cues
             added = [c for c in cues if c.index in set(res.added)]
+            for item in data["correction"].get("items", []):
+                item["cue"] = res.mapping.get(item["cue"], item["cue"])  # final cue numbers
             data["captions"] = {"found": len(caps), "added": len(res.added),
                                 "skipped": [list(x) for x in res.skipped[:20]], "problems": problems[:10]}
     film_out.mkdir(parents=True, exist_ok=True)
+    for path in outputs:  # a fresh file each time: never write through an existing link
+        if os.path.lexists(path):
+            os.unlink(path)
     save_srt(cues, out_path)
-    (film_out / "enrich.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    (film_out / "enrich.md").write_text(_summary(data, added, out_path), encoding="utf-8")
+    Path(outputs[1]).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    Path(outputs[2]).write_text(_summary(data, added, out_path), encoding="utf-8")
     message = (f"{film}: {data['captions']['added']} captions, {data['correction']['applied']} corrections; "
                f"review {out_path}")
     if notify:
