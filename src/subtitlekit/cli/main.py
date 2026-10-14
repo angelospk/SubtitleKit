@@ -7,6 +7,7 @@ Usage:
     subtitlekit overlaps --input FILE --reference FILE --output FILE [--window N]
     subtitlekit corrections --input FILE --corrections FILE --output FILE
     subtitlekit optimize INPUT [--output FILE] [--line-reduction] [--cps] [--interjections] [--llm]
+    subtitlekit pipeline {init-config,analyze,run,upload,queue} ...
 """
 
 import argparse
@@ -214,6 +215,9 @@ def main():
     optimize_parser.add_argument('--model', help='Gemini Model Name')
     
     optimize_parser.set_defaults(func=cmd_optimize)
+
+    from subtitlekit.pipeline.cli import add_pipeline_parser
+    add_pipeline_parser(subparsers)
     
     # Parse and execute
     args = parser.parse_args()
