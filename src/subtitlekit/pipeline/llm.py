@@ -134,6 +134,7 @@ class ClaudeCliBackend(LLMBackend):
     model: str = "claude-haiku-5-5"
     binary: str = "claude"
     timeout: float = 300.0
+    effort: str = ""  # claude --effort (low, medium, high); "" = the CLI default
     tools: str = ""
     runner: InputRunner = field(default=_run_input, repr=False)
     name: str = "claude"
@@ -150,6 +151,8 @@ class ClaudeCliBackend(LLMBackend):
             "--strict-mcp-config",
             "--system-prompt", CLAUDE_SYSTEM,
         ]
+        if self.effort:
+            argv += ["--effort", self.effort]
         if self.tools:
             argv += ["--allowedTools", self.tools]
         # Empty working dir: the agent must not see project files.
@@ -419,7 +422,8 @@ def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
     if kind == "gemini":
         return gemini
     if kind == "claude":
-        return ClaudeCliBackend(model=cfg.get("claude_model", "claude-haiku-5-5"), timeout=timeout,
+        return ClaudeCliBackend(model=cfg.get("claude_model", "claude-haiku-5-5"), effort=cfg.get("claude_effort", ""),
+                                timeout=timeout,
                                 tools=cfg.get("claude_tools", ""))
     if kind == "agy":
         return AgyBackend(model=cfg.get("agy_model", "gemini-3.8-flash-high"), timeout=timeout)

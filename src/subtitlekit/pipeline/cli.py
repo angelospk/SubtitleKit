@@ -46,6 +46,12 @@ def translate_backend_from(cfg) -> Optional[LLMBackend]:
     return make_backend(deep_merge(cfg["llm"], override)) if override else None
 
 
+def review_backend_from(cfg) -> Optional[LLMBackend]:
+    """Backend for the review pass, from ``review_pass.llm`` (merged over ``llm``); None = use the main one."""
+    override = cfg.get("review_pass", {}).get("llm")
+    return make_backend(deep_merge(cfg["llm"], override)) if override else None
+
+
 def hard_backend_from(cfg) -> Optional[LLMBackend]:
     """Backend for the hard-lines retranslation only, from ``hard_lines.llm`` (merged over ``llm``); None = use the main one."""
     override = cfg.get("hard_lines", {}).get("llm")
@@ -103,12 +109,14 @@ def cmd_run(args):
     mocked = getattr(args, "no_llm", False) or getattr(args, "mock_llm", False)
     translate_backend = None if mocked else translate_backend_from(cfg)
     hard_backend = None if mocked else hard_backend_from(cfg)
+    review_backend = None if mocked else review_backend_from(cfg)
     print(f"LLM backend: {getattr(backend, 'name', 'none')}  output: {out}", flush=True)
     failed = []
     for film in films:
         try:
             rep = run_film(film, cfg, backend, out, force=args.force, log=lambda m: print(m, flush=True),
-                           translate_backend=translate_backend, hard_backend=hard_backend)
+                           translate_backend=translate_backend, hard_backend=hard_backend,
+                           review_backend=review_backend)
         except Exception as exc:  # one broken film must not stop the batch
             failed.append(film)
             print(f"==> {os.path.basename(film)}: ERROR {type(exc).__name__}: {exc}", flush=True)

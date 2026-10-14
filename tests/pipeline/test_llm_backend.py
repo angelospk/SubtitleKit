@@ -293,3 +293,20 @@ def test_cache_key_includes_effort_and_tools(tmp_path):
     assert path(BridgeBackend(effort="low")) != path(BridgeBackend(effort="high"))
     assert path(ClaudeCliBackend()) != path(ClaudeCliBackend(tools="WebSearch"))
     assert path(ClaudeCliBackend()) == path(ClaudeCliBackend())
+
+
+def test_claude_cli_backend_passes_effort_when_set():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    calls = []
+
+    def run(argv, cwd, timeout, input_text):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout='{"is_error":false,"result":"ok"}', stderr="")
+
+    ClaudeCliBackend(runner=run).complete("p")
+    ClaudeCliBackend(runner=run, model="claude-opus-5-5", effort="medium").complete("p")
+    plain, opus = calls
+    assert "--effort" not in plain and opus[opus.index("--effort") + 1] == "medium"
+    b = make_backend({"backend": "claude", "claude_model": "claude-opus-5-5", "claude_effort": "medium"})
+    assert b.effort == "medium" and make_backend({"backend": "claude"}).effort == ""

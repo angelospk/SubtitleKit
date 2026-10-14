@@ -134,8 +134,11 @@ def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int,
         return [{"src": _flat(source[j].text), "el": ours[j].text.replace("\n", " / ")}
                 for j in range(max(lo, 0), min(hi, len(ours)))]
 
-    for start in range(0, len(targets), batch):
-        part = targets[start : start + batch]
+    # A failed batch (timeout, broken stream, bad JSON) is tried once more (as two halves), so one bad
+    # answer does not leave its serious lines unfixed.
+    queue = [(targets[start : start + batch], True) for start in range(0, len(targets), batch)]
+    while queue:
+        part, retry = queue.pop(0)
         items = {}
         for i in part:
             k = pos[i]
@@ -150,7 +153,13 @@ def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int,
             data = None
         if not isinstance(data, dict):
             forget(backend, prompt)
-            rep.failed_batches += 1
+            if retry and len(part) > 1:
+                half = len(part) // 2
+                queue[:0] = [(part[:half], False), (part[half:], False)]
+            elif retry:
+                queue.insert(0, (part, False))
+            else:
+                rep.failed_batches += 1
             continue
         for i in part:
             item = data.get(str(i))

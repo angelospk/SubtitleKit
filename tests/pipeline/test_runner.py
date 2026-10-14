@@ -3,7 +3,7 @@ import json
 import pytest
 
 from subtitlekit.pipeline.config import DEFAULTS, deep_merge, dump_default_config, load_config
-from subtitlekit.pipeline.llm import MockBackend
+from subtitlekit.pipeline.llm import LLMError, MockBackend
 from subtitlekit.pipeline.runner import AUTO, HUMAN, SKIP, run_film
 from subtitlekit.pipeline.translate import prompt_payload
 from subtitlekit.pipeline.srt import Cue, format_srt
@@ -467,3 +467,78 @@ def test_hard_lines_fix_clears_the_rule_flags_it_fixed(tmp_path):
     flags = read_report(tmp_path / "out")["flags"]
     numbers = {f["cue"] for f in flags if "numbers differ" in f["reason"]}
     assert 3 not in numbers and 4 in numbers
+
+
+def test_hard_lines_also_retranslate_cues_with_english_left_in(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend(text="Γραμμή {k}, friend.")
+
+    def reply(prompt):
+        if prompt.startswith("You find hard subtitle lines"):
+            return "{}"
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            return "{}"
+        return base.replies(prompt)
+
+    main = MockBackend(replies=reply, name="test-llm")
+    run_film(str(film), cfg(hard_lines={"enabled": True}), main, str(tmp_path / "out"), log=lambda m: None)
+    retr = [p for p in main.prompts if p.startswith("You retranslate hard subtitle lines")]
+    assert retr and "English word left: friend" in retr[0]
+
+
+def test_review_pass_audits_every_cue_and_retranslates_the_serious_ones(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You audit Greek subtitles"):
+            return json.dumps({"4": {"sev": 3, "kind": "garbled", "why": "no verb", "better": "Γραμμή 4, φίλε."},
+                               "5": {"sev": 2, "kind": "unnatural", "why": "calque"}}, ensure_ascii=False)
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            assert "no verb" in prompt and "Γραμμή 4, φίλε." in prompt and "calque" not in prompt
+            return json.dumps({"4": {"meaning": "m", "el": "Γραμμή 4, φίλε.", "web": False}}, ensure_ascii=False)
+        return base.replies(prompt)
+
+    reviewer = MockBackend(replies=reply, name="test-review")
+    main = MockBackend(replies=reply, name="test-llm")
+    run_film(str(film), cfg(review_pass={"enabled": True}), main, str(tmp_path / "out"), log=lambda m: None,
+             review_backend=reviewer)
+    assert any(p.startswith("You audit Greek subtitles") for p in reviewer.prompts)
+    assert not any(p.startswith("You audit Greek subtitles") for p in main.prompts)
+    rep = read_report(tmp_path / "out")
+    assert rep["review_pass"]["serious"] == 1 and rep["review_pass"]["noticeable"] == 1
+    assert rep["review_pass"]["changed"] == 1
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Γραμμή 4, φίλε." in srt
+    assert DEFAULTS["review_pass"]["enabled"] is False
+
+
+def test_review_pass_failures_and_unfixed_serious_errors_block_auto_approval(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You audit Greek subtitles"):
+            if '"1"' in prompt.split("\n\n")[-1].split('"audit"')[1][:40]:
+                raise LLMError("audit batch down")  # the first batch fails
+            return json.dumps({"4": {"sev": 3, "kind": "meaning", "why": "wrong person"}}, ensure_ascii=False)
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            return "{}"  # no fix proposed: the serious error stays
+        return base.replies(prompt)
+
+    run_film(str(film), cfg(review_pass={"enabled": True, "batch": 3}), MockBackend(replies=reply, name="t"),
+             str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    blockers = [f for f in rep["flags"] if f["blocker"]]
+    assert any(f["cue"] == 0 and "audit" in f["reason"] for f in blockers)
+    assert any(f["cue"] == 4 and "serious" in f["reason"] for f in blockers)
+    assert rep["decision"] != "auto_approve"
+
+
+def test_cli_builds_the_review_backend_from_config():
+    from subtitlekit.pipeline.cli import review_backend_from
+
+    assert review_backend_from({"llm": {"backend": "claude"}, "review_pass": {}}) is None
+    b = review_backend_from({"llm": {"backend": "claude", "timeout_s": 600, "cache_dir": None},
+                             "review_pass": {"llm": {"claude_model": "claude-opus-5-5", "claude_effort": "medium"}}})
+    assert b.model == "claude-opus-5-5" and b.effort == "medium"

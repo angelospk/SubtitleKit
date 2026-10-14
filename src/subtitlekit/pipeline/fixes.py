@@ -16,11 +16,12 @@ from typing import Any, Dict, List, Optional, Sequence
 from .greek_style import fix_final_n, has_bad_break, rebreak
 from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import cue_cps
-from .srt import Cue, visible_text
+from .srt import _ASS_RE, Cue, visible_text
 from .timing import TimingConfig, fix_timing
 from .validators import NUMBER_RE, ValidationReport, check_line, validate_structure
 
 log = logging.getLogger(__name__)
+_FORMAT_RE = re.compile(r"</?(?:i|b|u|font)\b[^>]*>", re.IGNORECASE)
 
 
 @dataclass
@@ -300,6 +301,16 @@ def qa_translation(
         if (target_lang == "el" and SOURCE_NEGATION_RE.search(visible_text(s.text))
                 and not GREEK_NEGATION_RE.search(visible_text(t.text))):
             flags.append(Flag(t.index, "negation in source, none in translation", s.text, t.text, blocker=True))
+        if target_lang == "el":
+            # E11 audit: lower-case English words left in a Greek line ("smoke shop", "safe") are serious for a
+            # viewer; capitalised ones are usually names or brands (Play-Doh, OnlyFans) and stay.
+            left = [w for w in re.findall(r"(?<![A-Za-z'-])[a-z][a-z']{2,}", visible_text(t.text))]
+            if left:
+                flags.append(Flag(t.index, "English word left: " + ", ".join(left[:5]), s.text, t.text))
+            # Raw text minus allowed formatting (<i>, <b>, <u>, <font>, {\an8}): a tag-like "<NAME>" is a
+            # placeholder the translator left, and visible_text() would hide it.
+            if re.search(r"@@|[{}<>\[\]]", _ASS_RE.sub("", _FORMAT_RE.sub("", t.text))):
+                flags.append(Flag(t.index, "placeholder or markup left in the text", s.text, t.text, blocker=True))
         if prev is not None and t.text == prev.text and s.text != prev_src.text:
             flags.append(Flag(t.index, "repeats the previous translation", s.text, t.text, blocker=True))
         prev, prev_src = t, s

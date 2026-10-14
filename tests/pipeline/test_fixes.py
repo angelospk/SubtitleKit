@@ -156,3 +156,31 @@ def test_style_stage_never_leaves_a_line_over_the_limit():
     rep = run_fixes([tight(line, 0, dur=6000)], None, FixConfig(timing=TimingConfig(target_cps=17), style_rules=True))
     assert "την Άννα" in rep.cues[0].text
     assert all(len(l) <= 42 for l in rep.cues[0].text.split("\n"))
+
+
+def test_qa_flags_english_words_and_placeholders_left_in_greek():
+    from subtitlekit.pipeline.fixes import FixConfig, qa_translation
+    from subtitlekit.pipeline.srt import Cue
+
+    src = [Cue(1, 0, 1000, "I worked at a smoke shop."), Cue(2, 2000, 3000, "Ka-motherfucking-ching."),
+           Cue(3, 4000, 5000, "It feels like Play-Doh on OnlyFans."), Cue(4, 6000, 7000, "Radio WSQK, ok?"),
+           Cue(5, 8000, 9000, "What safe?")]
+    el = [Cue(1, 0, 1000, "Δούλευα σε ένα smoke shop."), Cue(2, 2000, 3000, "Κα-@@-τσινγκ."),
+          Cue(3, 4000, 5000, "Μοιάζει με Play-Doh στο OnlyFans."), Cue(4, 6000, 7000, "Ράδιο WSQK, εντάξει;"),
+          Cue(5, 8000, 9000, "<i>Ποιο safe;</i>")]
+    flags = {(f.cue, f.reason) for f in qa_translation(src, el, FixConfig())}
+    assert (1, "English word left: smoke, shop") in flags
+    assert (5, "English word left: safe") in flags
+    assert any(c == 2 and r.startswith("placeholder or markup left") for c, r in flags)
+    assert not any(c in (3, 4) for c, _ in flags)  # brand names and call signs are capitalised
+
+
+def test_qa_flags_a_tag_like_placeholder_but_not_formatting():
+    from subtitlekit.pipeline.fixes import FixConfig, qa_translation
+    from subtitlekit.pipeline.srt import Cue
+
+    src = [Cue(1, 0, 1000, "Hi, John."), Cue(2, 2000, 3000, "Run!"), Cue(3, 4000, 5000, "Up there.")]
+    el = [Cue(1, 0, 1000, "Γεια σου, <NAME>."), Cue(2, 2000, 3000, "<i>Τρέξε!</i>"),
+          Cue(3, 4000, 5000, '{\\an8}<font color="#ffff00">Εκεί πάνω.</font>')]
+    flags = [f for f in qa_translation(src, el, FixConfig()) if f.reason.startswith("placeholder")]
+    assert [f.cue for f in flags] == [1] and flags[0].blocker

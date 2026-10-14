@@ -21,6 +21,7 @@ from .analyzer import analyze_film, detect_content_language, discover_candidates
 from .glossary import build_glossary, check_glossary, load_glossary
 from .captions import find_captions, insert_captions, translate_captions
 from .correct import correct_translation
+from .audit import audit_cues
 from .hardlines import retranslate_hard, select_hard_lines
 from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
@@ -136,6 +137,7 @@ def run_film(
     film_dir: str, cfg: Dict[str, Any], backend: Optional[LLMBackend], out_dir: str,
     force: bool = False, log: Callable[[str], None] = print,
     translate_backend: Optional[LLMBackend] = None, hard_backend: Optional[LLMBackend] = None,
+    review_backend: Optional[LLMBackend] = None,
 ) -> FilmReport:
     film_dir = os.path.abspath(os.path.expanduser(film_dir))
     film = os.path.basename(film_dir)
@@ -303,24 +305,60 @@ def run_film(
             qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
     tracks = [(c.language, c.cues) for c in candidates
               if c.language not in (cfg["target_language"], chosen.language)]
+    cps = cfg["translate"].get("budget_cps")
+    budgets = char_budgets(source, cps) if cps else None
+    known_names = [t.greek for t in glossary.terms if t.kind == "name"] if glossary else ()
+
+    def redo(changed):
+        """Flags after a retranslation stage: rule QA again; a recheck-passed cue drops its old fidelity verdict."""
+        nonlocal rule_flags, fid_flags, qa_flags
+        redone = {c["cue"] for c in changed}
+        rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+        fid_flags = [f for f in fid_flags if not (f.cue in redone and f.reason.startswith("LLM translation check:"))]
+        qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
+
     hcfg = cfg.get("hard_lines", {})
     if hcfg.get("enabled") and backend:
         log(f"[{film}] retranslating hard lines")
-        flagged = {f.cue: f.reason for f in qa_flags if f.cue and f.reason.startswith("LLM translation check:")}
+        flagged = {f.cue: f.reason for f in qa_flags
+                   if f.cue and f.reason.startswith(("LLM translation check:", "English word left",
+                                                     "placeholder or markup left"))}
         hard = select_hard_lines(source, tr.cues, backend, flagged=flagged, per_batch=hcfg["per_batch"])
-        cps = cfg["translate"].get("budget_cps")
         hrep = retranslate_hard(source, tr.cues, hard, tracks, hard_backend or backend, checker=backend,
-                                budgets=char_budgets(source, cps) if cps else None,
-                                known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
-                                max_langs=hcfg["max_langs"], batch=hcfg["batch"], source_lang=src_name, target_lang=tgt_name)
+                                budgets=budgets, known_names=known_names, max_langs=hcfg["max_langs"],
+                                batch=hcfg["batch"], source_lang=src_name, target_lang=tgt_name)
         report.data["hard_lines"] = hrep.to_dict()
         if hrep.changed:
             tr.cues = hrep.cues
-            # A retranslated cue passed its own fidelity recheck: its old fidelity verdict no longer applies.
-            redone = {c["cue"] for c in hrep.changed}
-            rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
-            fid_flags = [f for f in fid_flags if not (f.cue in redone and f.reason.startswith("LLM translation check:"))]
-            qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
+            redo(hrep.changed)
+    rcfg = cfg.get("review_pass", {})
+    if rcfg.get("enabled") and backend:
+        # Quality loop: a strong reviewer audits every cue; its serious findings are retranslated with the
+        # hard-lines rules (code checks + fidelity recheck), the review as the reason.
+        log(f"[{film}] reviewing every cue")
+        reviewer = review_backend or backend
+        audit = audit_cues(source, tr.cues, reviewer, batch=rcfg["batch"], source_lang=src_name)
+        bad = {i: f"{it.kind}: {it.why}" + (f" (a reviewer suggests: {it.better})" if it.better else "")
+               for i, it in audit.items.items() if it.sev >= rcfg["min_sev"]}
+        rrep = retranslate_hard(source, tr.cues, bad, tracks, reviewer, checker=backend, budgets=budgets,
+                                known_names=known_names, max_langs=hcfg.get("max_langs", 6),
+                                batch=hcfg.get("batch", 40), source_lang=src_name, target_lang=tgt_name)
+        counts = audit.counts()
+        report.data["review_pass"] = {"serious": counts[3], "noticeable": counts[2],
+                                      "audit_failed_batches": audit.failed_batches,
+                                      **{k: v for k, v in rrep.to_dict().items() if k != "selected"},
+                                      "audit": audit.to_dict()["items"]}
+        if rrep.changed:
+            tr.cues = rrep.cues
+            redo(rrep.changed)
+        # What the review found and could not fix stays visible: a failed audit batch or a serious error left
+        # in blocks auto-approval; a noticeable one is advisory.
+        fixed = {c["cue"] for c in rrep.changed}
+        if audit.failed_batches:
+            qa_flags.append(Flag(0, f"review pass: {audit.failed_batches} audit batches failed", blocker=True))
+        qa_flags += [Flag(i, f"review pass: {'serious' if it.sev == 3 else 'noticeable'} error left: {it.kind}: "
+                             f"{it.why}", blocker=it.sev == 3)
+                     for i, it in sorted(audit.items.items()) if i in bad and i not in fixed]
     reference = None
     if meta.get("timing_reference"):
         ref_path = os.path.join(film_dir, meta["timing_reference"])

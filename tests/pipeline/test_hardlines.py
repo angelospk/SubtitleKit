@@ -116,3 +116,44 @@ def test_retranslate_hard_rejects_a_proposal_that_copies_the_source():
                           if p.startswith("You retranslate") else "{}")
     rep = retranslate_hard(source, ours, {1: "untranslated"}, [], backend)
     assert rep.cues[0].text == "Hi" and [i for i, _ in rep.rejected] == [1] and "source" in rep.rejected[0][1]
+
+
+def test_retranslate_hard_retries_a_failed_batch_as_two_halves():
+    source, ours = films()
+    calls = []
+
+    def reply(prompt):
+        if prompt.startswith("You retranslate"):
+            calls.append(prompt)
+            if len(calls) == 1:
+                raise LLMError("stream interrupted")  # the first, full batch fails once
+            ids = json.loads(prompt.rsplit("\n\n", 1)[1])
+            new = {"2": "Τα τίναξε.", "3": "Βγες λίγο έξω."}
+            return json.dumps({k: {"meaning": "m", "el": new[k], "web": False} for k in ids}, ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(prompt.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "idiom", 3: "slang"}, [], MockBackend(replies=reply), batch=40)
+    assert len(calls) == 3  # full batch, then one half each
+    assert [c["cue"] for c in rep.changed] == [2, 3] and rep.failed_batches == 0
+
+    def boom(prompt):
+        raise LLMError("down")
+
+    rep = retranslate_hard(source, ours, {2: "idiom", 3: "slang"}, [], MockBackend(replies=boom))
+    assert rep.changed == [] and rep.failed_batches == 2  # both halves failed too; no further splitting
+
+
+def test_retranslate_hard_retries_a_single_cue_batch_once():
+    source, ours = films()
+    calls = []
+
+    def reply(prompt):
+        if prompt.startswith("You retranslate"):
+            calls.append(prompt)
+            if len(calls) == 1:
+                raise LLMError("timeout")
+            return json.dumps({"2": {"meaning": "died", "el": "Τα τίναξε.", "web": False}}, ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(prompt.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "idiom"}, [], MockBackend(replies=reply))
+    assert len(calls) == 2 and rep.cues[1].text == "Τα τίναξε." and rep.failed_batches == 0
