@@ -66,6 +66,9 @@ DEFAULTS: Dict[str, Any] = {
         "max_flag_ratio": 0.02,  # flags / cues
         "max_share_over_hard_cps": 0.01,
         "require_source_class": "professional",
+        # llm: every translated cue is checked against its source; a failed or
+        # missing verdict blocks auto-approve. none: always human review.
+        "translation_fidelity": "llm",
     },
     "upload": {
         "enabled": True,
@@ -75,6 +78,9 @@ DEFAULTS: Dict[str, Any] = {
         "cli_path": "~/projects/osgolang/opensubtitles-go/examples/upload_cli/upload_cli_mac_arm64",
         "username_env": "OS_USERNAME",
         "password_env": "OS_PASSWORD",
+        # argv: password as -password= (current upload_cli) → real upload refused.
+        # env: upload_cli reads OS_PASSWORD from its environment (needs a CLI change).
+        "password_transport": "argv",
         "translator": "",
         "comment": "",
         "automatic_translation": True,

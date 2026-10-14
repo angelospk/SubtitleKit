@@ -33,6 +33,8 @@ def greek_backend(bad_keys=False, text="Γραμμή {k}, φίλε μου."):
     def reply(prompt):
         if prompt.startswith("You shorten") or prompt.startswith("For each id"):
             return "{}"
+        if prompt.startswith("You review"):  # translation fidelity check: all faithful
+            return json.dumps({k: True for k in json.loads(prompt.rsplit("\n\n", 1)[1])})
         payload = prompt_payload(prompt)
         if bad_keys:
             return "{}"
@@ -171,3 +173,27 @@ def test_saved_srt_is_validated_after_reading_back(tmp_path):
     data = read_report(out)
     disk = [v for v in data["validations"] if v["stage"] == "serialized"][0]
     assert disk["ok"], disk
+
+
+def test_unfaithful_or_unchecked_translation_blocks_auto_approve(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You review"):
+            ids = list(json.loads(prompt.rsplit("\n\n", 1)[1]))
+            return json.dumps({ids[0]: "says the opposite", **{k: True for k in ids[2:]}})  # ids[1] missing
+        return base.replies(prompt)
+
+    rep = run_film(str(film), cfg(), MockBackend(replies=reply, name="test-llm"), str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == HUMAN
+    reasons = [f["reason"] for f in read_report(tmp_path / "out")["flags"]]
+    assert any("says the opposite" in r for r in reasons)
+    assert any("unchecked for 1 cues" in r for r in reasons)
+
+
+def test_disabled_fidelity_check_means_human_review(tmp_path):
+    film = make_film(tmp_path)
+    rep = run_film(str(film), cfg(review={"translation_fidelity": "none"}), greek_backend(), str(tmp_path / "out"),
+                   log=lambda m: None)
+    assert rep.decision == HUMAN

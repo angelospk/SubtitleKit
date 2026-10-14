@@ -5,6 +5,12 @@ DRY-RUN by default. The real upload runs only when BOTH the config says
 (CLI ``--really-upload``) AND credentials are present in the environment.
 The password never appears in logs or reports (it is replaced by ``***``).
 
+Password transport: today's ``upload_cli`` only accepts ``-password=...`` on
+the command line, which any local user can read in the process list while it
+runs. So a real upload is refused unless ``upload.password_transport: env``,
+which means the CLI reads ``OS_PASSWORD`` from its environment (needs a small
+change in opensubtitles-go, see RUNBOOK) and the argv carries no password.
+
 Upload CLI: ~/projects/osgolang/opensubtitles-go/examples/upload_cli
 (legacy XML-RPC upload; flags documented in its main.go).
 """
@@ -44,7 +50,7 @@ class UploadPlan:
 
 def build_upload_argv(
     subtitle_path: str, film: Dict[str, Any], upload_cfg: Dict[str, Any],
-    language: str = "el", password: str = REDACTED, username: str = "",
+    language: str = "el", password: Optional[str] = REDACTED, username: str = "",
 ) -> (List[str], List[str]):
     """Return (argv, problems). ``problems`` lists missing required inputs."""
     problems = []
@@ -55,7 +61,10 @@ def build_upload_argv(
     argv = [
         cli,
         f"-username={username or '$' + upload_cfg.get('username_env', 'OS_USERNAME')}",
-        f"-password={password}",
+    ]
+    if password is not None:
+        argv.append(f"-password={password}")
+    argv += [
         f"-subtitle={subtitle_path}",
         f"-imdb={imdb}",
         f"-lang={ISO639_2.get(language, language)}",
@@ -78,10 +87,12 @@ def build_upload_argv(
 def plan_upload(
     subtitle_path: str, film: Dict[str, Any], upload_cfg: Dict[str, Any], language: str = "el",
     really_upload: bool = False, env: Optional[Dict[str, str]] = None,
-    runner: Callable[[List[str]], "subprocess.CompletedProcess[str]"] = None,
+    runner: Callable[[List[str], Dict[str, str]], "subprocess.CompletedProcess[str]"] = None,
 ) -> UploadPlan:
     env = dict(os.environ if env is None else env)
-    argv, problems = build_upload_argv(subtitle_path, film, upload_cfg, language)
+    env_transport = upload_cfg.get("password_transport", "argv") == "env"
+    argv, problems = build_upload_argv(subtitle_path, film, upload_cfg, language,
+                                       password=None if env_transport else REDACTED)
     allowed = bool(upload_cfg.get("allow_real_upload", False))
     plan = UploadPlan(argv=argv, dry_run=True, problems=problems)
     if not really_upload:
@@ -94,17 +105,25 @@ def plan_upload(
     if not user or not pwd:
         plan.problems.append("real upload refused: credentials not set in the environment")
         return plan
+    if upload_cfg.get("password_transport", "argv") != "env":
+        plan.problems.append(
+            "real upload refused: upload_cli takes the password as a command-line flag (visible in the "
+            "process list); set upload.password_transport: env once upload_cli reads OS_PASSWORD from the environment"
+        )
+        return plan
     if problems:
         return plan
-    real_argv, _ = build_upload_argv(subtitle_path, film, upload_cfg, language, password=pwd, username=user)
-    run = runner or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=300))
+    real_argv, _ = build_upload_argv(subtitle_path, film, upload_cfg, language, password=None, username=user)
+    child_env = {**env, "OS_USERNAME": user, "OS_PASSWORD": pwd}
+    run = runner or (lambda a, e: subprocess.run(a, capture_output=True, text=True, timeout=300, env=e))
+    plan.argv = real_argv
     plan.dry_run = False
     plan.executed = True
     try:
-        proc = run(real_argv)
-    except Exception as exc:  # TimeoutExpired etc. carry the argv: never let it escape
+        proc = run(real_argv, child_env)
+    except Exception as exc:  # exception text may embed argv/env: report only its type
         plan.returncode = -1
-        plan.output = f"{type(exc).__name__}: " + str(exc).replace(pwd, REDACTED)[-500:]
+        plan.output = f"{type(exc).__name__} while running upload_cli"
         return plan
     plan.returncode = proc.returncode
     plan.output = (proc.stdout + proc.stderr).replace(pwd, REDACTED)[-2000:]

@@ -15,13 +15,14 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .analyzer import analyze_film, discover_candidates
-from .fixes import FixConfig, qa_translation, run_fixes
+from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
 from .metrics import Limits, compute_metrics
 from .srt import load_srt, save_srt
 from .timing import TimingConfig
 from .translate import FilmMeta, prepare_source, translate_cues
 from .upload import plan_upload
+from .fixes import Flag
 from .validators import validate_structure
 
 SKIP, HUMAN, AUTO = "skip", "human_review", "auto_approve"
@@ -189,6 +190,14 @@ def run_film(
         condense_above_cps=f["condense_above_cps"], fidelity_check=f["fidelity_check"],
     )
     qa_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+    if cfg["review"]["translation_fidelity"] == "llm":
+        log(f"[{film}] checking translation fidelity")
+        from .translate import LANG_NAMES
+
+        qa_flags += check_translation(source, tr.cues, backend, LANG_NAMES.get(chosen.language, chosen.language),
+                                      LANG_NAMES.get(cfg["target_language"], cfg["target_language"]))
+    else:
+        qa_flags.append(Flag(0, "translation fidelity check disabled in config", blocker=True))
     reference = None
     if meta.get("timing_reference"):
         ref_path = os.path.join(film_dir, meta["timing_reference"])

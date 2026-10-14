@@ -128,3 +128,12 @@ def test_retry_prompt_names_the_problem_so_cached_bad_replies_are_not_replayed()
     res = translate_cues(cues(2), backend, chunk_size=2)
     assert "Retry 2" in backend.prompts[1] and "Retry" not in backend.prompts[0]
     assert res.untranslated == []
+
+
+def test_credit_detection_needs_explicit_evidence():
+    from subtitlekit.pipeline.metrics import credit_mask
+
+    cues_ = [Cue(1, 0, 1, "Go to example.com now."), Cue(2, 1, 2, "I downloaded from the server."),
+             Cue(3, 2, 3, "lnk.bio/haroldpoi"), Cue(4, 3, 4, "Downloaded from\nYTS.MX"),
+             Cue(5, 4, 5, "Υποτιτλισμός: haroldpoi")]
+    assert credit_mask(cues_) == [False, False, True, True, True]

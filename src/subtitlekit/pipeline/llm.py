@@ -164,17 +164,39 @@ class CachingBackend(LLMBackend):
         import os
 
         path = self._path(prompt)
-        if os.path.exists(path):
-            self.hits += 1
+        try:
             with open(path, encoding="utf-8") as fh:
-                return fh.read()
+                reply = fh.read()
+            self.hits += 1
+            return reply
+        except OSError:
+            pass
         reply = self.inner.complete(prompt)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(reply)
-        os.replace(tmp, path)
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(reply)
+            os.replace(tmp, path)
+        except OSError as exc:  # a cache problem must never fail the call
+            log.warning("LLM cache write failed: %s", exc)
         return reply
+
+    def forget(self, prompt: str) -> None:
+        """Drop a cached reply the caller rejected, so a rerun asks again."""
+        import os
+
+        try:
+            os.remove(self._path(prompt))
+        except OSError:
+            pass
+
+
+def forget(backend: LLMBackend, prompt: str) -> None:
+    """Evict a rejected reply from a caching backend (no-op otherwise)."""
+    fn = getattr(backend, "forget", None)
+    if callable(fn):
+        fn(prompt)
 
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

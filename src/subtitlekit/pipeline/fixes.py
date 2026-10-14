@@ -13,7 +13,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
-from .llm import LLMBackend, LLMError, extract_json
+from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import cue_cps
 from .srt import Cue, visible_text
 from .timing import TimingConfig, fix_timing
@@ -132,12 +132,15 @@ def condense(
             {str(c.index): {"text": c.text, "max_chars": _target_chars(c, target)} for c in batch},
             ensure_ascii=False, indent=0,
         )
+        prompt = CONDENSE_PROMPT.format(language=language, payload=payload)
         try:
-            proposals = extract_json(backend.complete(CONDENSE_PROMPT.format(language=language, payload=payload)))
+            proposals = extract_json(backend.complete(prompt))
         except LLMError as exc:
+            forget(backend, prompt)
             flags += [Flag(c.index, f"too fast, condensation failed: {exc}"[:200], c.text) for c in batch]
             continue
         if not isinstance(proposals, dict):
+            forget(backend, prompt)
             proposals = {}
         candidates = {}
         for c in batch:
@@ -177,10 +180,14 @@ def _fidelity(batch, candidates, backend, cfg, language) -> Dict[int, tuple]:
         {str(i): {"ORIGINAL": originals[i], "SHORT": new} for i, new in candidates.items()},
         ensure_ascii=False, indent=0,
     )
+    prompt = FIDELITY_PROMPT.format(language=language, payload=payload)
     try:
-        data = extract_json(backend.complete(FIDELITY_PROMPT.format(language=language, payload=payload)))
+        data = extract_json(backend.complete(prompt))
     except LLMError as exc:
+        forget(backend, prompt)
         return {i: (False, f"fidelity check failed: {exc}"[:200]) for i in candidates}
+    if not isinstance(data, dict) or not all(isinstance(data.get(str(i)), dict) for i in candidates):
+        forget(backend, prompt)
     out = {}
     for i in candidates:
         v = data.get(str(i)) if isinstance(data, dict) else None
@@ -194,6 +201,60 @@ def _fidelity(batch, candidates, backend, cfg, language) -> Dict[int, tuple]:
 
 
 # --------------------------------------------------------- translation QA
+
+TRANSLATION_CHECK_PROMPT = """You review a {target} subtitle translation of a {source} film.
+For each id, compare SOURCE and TRANSLATION. A translation is faithful if a viewer gets the same
+meaning: who does what, negation, numbers, names, questions, tone. Condensing filler is fine.
+Return ONLY JSON with EVERY id: {{"<id>": true}} if faithful, or {{"<id>": "<short problem>"}} if not.
+
+{payload}"""
+
+
+def check_translation(
+    source: Sequence[Cue], translated: Sequence[Cue], backend: Optional[LLMBackend],
+    source_lang: str = "English", target_lang: str = "Greek", batch: int = 40,
+) -> List[Flag]:
+    """LLM fidelity check of every translated cue. Unfaithful or unchecked → blocker flags.
+
+    Failed cues are not reverted: the source-language text would be worse in a
+    Greek subtitle. A blocker sends the film to a human instead.
+    """
+    if backend is None:
+        return [Flag(0, "translation fidelity not checked (no LLM)", blocker=True)]
+    flags: List[Flag] = []
+    pairs = [(s, t) for s, t in zip(source, translated) if s.text != t.text]
+    for start in range(0, len(pairs), batch):
+        part = pairs[start : start + batch]
+        payload = json.dumps({str(t.index): {"SOURCE": s.text, "TRANSLATION": t.text} for s, t in part},
+                             ensure_ascii=False, indent=0)
+        prompt = TRANSLATION_CHECK_PROMPT.format(source=source_lang, target=target_lang, payload=payload)
+        try:
+            data = extract_json(backend.complete(prompt))
+        except LLMError as exc:
+            forget(backend, prompt)
+            data = None
+            reason = f"check failed: {exc}"[:120]
+        else:
+            reason = "no verdict returned"
+        if not isinstance(data, dict):
+            forget(backend, prompt)
+            flags.append(Flag(0, f"translation fidelity unchecked for cues {part[0][1].index}-{part[-1][1].index} "
+                                 f"({reason})", blocker=True))
+            continue
+        missing = []
+        for s, t in part:
+            verdict = data.get(str(t.index))
+            if verdict is True:
+                continue
+            if isinstance(verdict, str) and verdict.strip():
+                flags.append(Flag(t.index, f"LLM translation check: {verdict.strip()[:150]}", s.text, t.text, blocker=True))
+            else:
+                missing.append(t.index)
+        if missing:
+            flags.append(Flag(missing[0], f"translation fidelity unchecked for {len(missing)} cues "
+                                          f"(e.g. {missing[:5]})", blocker=True))
+    return flags
+
 
 
 SOURCE_NEGATION_RE = re.compile(r"\b(not|no|never|nothing|nobody|none|neither|nor|cannot)\b|n't\b", re.I)

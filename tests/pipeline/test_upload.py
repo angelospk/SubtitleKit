@@ -11,8 +11,9 @@ class Spy:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, argv):
+    def __call__(self, argv, env=None):
         self.calls.append(argv)
+        self.env = env
         return subprocess.CompletedProcess(argv, 0, stdout="uploaded s3cret ok", stderr="")
 
 
@@ -41,18 +42,29 @@ def test_really_upload_refused_without_credentials():
     assert spy.calls == [] and "credentials" in plan.problems[0]
 
 
-def test_real_upload_path_redacts_password_everywhere():
+REAL = {**CFG, "allow_real_upload": True, "password_transport": "env"}
+
+
+def test_argv_password_transport_refuses_real_upload():
     spy = Spy()
     plan = plan_upload("/out/f.srt", FILM, {**CFG, "allow_real_upload": True}, really_upload=True, env=ENV, runner=spy)
+    assert spy.calls == [] and plan.dry_run
+    assert "process list" in plan.problems[0]
+
+
+def test_real_upload_passes_password_only_through_child_env():
+    spy = Spy()
+    plan = plan_upload("/out/f.srt", FILM, REAL, really_upload=True, env=ENV, runner=spy)
     assert plan.executed and not plan.dry_run
-    assert "-password=s3cret" in spy.calls[0]  # the real process gets the secret
+    assert not any("password" in a for a in spy.calls[0])
+    assert spy.env["OS_PASSWORD"] == "s3cret"
     assert "s3cret" not in plan.command and "s3cret" not in plan.output
     assert "s3cret" not in str(plan.to_dict())
 
 
 def test_missing_imdb_is_reported_and_blocks_real_upload():
     spy = Spy()
-    plan = plan_upload("/out/f.srt", {}, {**CFG, "allow_real_upload": True}, really_upload=True, env=ENV, runner=spy)
+    plan = plan_upload("/out/f.srt", {}, REAL, really_upload=True, env=ENV, runner=spy)
     assert spy.calls == []
     assert any("imdb" in p for p in plan.problems)
 
@@ -63,9 +75,11 @@ def test_auto_flag_can_be_disabled_for_human_translations():
 
 
 def test_timeout_during_real_upload_does_not_leak_password():
-    def boom(argv):
-        raise subprocess.TimeoutExpired(argv, 300)
+    weird = {"OS_USERNAME": "harold", "OS_PASSWORD": "a\\b\nc's3cret"}
 
-    plan = plan_upload("/out/f.srt", FILM, {**CFG, "allow_real_upload": True}, really_upload=True, env=ENV, runner=boom)
+    def boom(argv, env):
+        raise subprocess.TimeoutExpired(argv + [env["OS_PASSWORD"]], 300)
+
+    plan = plan_upload("/out/f.srt", FILM, REAL, really_upload=True, env=weird, runner=boom)
     assert plan.returncode == -1 and "TimeoutExpired" in plan.output
-    assert "s3cret" not in str(plan.to_dict())
+    assert "s3cret" not in str(plan.to_dict()) and "s3cret" not in repr(plan.to_dict())

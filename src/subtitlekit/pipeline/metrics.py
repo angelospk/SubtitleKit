@@ -19,12 +19,13 @@ from .srt import Cue, visible_text
 # first/last EDGE cues, so dialogue such as "Go to example.com now." stays.
 STRONG_CREDIT_RE = re.compile(
     r"(yts\.(?:lt|mx|am|ag|bz)|yify|opensubtitles|addic7ed|subs4free|subscene|podnapisi|"
-    r"downloaded from|subtitles? by|subbed by|synced? by|sync(ed)? and corrected|ripped by|"
+    r"downloaded from\s+\S+\.[a-z]{2,}|subtitles? by|subbed by|synced? by|sync(ed)? and corrected|ripped by|"
     r"translated by|translation by|corrected by|"
     r"(υπ[οό]τιτλισμ[οό]ς|μετ[αά]φραση|απ[οό]δοση|επιμ[εέ]λεια|συγχρονισμ[οό]ς)\s*:)",
     re.IGNORECASE,
 )
 WEAK_CREDIT_RE = re.compile(r"(www\.|https?://|\.com\b|\.org\b|lnk\.bio|ترجمة)", re.IGNORECASE)
+URL_TOKEN_RE = re.compile(r"(https?://\S+|www\.\S+|\S+\.(com|org|net|bio|lt|mx|gr|tv)\S*)", re.IGNORECASE)
 CREDIT_EDGE = 5
 HI_RE = re.compile(r"^\s*[\[(].+[\])]\s*$|♪|^[A-Z][A-Z .'-]{1,20}:")
 GREEK_RE = re.compile(r"[Ͱ-Ͽἀ-῿]")
@@ -121,7 +122,11 @@ def credit_mask(cues: Sequence[Cue]) -> List[bool]:
     for i, c in enumerate(cues):
         text = visible_text(c.text)
         edge = i < CREDIT_EDGE or i >= n - CREDIT_EDGE
-        out.append(bool(STRONG_CREDIT_RE.search(text) or (edge and WEAK_CREDIT_RE.search(text))))
+        # Weak evidence needs the cue to be (almost) only the link/credit:
+        # "Go to example.com now." is dialogue even in the first cues.
+        words_left = len(re.findall(r"\w+", URL_TOKEN_RE.sub(" ", text)))
+        weak = edge and WEAK_CREDIT_RE.search(text) and words_left <= 2
+        out.append(bool(STRONG_CREDIT_RE.search(text) or weak))
     return out
 
 

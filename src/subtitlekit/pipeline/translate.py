@@ -15,7 +15,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from .llm import LLMBackend, LLMError, extract_json
+from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import credit_mask
 from .srt import Cue, visible_text
 
@@ -194,6 +194,7 @@ def translate_cues(
             try:
                 data = extract_json(backend.complete(prompt))
             except LLMError as exc:
+                forget(backend, prompt)
                 errors_in_row += 1
                 last_problem = str(exc)
                 result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {exc}")
@@ -202,6 +203,7 @@ def translate_cues(
             accepted, problems = validate_chunk(pending, data, target_lang)
             done.update(accepted)
             if problems:
+                forget(backend, prompt)
                 last_problem = "; ".join(problems[:5])
                 result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {last_problem}")
             pending = [c for c in pending if c.index not in done]

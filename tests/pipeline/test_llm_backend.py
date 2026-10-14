@@ -111,3 +111,18 @@ def test_caching_backend_reuses_successful_replies_only(tmp_path):
 def test_make_backend_wraps_cache_when_configured(tmp_path):
     b = make_backend({"backend": "opencode", "cache_dir": str(tmp_path)})
     assert isinstance(b, CachingBackend) and b.name == "opencode"
+
+
+def test_forget_evicts_rejected_reply_and_cache_errors_are_tolerated(tmp_path):
+    from subtitlekit.pipeline.llm import forget
+
+    inner = MockBackend(replies=["bad", "good"])
+    cached = CachingBackend(inner=inner, cache_dir=str(tmp_path))
+    assert cached.complete("p") == "bad"
+    forget(cached, "p")
+    assert cached.complete("p") == "good"
+    forget(MockBackend(), "p")  # no-op on non-caching backends
+    blocked = tmp_path / "file"
+    blocked.write_text("x")
+    unwritable = CachingBackend(inner=MockBackend(replies=["ok"]), cache_dir=str(blocked))
+    assert unwritable.complete("p") == "ok"
