@@ -33,7 +33,8 @@ shop"), formal plural for a generic "you" in stand-up, literal swearing.
 | Q1 | Severity audit tool (all cues, 2 judges, per hour) | done: `audit.py`, `eval/audit_eval.py` |
 | Q2 | Baseline audit: 3 films + pro Greek as calibration | done |
 | E11 | Translation model on the locked pipeline: Haiku, Gemini Flash medium (agy, new account), Opus 5.5 medium, gpt-6.1-sol medium; 3 films, audited | done (Flash incomplete: quota) |
-| Q3 | English-word / placeholder rule; hard-lines batch retry; optional review pass | code done; Lopus2 run measuring |
+| Q3 | English-word / placeholder rule; hard-lines batch retry; optional review pass | done: Lopus2 |
+| Q4 | Judge disagreement: which auditor defines "serious" | open: Harold's spot-check decides |
 | Spot-check | Harold rates 20 lines | todo |
 
 ## Log
@@ -96,4 +97,22 @@ failed hard-lines batch is retried once (as two halves).
   retranslated with the hard-lines rules; a failed audit batch or a serious
   error left is a blocker flag. Codex review: 5 important findings, all fixed
   (round 2 confirmed). CodeRabbit: 1 minor (argument parsing), fixed.
-- Lopus2 = Opus 5.5 medium translate + Q3 code, 3 films: running.
+- Lopus2 = Opus 5.5 medium translate + Q3 code (`cfg-Lopus2.yaml`), 3 films.
+  Run time 17 / 36 / 25 min (Euphoria / ST / Kumail), 3 in parallel.
+
+| Lopus2, judges | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| Sonnet audits, sol confirms | 0.0 (6.0) | 0.0 (13.3) | 0.0 (10.6) |
+| sol audits, Sonnet confirms (`--auditor sol`) | 2.01 (29.2) | 2.94 (21.6) | 5.32 (23.4) |
+
+The "0.0" row hides a judge effect: sol, as the
+auditor, finds 5-21 serious candidates per film, and Sonnet confirms about a
+third of them. Most confirmed ones are real: a misused idiom ("δεν άγγιξα
+γρυ"), a broken verb ("η κατάρα ... επιτέλους έλυσε"), wrong gender
+("Πρέπει να είσαι περήφανος" to a mother), puns transliterated ("Ίζιπιλ
+Γκίβερ Κατ", "Πουρ 90Χ"). Sonnet as the auditor misses them, perhaps
+because it is in the translator's family. So the Full Stop is met with the
+first judge pair and not met with the second. Next metric: the union of both
+auditors, each confirmed by the other family. The 20-line spot-check
+(`eval/review/spotcheck.md`, includes judged lines) tells which judge
+matches Harold.
