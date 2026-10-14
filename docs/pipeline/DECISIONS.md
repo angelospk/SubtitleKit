@@ -222,3 +222,75 @@ failure; stopped retrying. No CodeRabbit findings to log. To retry:
   source line starts with a dash, leading dashes are removed. The prompt text
   is left unchanged on purpose: changing it would invalidate the LLM cache of
   the demo films (≈ 2 h of free-model calls).
+- Note (run 3): the cache was invalidated anyway, because each chunk's
+  context lines carry the previous chunk's output, and that output changed.
+  Hamnet run 3 was a full retranslation (~45 min).
+
+## Demo results (night of 2026-10-14)
+
+Real LLM: OpenCode `opencode/big-pickle` (free), no Gemini (auth failed, D3).
+Films: `docs/pipeline/demo/setup_demo.sh` → `~/pipeline-demo/films`.
+Reports: `~/pipeline-demo/out/<film>/report.{md,json}`; run 1 archive:
+`~/pipeline-demo/out-run1`. No upload ran: every payload is dry-run.
+
+| Film | Decision | Chosen source | Why |
+|---|---|---|---|
+| Influencers.2025 | skip | AMZN `.por` (pt, pro) | professional Greek exists (playWEB `.gre`); already translated by haroldpoi |
+| Avatar.Fire.and.Ash.2025 | skip | Danish TELESYNC (amateur, score 22) | only amateur sources; score < 50; release matches TELESYNC; already translated by haroldpoi |
+| The.Housemaid.2025 | human_review | `WEB.eng` (en, pro 0.99, score 78.5) | see below |
+| Hamnet.2025 | human_review | ETHEL WEB (es by content, pro) | see below |
+
+### The.Housemaid.2025 (run 2, code before D15)
+
+- 1985 cues, 53 LLM calls, 9555 s (~2 h 40 min, mostly LLM time).
+- Ranking: WEB.eng 78.5 > AMZN pt 57.0 > BG TS 26.8 > TS pt 23.3 > TS fr 17.7.
+- Resync to the AMZN `.por` timing: offset +834 ms, drift ≈ 0 (score 0.84).
+- Fixes: 1215 min-gap, 115 extends, 20 reflows, 141 condensed, 72 reverted.
+- CPS p95 23.84 → 22.22; over 25 CPS 3.6 % → 3.0 %; overlaps 0.
+- Validators: all 7 stages OK (incl. the re-read `serialized` check).
+- Route reasons: 2 untranslated, 32 blockers, 152 advisory (7.7 %), 3.0 %
+  over 25 CPS.
+- Findings:
+  - The 2 "untranslated" cues are false positives: `Ah, <i>Family Feud.</i>`
+    and `I'm watching <i>Family Feud.</i>` (show title kept in English).
+  - The negation rule gives false positives on idioms: "can't wait" →
+    "Ανυπομονώ" is correct. 7 of the 32 blockers are this rule.
+  - 23 blockers are real LLM-check notes (tone, omitted words, gender), 2
+    are "unchecked" (check call failed).
+  - 54 advisory flags are "condensation failed: opencode timed out": the
+    free model is slow under load. Run 2 predates D15 (dash fix).
+- Dry-run: `upload_cli_mac_arm64 -username=$OS_USERNAME -password=*** -subtitle=…/The.Housemaid.2025.el.srt -imdb=27543632 -lang=ell -release=The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR -fps=23.976 -auto`
+
+### Hamnet.2025 (run 3, with D15)
+
+- 1308 cues, source detected as Spanish (file has no tag), 34 LLM calls,
+  3499 s; 0 untranslated.
+- D15 check: 0 cues gained a dash (source 103 dash cues, output 103; run 2
+  had 105 added).
+- Fixes: 327 extends, 42 reflows, 0 condensed (see below).
+- CPS p95 21.19 → 20.77; over 25 CPS 0.76 % → 0.46 %; overlaps 0.
+- Validators: all stages OK; final has 1 warning (cue 1158 line > 42).
+- Route reasons: 20 blockers (5 "unchecked", 15 LLM-check notes such as a
+  changed meaning or a dropped word, 1 number), 102 advisory (7.8 %), 1
+  long line.
+- **opencode.ai outage during the run:** from the condensation step on,
+  `opencode run` exited 1 with an empty stderr; a manual call showed
+  `getaddrinfo ENOTFOUND opencode.ai` (DNS of the provider; github.com
+  resolved fine). 87 condensations failed and were flagged, nothing was
+  changed silently. Run 2 (provider up) for comparison: 58 condensed, 30
+  rejected, 12 blockers, 49 advisory (3.7 %).
+- Open: the error text sits in the JSON stdout, not stderr, so the report
+  says only "exit 1". `OpenCodeBackend` should read the `error` event before
+  the exit code.
+- Dry-run: `upload_cli_mac_arm64 -username=$OS_USERNAME -password=*** -subtitle=…/Hamnet.2025.el.srt -imdb=14905854 -lang=ell -release=Hamnet.2025.1080p.WEB.h264-ETHEL -fps=23.976 -auto`
+
+### What the demo shows
+
+- Gate and ranking work: 2 of 4 films skipped for the right reasons, no LLM
+  call spent on them.
+- Nothing reached auto_approve. With the free model, a film needs a human
+  pass: the LLM check finds 12–32 real issues per film.
+- Rule false positives to tune: negation idioms ("can't wait"), titles kept
+  in English counted as untranslated.
+- A rerun after the provider recovers costs only the condensation calls:
+  translation replies are cached.
