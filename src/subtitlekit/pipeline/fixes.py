@@ -13,7 +13,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
-from .greek_style import fix_final_n, has_bad_break, rebreak
+from .greek_style import fix_final_n, fix_forms, has_bad_break, rebreak
 from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import cue_cps
 from .srt import _ASS_RE, Cue, visible_text
@@ -368,13 +368,15 @@ def run_fixes(
         rep.flags += flags
 
     if cfg.style_rules:
-        fixed = [fix_final_n(c.text) for c in rep.cues]
+        forms = [fix_forms(c.text) for c in rep.cues]
+        fixed = [fix_final_n(t) for t, _ in forms]
         # An added ν can push a full line over the limit: reflow then re-breaks it.
         styled = [c.with_text(reflow_text(rebreak(t, cfg.max_line_chars), cfg.max_line_chars, cfg.max_lines))
                   for c, (t, _) in zip(rep.cues, fixed)]
         n_rebroken = sum(1 for (t, _), s in zip(fixed, styled) if s.text != t)
         if stage("style", styled, max_shift_ms=0):
-            rep.styled = {"final_n": sum(n for _, n in fixed), "rebroken": n_rebroken}
+            rep.styled = {"final_n": sum(n for _, n in fixed), "forms": sum(n for _, n in forms),
+                          "rebroken": n_rebroken}
 
     rep.validations.append(validate_structure(
         cues, rep.cues, "final", min_gap_ms=tcfg.min_gap_ms,

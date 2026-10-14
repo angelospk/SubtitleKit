@@ -116,3 +116,18 @@ first judge pair and not met with the second. Next metric: the union of both
 auditors, each confirmed by the other family. The 20-line spot-check
 (`eval/review/spotcheck.md`, includes judged lines) tells which judge
 matches Harold.
+
+## Spot-check 1 (Harold, 2026-10-14, 20 lines from Lopus2)
+
+18 OK. Line 4 ("Άρα αποσπά;" for "So being gay is a distraction?") is
+borderline: fine if the previous line gives the subject. Line 5 is wrong:
+"Εύχου μου καλή τύχη" should be "Ευχήσου μου καλή τύχη". No judge flagged it,
+and Haiku, Opus and sol all wrote it, so it is a model habit, not a slip.
+Fix: `greek_style.fix_forms` (table `SPOKEN_FORMS`, applied in the style
+stage) plus a line in the style prompt. Harold's later finds go in the same
+table, as in his own rx/sb correction step.
+
+Calibration: 9 of the 20 lines were "serious" for one auditor; Harold
+accepts 8 and calls 1 borderline. The confirm step had rejected all of
+those 8, so two judges are needed. The one line confirmed by both judges
+(429) is borderline for Harold.

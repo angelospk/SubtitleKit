@@ -2,6 +2,7 @@ from subtitlekit.pipeline.greek_style import (
     STYLE_RULES_EL,
     count_ok_words,
     fix_final_n,
+    fix_forms,
     has_bad_break,
     rebreak,
     style_lint,
@@ -91,3 +92,12 @@ def test_final_n_sees_through_closing_tags_and_spaces_inside_tags():
     assert fix_final_n("Πες <i>τη</i> αλήθεια.") == ("Πες <i>την</i> αλήθεια.", 1)
     assert fix_final_n("Πες τη <i> αλήθεια</i>.") == ("Πες την <i> αλήθεια</i>.", 1)
     assert fix_final_n("Πες <i>την</i>\n<i>θάλασσα</i>.") == ("Πες <i>τη</i>\n<i>θάλασσα</i>.", 1)
+
+
+def test_fix_forms_uses_the_spoken_imperative():
+    # Harold's spot-check (2026-10-14): "Εύχου μου καλή τύχη" is wrong; spoken Greek says "Ευχήσου".
+    assert fix_forms("Εύχου μου καλή τύχη.") == ("Ευχήσου μου καλή τύχη.", 1)
+    assert fix_forms("-Ναι.\n-ΕΥΧΟΥ μου τύχη!") == ("-Ναι.\n-ΕΥΧΗΣΟΥ μου τύχη!", 1)
+    assert fix_forms("Θα σου ευχηθώ, και εύχου κι εσύ.") == ("Θα σου ευχηθώ, και ευχήσου κι εσύ.", 1)
+    assert fix_forms("Ευχούλα και προσευχούλα.") == ("Ευχούλα και προσευχούλα.", 0)  # whole words only
+    assert "Ευχήσου" in STYLE_RULES_EL

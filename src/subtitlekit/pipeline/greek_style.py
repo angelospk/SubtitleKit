@@ -15,6 +15,7 @@ STYLE_RULES_EL = """Greek style: write natural spoken Modern Greek, as if the fi
 - Use the plural of politeness (εσείς) for strangers, superiors and formal settings; the singular (εσύ) for friends, family and peers.
 - Avoid calques: "Βγάζει νόημα" or "Στέκει", not "Κάνει νόημα"; "Βασικά", not "Πραγματικά" for "actually"; "Μην του δίνεις σημασία", not "Αγνόησέ τον"; "Παναγία μου!", "Χριστέ μου!" or "Πω πω!", not "Ω Θεέ μου"; "Ωχ!" or "Αχ!", not "Άουτς".
 - Never write "OK", "ΟΚ" or "Οκέι": use "Εντάξει", "Έγινε", "Κομπλέ", "Καλά" or "Πάμε" as the context needs.
+- Use the spoken imperative: "Ευχήσου μου καλή τύχη", not "Εύχου".
 - Final ν: "την"/"στην" before vowels and κ, π, τ, ξ, ψ, μπ, ντ, γκ; "τη"/"στη" before other consonants ("την ντροπή", "τη θάλασσα").
 - Line breaks: never end the first line with an article, preposition or particle (το, την, σε, με, για, να, θα, δεν), and never split a first name from a last name.
 - Match the register: formal speech keeps full forms; street talk is short, with "ρε" and elisions; anger is very short and may drop the verb ("Δρόμο!").
@@ -62,6 +63,23 @@ def fix_final_n(text: str) -> Tuple[str, int]:
         return target + space
 
     return _FINAL_N_RE.sub(repl, text), changes
+
+
+# Learned forms a model writes where spoken Greek uses another one (Harold's spot-check, 2026-10-14).
+SPOKEN_FORMS = {"εύχου": "ευχήσου"}
+
+
+def fix_forms(text: str) -> Tuple[str, int]:
+    """Replace learned forms (SPOKEN_FORMS) with the spoken ones, whole words only, keeping the case."""
+    text = unicodedata.normalize("NFC", text)
+    changes = 0
+    for learned, spoken in SPOKEN_FORMS.items():
+        pairs = {learned: spoken, learned.capitalize(): spoken.capitalize(),
+                 _strip_accents(learned).upper(): _strip_accents(spoken).upper()}
+        for old, new in pairs.items():
+            text, n = re.subn(rf"(?<!\w){re.escape(old)}(?!\w)", new, text)
+            changes += n
+    return text, changes
 
 
 def has_bad_break(text: str) -> bool:

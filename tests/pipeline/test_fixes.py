@@ -140,12 +140,13 @@ def test_reflow_never_ends_the_first_line_with_a_preposition():
 
 
 def test_style_stage_fixes_final_n_and_bad_breaks_only_when_on():
-    cues = [tight("Πάμε στη πόλη.", 0, idx=1), tight("Πήγαμε μαζί στο\nσπίτι της γιαγιάς μου.", 3000, idx=2)]
+    cues = [tight("Πάμε στη πόλη.", 0, idx=1), tight("Πήγαμε μαζί στο\nσπίτι της γιαγιάς μου.", 3000, idx=2),
+            tight("Εύχου μου τύχη.", 6000, idx=3)]
     on = run_fixes(cues, None, FixConfig(timing=TimingConfig(target_cps=17), style_rules=True))
-    assert on.cues[0].text == "Πάμε στην πόλη."
+    assert on.cues[0].text == "Πάμε στην πόλη." and on.cues[2].text == "Ευχήσου μου τύχη."
     assert on.cues[1].text != cues[1].text and on.cues[1].text.split() == cues[1].text.split()
-    assert on.styled == {"final_n": 1, "rebroken": 1}
-    assert on.to_dict()["styled"] == {"final_n": 1, "rebroken": 1}
+    assert on.styled == {"final_n": 1, "forms": 1, "rebroken": 1}
+    assert on.to_dict()["styled"] == {"final_n": 1, "forms": 1, "rebroken": 1}
     off = run_fixes(cues, None, FixConfig(timing=TimingConfig(target_cps=17)))
     assert [c.text for c in off.cues] == [c.text for c in cues]
 
