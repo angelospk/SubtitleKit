@@ -29,10 +29,17 @@ def make_film(tmp_path, greek=None, meta="title: Test Film\nyear: 2025\nimdb_id:
     return film
 
 
-def greek_backend(bad_keys=False, text="Γραμμή {k}, φίλε μου."):
+def greek_backend(bad_keys=False, text="Γραμμή {k}, φίλε μου.", glossary_reply=None, corrections=()):
+    glossary_reply = glossary_reply or {"terms": []}
+    corrections = list(corrections)
+
     def reply(prompt):
         if prompt.startswith("You shorten") or prompt.startswith("For each id"):
             return "{}"
+        if prompt.startswith("You correct Greek subtitles"):
+            return json.dumps(corrections)
+        if prompt.startswith("You prepare a glossary"):
+            return json.dumps(glossary_reply)
         if prompt.startswith("You review"):  # translation fidelity check: all faithful
             return json.dumps({k: True for k in json.loads(prompt.rsplit("\n\n", 1)[1])})
         payload = prompt_payload(prompt)
@@ -286,5 +293,75 @@ def test_style_rules_in_config_reach_prompt_and_fix_stage(tmp_path):
     assert rep["fixes"]["styled"]["final_n"] > 0
     off = greek_backend(text="Πάμε στη πόλη {k}.")
     run_film(str(film), cfg(style_rules=False), off, str(tmp_path / "off"), log=lambda m: None)
-    assert not any("Greek style:" in p for p in off.prompts)
+    # The correction pass (Harold's stage 4) always carries his style rules; translation prompts must not.
+    assert not any("Greek style:" in p for p in off.prompts if not p.startswith("You correct Greek subtitles"))
     assert read_report(tmp_path / "off")["fixes"]["styled"] == {"final_n": 0, "rebroken": 0}
+
+
+def test_glossary_is_built_saved_used_and_checked(tmp_path):
+    film = make_film(tmp_path)
+    assert DEFAULTS["translate"]["chunk_size"] == 300 and DEFAULTS["glossary"]["enabled"] is True
+    reply = {"style": "Δράμα.", "terms": [{"source": "friend", "greek": "κολλητός", "kind": "term"}]}
+    backend = greek_backend(text="Γραμμή {k}, φίλε μου.", glossary_reply=reply)
+    run_film(str(film), cfg(), backend, str(tmp_path / "out"), log=lambda m: None)
+    saved = json.loads((tmp_path / "out" / "Test.Film.2025" / "glossary.json").read_text(encoding="utf-8"))
+    assert saved["terms"][0]["greek"] == "κολλητός"
+    translate_prompts = [p for p in backend.prompts if "Input JSON:" in p]
+    assert translate_prompts and all('"source": "friend", "greek": "κολλητός"' in p for p in translate_prompts)
+    rep = read_report(tmp_path / "out")
+    assert rep["glossary"]["origin"] == "llm" and rep["glossary"]["terms"] == 1
+    assert any(f["reason"].startswith("glossary: 'friend'") for f in rep["flags"])  # "φίλε" ≠ "κολλητός"
+
+
+def test_glossary_file_from_film_yaml_skips_the_llm_pass(tmp_path):
+    film = make_film(tmp_path, meta="title: Test Film\nyear: 2025\nrelease: Test.Film.2025.1080p.WEB-DL\nglossary: names.json\n")
+    (film / "names.json").write_text(json.dumps({"terms": [{"source": "friend", "greek": "φίλος", "kind": "term"}]},
+                                                ensure_ascii=False), encoding="utf-8")
+    backend = greek_backend()
+    run_film(str(film), cfg(), backend, str(tmp_path / "out"), log=lambda m: None)
+    assert not any(p.startswith("You prepare a glossary") for p in backend.prompts)
+    rep = read_report(tmp_path / "out")
+    assert rep["glossary"]["origin"] == "file" and rep["glossary"]["terms"] == 1
+    assert not any(f["reason"].startswith("glossary:") for f in rep["flags"])  # "φίλε" is a form of "φίλος"
+
+
+def test_unreadable_glossary_file_is_reported_not_fatal(tmp_path):
+    film = make_film(tmp_path, meta="title: Test Film\nyear: 2025\nrelease: Test.Film.2025.1080p.WEB-DL\nglossary: names.yaml\n")
+    (film / "names.yaml").write_text("terms: [unclosed\n", encoding="utf-8")
+    run_film(str(film), cfg(), greek_backend(), str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert rep["glossary"]["origin"] is None and "unreadable" in rep["glossary"]["problems"][0]
+
+
+def test_correction_pass_runs_after_translation_and_lands_in_the_output(tmp_path):
+    film = make_film(tmp_path)
+    assert DEFAULTS["correction"]["enabled"] is True
+    fix = [{"id": 3, "rx": "φίλε μου", "sb": "φίλε", "rate": 5, "type": "σύντμηση"},
+           {"id": 4, "rx": "Γραμμή 4", "sb": "Γραμμή 4, Νέιτ", "rate": 5, "type": "άλλο"}]  # adds a name: rejected
+    backend = greek_backend(corrections=fix)
+    run_film(str(film), cfg(), backend, str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert rep["correction"]["applied"] == 1 and rep["correction"]["rejected"] == 1
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Γραμμή 3, φίλε." in srt and "Γραμμή 4, φίλε μου." in srt
+    off = greek_backend(corrections=fix)
+    run_film(str(film), cfg(correction={"enabled": False}), off, str(tmp_path / "off"), log=lambda m: None)
+    assert not any(p.startswith("You correct Greek subtitles") for p in off.prompts)
+
+
+def test_verified_correction_keeps_an_unchecked_batch_blocker(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend(corrections=[{"id": 1, "rx": "φίλε μου", "sb": "φίλε"}])
+    reviews = []
+
+    def reply(prompt):
+        if prompt.startswith("You review"):
+            reviews.append(prompt)
+            if len(reviews) == 1:
+                return "{}"  # first fidelity pass: no verdicts at all
+        return base.replies(prompt)
+
+    run_film(str(film), cfg(), MockBackend(replies=reply, name="test-llm"), str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert rep["correction"]["applied"] == 1
+    assert any("fidelity unchecked" in f["reason"] for f in rep["flags"])  # cue 1 verified; the others still not

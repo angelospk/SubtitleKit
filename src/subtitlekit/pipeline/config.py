@@ -39,7 +39,7 @@ DEFAULTS: Dict[str, Any] = {
         "backend": "opencode",  # opencode | claude | gemini | fallback | mock
         "model": "opencode/big-pickle",
         "claude_model": "claude-haiku-5-5",
-        "timeout_s": 300,
+        "timeout_s": 600,
         # Successful replies are cached here (null = no cache).
         "cache_dir": "~/.cache/subtitlekit/llm",
     },
@@ -53,7 +53,13 @@ DEFAULTS: Dict[str, Any] = {
     },
     # budget_cps: per-cue character budget in the translation prompt (E3: 17 keeps the meaning
     # at professional reading speed); null = off.
-    "translate": {"chunk_size": 40, "context_lines": 4, "max_cues": None, "budget_cps": 17},
+    # chunk_size: cues per LLM call; large chunks keep names, register and εσύ/εσείς consistent (E5).
+    "translate": {"chunk_size": 300, "context_lines": 4, "max_cues": None, "budget_cps": 17,
+                  "rescue_untranslated": True},
+    # Correction pass (E6, Harold's stage 4): LLM proposes rx/sb edits; code enforces no growth, no added pronouns/names, numbers, negation, then rechecks fidelity.
+    "correction": {"enabled": True, "batch": 300},
+    # Film glossary (E5): built by the LLM once per film, or loaded from film.yaml `glossary: <file>`; saved as glossary.json in the output folder.
+    "glossary": {"enabled": True, "max_terms": 150},
     "fixes": {
         "min_gap_ms": 84,
         "min_duration_ms": 833,

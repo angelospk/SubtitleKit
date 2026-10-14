@@ -172,7 +172,7 @@ def build_prompt(
     chunk: Sequence[Cue], meta: FilmMeta, source_lang: str, target_lang: str,
     names: Sequence[str], context: Sequence[tuple],
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
-    budgets: Optional[Dict[int, int]] = None, style_rules: bool = False,
+    budgets: Optional[Dict[int, int]] = None, style_rules: bool = False, glossary=None,
 ) -> str:
     movie = ""
     if meta.title:
@@ -185,7 +185,8 @@ def build_prompt(
         if meta.cast:
             movie += f"\n- Top cast: {', '.join(meta.cast)}"
         movie += "\n"
-    glossary = f"- Recurring names in this film: {', '.join(names)}\n" if names else ""
+    glossary_block = glossary.prompt_block() if glossary is not None else ""
+    glossary = glossary_block or (f"- Recurring names in this film: {', '.join(names)}\n" if names else "")
     ctx = ""
     if context:
         ctx = "\nPrevious lines (already translated, for continuity; do not return them):\n"
@@ -226,7 +227,7 @@ def normalize_text(text: str) -> str:
 
 def prompt_payload(prompt: str) -> Dict[str, str]:
     """The ``{"id": "text"}`` input of a translation prompt (for mocks/tests)."""
-    return json.loads(prompt.split("Input JSON:\n", 1)[1].split("\n\nRetry ", 1)[0])
+    return json.loads(prompt.split("Input JSON:\n", 1)[1].split("\n\nRetry ", 1)[0].split("\n\nThese lines were left", 1)[0])
 
 
 _DASH_RE = re.compile(r"^(\s*(?:<[^>]+>)*)\s*[-–—]\s*")
@@ -280,7 +281,7 @@ def translate_cues(
     context_lines: int = 4, max_attempts: int = 2, max_consecutive_errors: int = 4,
     progress: Optional[Callable[[int, int], None]] = None,
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
-    budget_cps: Optional[float] = None, style_rules: bool = False,
+    budget_cps: Optional[float] = None, style_rules: bool = False, glossary=None, rescue: bool = True,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
     if budget_cps is not None and not (math.isfinite(budget_cps) and budget_cps > 0):
@@ -301,7 +302,7 @@ def translate_cues(
         for attempt in range(1, max_attempts + 1):
             prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
             prompt = build_prompt(pending, meta, source_lang, target_lang, names,
-                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets, style_rules)
+                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets, style_rules, glossary)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += f"\n\nRetry {attempt}: your previous answer was rejected ({last_problem[:200]}). Follow the rules exactly."
@@ -332,6 +333,27 @@ def translate_cues(
             continue
         if progress:
             progress(len(done), len(cues))
+    if rescue and errors_in_row < max_consecutive_errors:
+        # One more call for lines still in the source language (not after a backend outage).
+        left = [c for c in cues if c.index not in done]
+        for i in range(0, len(left), chunk_size):
+            chunk = left[i : i + chunk_size]
+            prev = [c for c in cues if c.index < chunk[0].index and c.index in done][-context_lines:]
+            prompt = build_prompt(chunk, meta, source_lang, target_lang, names,
+                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets, style_rules, glossary)
+            prompt += ("\n\nThese lines were left in the source language in an earlier answer. Translate every one into "
+                       f"{LANG_NAMES.get(target_lang, target_lang)}; keep only names and titles unchanged.")
+            result.calls += 1
+            try:
+                accepted, problems = validate_chunk(chunk, extract_json(backend.complete(prompt)), target_lang)
+            except LLMError as exc:
+                forget(backend, prompt)
+                result.log.append(f"rescue cues {chunk[0].index}-{chunk[-1].index}: {exc}")
+                continue
+            done.update(accepted)
+            if problems:
+                forget(backend, prompt)
+                result.log.append(f"rescue cues {chunk[0].index}-{chunk[-1].index}: {'; '.join(problems[:5])[:200]}")
     for c in cues:
         if c.index in done:
             result.cues.append(c.with_text(done[c.index]))

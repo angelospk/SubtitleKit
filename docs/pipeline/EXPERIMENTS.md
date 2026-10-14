@@ -47,6 +47,14 @@ experiment; keep them short and concrete. Details and tables live in
 14. **The judge score moves ±5 wins between two identical runs** (E4).
     Treat smaller gaps as a tie. Style changes need their own measure:
     count style markers (`summary.py`), which stay stable between runs.
+15. **Measure a stage that changes few cues on those cues only.** The
+    correction pass changes 1–4 % of the cues, so the 60-anchor judge sees
+    almost none of them and moves by its own noise. Judge the changed cues
+    blind, before against after (`docs/pipeline/eval/ab_changed.py`).
+16. **Code rules decide what an LLM edit may do.** Most rejected
+    corrections were longer than the line they replaced, and most losing
+    ones cut a line that already fit its budget down to a stub. Both are
+    rules in code now, not requests in the prompt.
 
 ## E1: French vs English source (2026-10-14, Euphoria S03E01)
 
@@ -212,4 +220,78 @@ experiment; keep them short and concrete. Details and tables live in
 - Next (E5): Harold's correction pass (rx/sb, his vocabulary list, his
   hard rules enforced in code: never longer, no added words or pronouns),
   fed with the fidelity-check flags; retry untranslated lines one by one.
+
+## E5: large chunks + film glossary (2026-10-14)
+
+- Hypothesis: Harold prefers large chunks ("at least 300 lines") and full
+  naming consistency, not only rare names. Chunks of 300 cues keep names,
+  register and εσύ/εσείς consistent; a glossary built once per film
+  (Harold's stage 1: names, places, terms, idioms, style, notes, scene
+  map) makes every rendering repeat.
+- Setup: English source, budget 17 CPS, style rules on, Haiku 5.5, both
+  films. "enbs" = E4 (chunks of 40); "enc" = chunks of 300; "encg" =
+  chunks of 300 + glossary (one extra LLM call per film; terms are kept
+  only if they occur in the source, names and places only in Greek
+  script). Glossary adherence is measured with the encg glossary on every
+  variant and on the professional track.
+- Result (judge ours / pro / tie on the same anchors):
+
+  | Film | Variant | Judge | Meaning errors | Glossary adherence | LLM calls (translate) | Time |
+  |---|---|---|---|---|---|---|
+  | Euphoria (59) | enbs | 41 / 10 / 8 | 7 | 86 % | 23 | 26 min |
+  | | enc | 45 / 9 / 5 | 5 | 89 % | 5 | 20 min |
+  | | **encg** | 41 / 10 / 8 | **2** | **98 %** | 3 | 21 min |
+  | | professional | | | 76 % | | |
+  | Stranger Things (59) | enbs | 30 / 13 / 16 | 3 | 81 % | 42 | 37 min |
+  | | enc | 30 / 15 / 14 | 4 | 88 % | 6 | 22 min |
+  | | **encg** | 35 / 12 / 12 | 3 | **97 %** | 6 | 28 min |
+  | | professional | | | 80 % | | |
+
+- Judge: a tie (gaps within the ±5 noise of lesson 14).
+- Consistency: **the glossary works.** The same rendering for each name,
+  place and term in 97–98 % of its occurrences, against 86/81 % with
+  chunks of 40 and 76/80 % in the professional tracks.
+- Cost: 5–7 times fewer translation calls; a 300-cue call takes about
+  6–7 minutes with Haiku (timeout raised to 600 s).
+- Untranslated lines: Stranger Things encg left 2 cues untranslated
+  (793, 795) and Euphoria enbs 1; E6 adds a rescue call for them.
+- Decision: chunk_size 300 and the glossary are the defaults (D21).
+
+## E6: correction pass + rescue of untranslated lines (2026-10-14)
+
+- Hypothesis: Harold's stage 4 (an LLM proposes `{id, rx, sb, rate,
+  type}` replacements with his criteria, his forbidden list, his style
+  rules and his vocabulary list), with his hard rules enforced in code,
+  fixes errors without new ones.
+- Setup: A/B on the same base translation, so only the correction
+  differs: `docs/pipeline/eval/correct_only.py` runs the pass on a
+  finished variant (flags: rule QA + glossary), and
+  `docs/pipeline/eval/ab_changed.py` lets Sonnet judge each changed cue
+  blind (before vs after, with the English source).
+- Result:
+
+  | Base | Code | Changed cues | Rejected / reverted | A/B after / before / tie |
+  |---|---|---|---|---|
+  | Euphoria enbs | first version | 13 | 8 / 2 | 6 / 6 / 1 |
+  | Stranger Things enbs | first version | 35 | 20 / 4 | 18 / 17 / 0 |
+  | Euphoria encg | final | 9 | 30 / 0 | 5 / 4 / 0 |
+  | Stranger Things encg | final | 42 | 22 / 1 | **25 / 17 / 0** |
+
+- First version: a tie (24 / 23). Most losses cut a line that already fit
+  its budget down to a stub ("Φύγε από πάνω μου!" → "Φύγε!", "Ποιο
+  χρηματοκιβώτιο;" → "Ποιο;") or removed a natural "μου" ("παιδί μου").
+  Neither the type nor the rate of a correction predicted a win.
+- Final version (after the reviews and the E6 data): an unflagged cue that
+  already fits its budget keeps ≥ 55 % of its characters. Result 30 / 21
+  over both films: a small gain. One Euphoria loss brought an English word
+  in ("Ποιο safe;"), so a rule added after these runs rejects that too. The
+  wins are real fixes: wrong number agreement ("Ευχαριστούμε" for "Thank
+  you"), awkward calques ("10άρια … 24ωρο" → "με άριστα … μέρα νύχτα").
+- Rejections: 27 of 30 on Euphoria were "longer than allowed"; the
+  LLM often proposes a longer line, and the code refuses it.
+- The 60-anchor judge moved 41 → 39 and 35 → 32: noise (lesson 15).
+- Rescue: one extra call for cues still untranslated after the normal
+  attempts; covered by tests, not yet seen in a run (no E6 full run).
+- Decision: keep the correction pass on by default; watch the A/B on the
+  next films (D22).
 

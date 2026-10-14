@@ -496,3 +496,87 @@ Codex `review` lane, 2 rounds (cap reached), then a fix without a round 3:
 - CodeRabbit: 1 finding (minor, fixed): `run_sweep.sh` fell back to the
   default config when a named variant config was missing; it now stops.
 
+## D21: chunks of 300 cues and a film glossary (E5)
+
+Details: `EXPERIMENTS.md` E5. Harold's stage 1 (glossary) and his wish for
+large chunks with full naming consistency.
+
+- `translate.chunk_size` 40 → 300; `llm.timeout_s` 300 → 600.
+- New `glossary.py`: one LLM call per film builds names, places, terms,
+  idioms, style, notes and a scene map. Code keeps only terms that occur
+  in the source, names and places in Greek script only, valid scenes
+  inside the film, at most 150 terms. A file glossary (`glossary:` in
+  film.yaml, e.g. a series-wide list) passes the same checks, except
+  presence in this episode. Saved as `glossary.json` next to the output.
+- The glossary goes into every translation prompt as JSON data (built
+  from untrusted subtitles: never as prompt text). After all fixes, a
+  check flags cues whose source has a glossary name, place or term while
+  the Greek has another rendering (advisory flag).
+- Result: judge tie; glossary adherence 97–98 % (pro 76–80 %); 5–7 times
+  fewer translation calls.
+
+### Review log (D21)
+
+Codex `review` lane, 2 rounds (cap reached):
+- Round 1 REVISE, 7 important + 1 nit. Fixed with tests: terms across a
+  line break, mixed-script names, invalid scene times, NFD text, the
+  glossary check now runs on the final text, a malformed file no longer
+  stops the film.
+- Round 2: 3 confirmed fixed. Fixed after the round, with tests: the
+  glossary is serialised as JSON data; a file glossary passes the same
+  validation and reports its problems; scenes must end inside the film;
+  the glossary reaches every chunk (multi-chunk test).
+- Rejected: "bounded inflection variants" for the stem match (a term like
+  φως also accepts φωτιά). The check is advisory; a false accept costs
+  nothing, a false flag sends a film to a human. Greek third-declension
+  stems change (φως/φωτός), so exact variants need a morphological
+  lexicon.
+- CodeRabbit: 0 findings.
+
+## D22: correction pass and rescue of untranslated lines (E6)
+
+Details: `EXPERIMENTS.md` E6. Harold's stage 4.
+
+- New `correct.py`: batches of 300 cues `{id: {src, el, problem}}` (the
+  problem is the QA, fidelity and glossary flags), Harold's Greek prompt
+  with his style rules and vocabulary list (`greek_vocab.py`, verbatim),
+  reply `[{id, rx, sb, rate, type}]`.
+- Code enforces his hard rules on each edit: not longer than the line
+  (a flagged cue may grow to its CPS budget), fits 2 lines of 42, no
+  added pronoun (μου σου του της μας σας τους), no added name (also the
+  glossary names at any position), no English word, and no lost number,
+  negation, question mark or dialogue dash (numbers and negation may
+  change when they then match the source). An unflagged cue that fits
+  its budget keeps ≥ 55 % of its characters.
+- Every accepted edit is checked again by the LLM fidelity check; a cue
+  without an explicit "faithful" verdict is reverted. A verified cue
+  clears only its own fidelity flag, never a batch-level "unchecked"
+  blocker. Rule QA runs again on the corrected text.
+- `translate_cues` makes one rescue call for cues still in the source
+  language (not after a backend outage). Config:
+  `translate.rescue_untranslated` (true), `correction.enabled` (true),
+  `correction.batch` (300).
+- Result: A/B on changed cues 30 / 21 with the final rules.
+
+### Review log (D22)
+
+Codex `review` lane, 2 rounds (cap reached):
+- Round 1 REVISE, 10 important, all fixed with tests: missing fidelity
+  verdicts verified cues; a verified cue cleared a batch blocker;
+  injection (the prompt marks the data; the Claude backend runs without
+  tools); names at the start of a cue; negation, question marks and
+  speaker dashes are counted, not only detected; layout overflow;
+  non-ASCII ids; rescue when no cue was translated yet.
+- Round 2: 6 confirmed fixed. Fixed after the round, with tests: very long
+  numeric ids; name forms are bounded (Μαρία does not match μαρμελάδα).
+- Rejected: (a) names outside the glossary at the start of a cue: no
+  Greek lexicon tells a name from a word there; the glossary lists every
+  human name, and the mid-sentence check stays. (b) negation per clause:
+  counting keeps the number of negations; a negation moved to the wrong
+  clause changes meaning, which the per-cue fidelity recheck catches.
+  (c) more adversarial tests: the edit can only pass the code rules and
+  an explicit fidelity verdict.
+- Added after the E6 data (no review round left): the 55 % keep rule and
+  the English-word rule, both with tests.
+- CodeRabbit: 0 findings.
+

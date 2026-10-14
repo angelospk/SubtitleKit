@@ -46,3 +46,20 @@ texts["pro"] = "\n".join(c.text for c in ref_cues)
 print(f"\n{'marker':18}" + "".join(f"{v.rsplit('.', 1)[-1]:>7}" for v in texts))
 for k, p in MARKERS.items():
     print(f"{k:18}" + "".join(f"{len(re.findall(p, t, re.M)):>7}" for t in texts.values()))
+# Name consistency against the film glossary of the E5 run (if any): share of glossary occurrences
+# whose translation uses the glossary rendering. Text = all our cues that overlap the source cue.
+gpath = f"{base}/out/{film}.encg/glossary.json"
+if os.path.exists(gpath):
+    from subtitlekit.pipeline.glossary import CHECKED_KINDS, _occurs, check_glossary, load_glossary
+    from subtitlekit.pipeline.srt import Cue
+    gl, _ = load_glossary(gpath)
+    src_track = load_srt(json.load(open(f"{base}/out/{variants[0]}/report.json"))["source"]["path"])
+    checks = sum(1 for c in src_track for t in gl.terms if t.kind in CHECKED_KINDS
+                 and _occurs(t.source, c.text, ignore_case=t.kind not in ("name", "place")))
+    def adherence(cues):
+        joined = [Cue(s.index, s.start_ms, s.end_ms, " ".join(c.text for c in cues if c.start_ms < s.end_ms and c.end_ms > s.start_ms))
+                  for s in src_track]
+        return 1 - len(check_glossary(src_track, joined, gl)) / max(1, checks)
+    print(f"\nglossary ({len(gl.terms)} terms, {checks} occurrences): "
+          + "  ".join(f"{v.rsplit('.', 1)[-1]} {adherence(ours_cues(v)):.0%}" for v in variants)
+          + f"  pro {adherence(ref_cues):.0%}")

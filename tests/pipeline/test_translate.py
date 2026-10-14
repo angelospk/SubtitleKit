@@ -50,11 +50,14 @@ def test_prompt_contains_movie_context_glossary_and_previous_lines():
 def test_key_mismatch_is_retried_then_split_then_left_untranslated():
     src = cues(8)
     backend = MockBackend(replies=lambda p: '{"1": "μόνο ένα"}')
-    res = translate_cues(src, backend, chunk_size=8, max_attempts=2)
+    res = translate_cues(src, backend, chunk_size=8, max_attempts=2, rescue=False)
     assert res.untranslated == list(range(1, 9))
     assert [c.text for c in res.cues] == [c.text for c in src]
     assert any("split" in line for line in res.log)
     assert len(backend.prompts) == 2 + 2 + 2  # whole chunk, then two halves
+    rescued = MockBackend(replies=lambda p: '{"1": "μόνο ένα"}')
+    translate_cues(src, rescued, chunk_size=8, max_attempts=2)
+    assert len(rescued.prompts) == 2 + 2 + 2 + 1  # the backend answers, so one rescue call is worth it
 
 
 def test_partial_acceptance_keeps_good_lines_and_retries_rest():
@@ -257,3 +260,45 @@ def test_greek_style_rules_go_into_the_prompt_only_when_on_and_target_is_greek()
     backend = MockBackend(replies=lambda p: json.dumps({k: "Γεια." for k in prompt_payload(p)}))
     translate_cues(cues(2), backend, style_rules=True)
     assert "Greek style:" in backend.prompts[0]
+
+
+def test_glossary_block_replaces_the_frequent_names_line():
+    from subtitlekit.pipeline.glossary import Glossary, Term
+
+    g = Glossary(terms=[Term("Mike", "Μάικ", "name")], style="Δράμα.")
+    p = build_prompt(cues(2), FilmMeta(), "en", "el", ["Mike"], [], glossary=g)
+    entry = '"source": "Mike", "greek": "Μάικ"'
+    assert entry in p and "Recurring names" not in p
+    assert p.index(entry) < p.index("Input JSON:")
+    backend = MockBackend(replies=lambda p: json.dumps({k: "Γεια, Μάικ." for k in prompt_payload(p)}, ensure_ascii=False))
+    translate_cues(cues(5), backend, chunk_size=2, glossary=g)  # every chunk, not only the first
+    assert len(backend.prompts) == 3 and all(entry in p for p in backend.prompts)
+
+
+def test_untranslated_lines_get_one_rescue_round_on_their_own():
+    seen = []
+
+    def reply(prompt):
+        payload = prompt_payload(prompt)
+        seen.append((sorted(payload), "left in the source language" in prompt))
+        if "left in the source language" in prompt:
+            return json.dumps({k: "Γεια σου, φίλε μου." for k in payload}, ensure_ascii=False)
+        # cue 2 keeps coming back in English
+        return json.dumps({k: ("Hello there, my friend." if k == "2" else "Γεια.") for k in payload}, ensure_ascii=False)
+
+    src = [Cue(1, 0, 1000, "Hello there."), Cue(2, 1000, 2000, "Hello there, my friend."), Cue(3, 2000, 3000, "Bye now.")]
+    res = translate_cues(src, MockBackend(replies=reply), chunk_size=10)
+    assert res.untranslated == [] and res.cues[1].text == "Γεια σου, φίλε μου."
+    assert seen[-1] == (["2"], True)
+    off = translate_cues(src, MockBackend(replies=reply), chunk_size=10, rescue=False)
+    assert off.untranslated == [2]
+
+
+def test_rescue_also_runs_when_no_cue_was_translated_yet():
+    def reply(prompt):
+        if "left in the source language" in prompt:
+            return json.dumps({"1": "Γεια σου, φίλε μου."}, ensure_ascii=False)
+        return json.dumps({"1": "Hello there, my friend."})
+
+    res = translate_cues([Cue(1, 0, 1000, "Hello there, my friend.")], MockBackend(replies=reply))
+    assert res.untranslated == [] and res.cues[0].text == "Γεια σου, φίλε μου."

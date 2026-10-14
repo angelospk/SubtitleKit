@@ -15,13 +15,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+import yaml
+
 from .analyzer import analyze_film, detect_content_language, discover_candidates
+from .glossary import build_glossary, check_glossary, load_glossary
+from .correct import correct_translation
 from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
 from .metrics import Limits, compute_metrics
 from .srt import Cue, load_srt, save_srt
 from .timing import TimingConfig
-from .translate import FilmMeta, merge_for_hybrid, prepare_source, translate_cues
+from .translate import FilmMeta, char_budgets, merge_for_hybrid, prepare_source, translate_cues
 from .upload import plan_upload
 from .fixes import Flag
 from .validators import validate_structure
@@ -223,6 +227,26 @@ def run_film(
     if max_cues:
         source = source[: int(max_cues)]
         report.data["partial"] = True
+    glossary, gloss_notes = None, []
+    if meta.get("glossary"):
+        gloss_path = os.path.join(film_dir, str(meta["glossary"]))
+        if os.path.exists(gloss_path):
+            try:
+                glossary, gloss_notes = load_glossary(gloss_path, cfg["glossary"]["max_terms"])
+            except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+                gloss_notes = [f"glossary file unreadable: {exc}"[:200]]
+        else:
+            gloss_notes = [f"glossary file not found: {meta['glossary']}"]
+    elif cfg["glossary"]["enabled"] and backend:
+        log(f"[{film}] building glossary")
+        glossary, gloss_notes = build_glossary(
+            source, backend, FilmMeta.from_dict(meta), cfg["target_language"], cfg["glossary"]["max_terms"])
+    if glossary:
+        film_out.mkdir(parents=True, exist_ok=True)
+        (film_out / "glossary.json").write_text(
+            json.dumps(glossary.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    report.data["glossary"] = {"origin": glossary.origin if glossary else None,
+                               "terms": len(glossary.terms) if glossary else 0, "problems": gloss_notes[:20]}
     log(f"[{film}] translating {len(source)} cues from {chosen.language} with "
         f"{getattr(backend, 'name', None)}")
     tr = translate_cues(
@@ -230,7 +254,8 @@ def run_film(
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
         hints=hints, hint_lang=hint_lang, budget_cps=cfg["translate"].get("budget_cps"),
-        style_rules=cfg.get("style_rules", False),
+        rescue=cfg["translate"].get("rescue_untranslated", True),
+        style_rules=cfg.get("style_rules", False), glossary=glossary,
     ) if backend else _no_llm(source)
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
@@ -243,21 +268,44 @@ def run_film(
         condense_above_cps=f["condense_above_cps"], fidelity_check=f["fidelity_check"],
         style_rules=cfg.get("style_rules", False),
     )
-    qa_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+    from .translate import LANG_NAMES
+
+    src_name = LANG_NAMES.get(chosen.language, chosen.language)
+    tgt_name = LANG_NAMES.get(cfg["target_language"], cfg["target_language"])
+    rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+    fid_flags: List[Flag] = []
+    off_flags: List[Flag] = []
     if cfg["review"]["translation_fidelity"] == "llm":
         log(f"[{film}] checking translation fidelity")
-        from .translate import LANG_NAMES
-
-        qa_flags += check_translation(source, tr.cues, backend, LANG_NAMES.get(chosen.language, chosen.language),
-                                      LANG_NAMES.get(cfg["target_language"], cfg["target_language"]))
+        fid_flags = check_translation(source, tr.cues, backend, src_name, tgt_name)
     else:
-        qa_flags.append(Flag(0, "translation fidelity check disabled in config", blocker=True))
+        off_flags = [Flag(0, "translation fidelity check disabled in config", blocker=True)]
+    gloss_flags = [Flag(i, reason) for i, reason in check_glossary(source, tr.cues, glossary)] if glossary else []
+    qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
+    if cfg.get("correction", {}).get("enabled") and backend:
+        log(f"[{film}] correcting translation")
+        cps = cfg["translate"].get("budget_cps")
+        budgets = char_budgets(source, cps) if cps else None
+        crep = correct_translation(source, tr.cues, backend, flags=qa_flags, budgets=budgets,
+                                   batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
+                                   known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else ())
+        report.data["correction"] = crep.to_dict()
+        if crep.applied:
+            tr.cues = crep.cues
+            qa_flags = (qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+                        # A verified cue clears only its own verdict, never a batch-level "unchecked" blocker.
+                        + [f for f in fid_flags if not (f.cue in crep.verified and f.reason.startswith("LLM translation check:"))]
+                        + off_flags + gloss_flags)
     reference = None
     if meta.get("timing_reference"):
         ref_path = os.path.join(film_dir, meta["timing_reference"])
         reference = load_srt(ref_path) if os.path.exists(ref_path) else None
     log(f"[{film}] fixing timing / reading speed")
     fx = run_fixes(tr.cues, backend, fix_cfg, reference=reference)
+    if glossary:
+        # Judge the glossary on the final text: condensing may change a rendering after the first check.
+        qa_flags = [f for f in qa_flags if f not in gloss_flags]
+        qa_flags += [Flag(i, reason) for i, reason in check_glossary(source, fx.cues, glossary)]
     out_srt = film_out / f"{film}.{cfg['target_language']}.srt"
     save_srt(fx.cues, str(out_srt))
     # The file on disk is what gets uploaded: re-read it and prove it matches.
@@ -345,6 +393,9 @@ def render_markdown(d: Dict[str, Any]) -> str:
               f"- Cues: {d['source']['cues']} (partial run)" if d.get("partial") else f"- Cues: {d['source']['cues']}",
               f"- LLM backend: {d['translation']['backend']}, calls: {d['translation']['calls']}, "
               f"untranslated: {len(d['translation']['untranslated'])}",
+              *([f"- Glossary: {d['glossary']['origin']}, {d['glossary']['terms']} terms"] if "glossary" in d else []),
+              *([f"- Correction: {d['correction']['applied']} applied, {d['correction']['rejected']} rejected, "
+                 f"{d['correction']['reverted']} reverted"] if "correction" in d else []),
               f"- Timing changes: {fx['timing_changes']}",
               f"- Reflowed lines: {fx['reflowed']}; condensed: {fx['condensed']}; condensations reverted: {fx['condense_rejected']}; "
               f"style fixes: {fx.get('styled')}",

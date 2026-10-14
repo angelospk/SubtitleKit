@@ -226,9 +226,12 @@ Return ONLY JSON with EVERY id: {{"<id>": true}} if faithful, or {{"<id>": "<sho
 
 def check_translation(
     source: Sequence[Cue], translated: Sequence[Cue], backend: Optional[LLMBackend],
-    source_lang: str = "English", target_lang: str = "Greek", batch: int = 40,
+    source_lang: str = "English", target_lang: str = "Greek", batch: int = 40, per_cue: bool = False,
 ) -> List[Flag]:
     """LLM fidelity check of every translated cue. Unfaithful or unchecked → blocker flags.
+
+    per_cue: one flag per unchecked cue (instead of one summary flag per batch), for callers that
+    must know exactly which cues passed.
 
     Failed cues are not reverted: the source-language text would be worse in a
     Greek subtitle. A blocker sends the film to a human instead.
@@ -252,6 +255,9 @@ def check_translation(
             reason = "no verdict returned"
         if not isinstance(data, dict):
             forget(backend, prompt)
+            if per_cue:
+                flags += [Flag(t.index, f"translation fidelity unchecked ({reason})", blocker=True) for _, t in part]
+                continue
             flags.append(Flag(0, f"translation fidelity unchecked for cues {part[0][1].index}-{part[-1][1].index} "
                                  f"({reason})", blocker=True))
             continue
@@ -264,7 +270,9 @@ def check_translation(
                 flags.append(Flag(t.index, f"LLM translation check: {verdict.strip()[:150]}", s.text, t.text, blocker=True))
             else:
                 missing.append(t.index)
-        if missing:
+        if missing and per_cue:
+            flags += [Flag(i, "translation fidelity unchecked (no verdict returned)", blocker=True) for i in missing]
+        elif missing:
             flags.append(Flag(missing[0], f"translation fidelity unchecked for {len(missing)} cues "
                                           f"(e.g. {missing[:5]})", blocker=True))
     return flags
