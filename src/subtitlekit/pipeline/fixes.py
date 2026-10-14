@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -38,6 +39,9 @@ class Flag:
     reason: str
     original: str = ""
     proposed: str = ""
+    # blocker: integrity problem, the film can never be auto-approved.
+    # advisory: counted against review.max_flag_ratio.
+    blocker: bool = False
 
 
 @dataclass
@@ -182,15 +186,24 @@ def _fidelity(batch, candidates, backend, cfg, language) -> Dict[int, tuple]:
         v = data.get(str(i)) if isinstance(data, dict) else None
         if isinstance(v, dict) and v.get("ok") is True:
             out[i] = (True, "")
+        elif isinstance(v, dict):
+            out[i] = (False, "LLM fidelity: " + str(v.get("issue", "no reason given"))[:150])
         else:
-            out[i] = (False, "LLM fidelity: " + str((v or {}).get("issue", "no verdict"))[:150])
+            out[i] = (False, "LLM fidelity: malformed or missing verdict")
     return out
 
 
 # --------------------------------------------------------- translation QA
 
 
-def qa_translation(source: Sequence[Cue], translated: Sequence[Cue], cfg: FixConfig) -> List[Flag]:
+SOURCE_NEGATION_RE = re.compile(r"\b(not|no|never|nothing|nobody|none|neither|nor|cannot)\b|n't\b", re.I)
+GREEK_NEGATION_RE = re.compile(
+    r"\b(δεν|δε|μην|μη|όχι|ποτέ|τίποτα|τίποτε|κανείς|κανένας|κανένα|καμία|καμιά|ούτε|χωρίς|ουδέποτε)\b", re.I)
+
+
+def qa_translation(
+    source: Sequence[Cue], translated: Sequence[Cue], cfg: FixConfig, target_lang: str = "el"
+) -> List[Flag]:
     """Flags typical MT/AI errors that rules can see (count already validated)."""
     flags = []
     prev = prev_src = None
@@ -200,9 +213,12 @@ def qa_translation(source: Sequence[Cue], translated: Sequence[Cue], cfg: FixCon
         if sc >= 10 and tc > cfg.max_expansion * sc:
             flags.append(Flag(t.index, f"translation {tc / sc:.1f}× longer than source", s.text, t.text))
         if sorted(NUMBER_RE.findall(visible_text(s.text))) != sorted(NUMBER_RE.findall(visible_text(t.text))):
-            flags.append(Flag(t.index, "numbers differ from source", s.text, t.text))
+            flags.append(Flag(t.index, "numbers differ from source", s.text, t.text, blocker=True))
+        if (target_lang == "el" and SOURCE_NEGATION_RE.search(visible_text(s.text))
+                and not GREEK_NEGATION_RE.search(visible_text(t.text))):
+            flags.append(Flag(t.index, "negation in source, none in translation", s.text, t.text, blocker=True))
         if prev is not None and t.text == prev.text and s.text != prev_src.text:
-            flags.append(Flag(t.index, "repeats the previous translation", s.text, t.text))
+            flags.append(Flag(t.index, "repeats the previous translation", s.text, t.text, blocker=True))
         prev, prev_src = t, s
     return flags
 
@@ -223,7 +239,7 @@ def run_fixes(
         if v.ok:
             rep.cues = new
         else:
-            rep.flags.append(Flag(0, f"stage {name} reverted: " + "; ".join(i.code for i in v.issues if i.severity == "error")[:200]))
+            rep.flags.append(Flag(0, f"stage {name} reverted: " + "; ".join(i.code for i in v.issues if i.severity == "error")[:200], blocker=True))
         return v.ok
 
     if reference:

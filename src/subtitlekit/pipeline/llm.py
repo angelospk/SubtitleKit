@@ -136,6 +136,47 @@ class FallbackBackend(LLMBackend):
         raise LLMError("all LLM backends failed: " + "; ".join(errors))
 
 
+@dataclass
+class CachingBackend(LLMBackend):
+    """Disk cache of successful replies, keyed by backend name + model + prompt.
+
+    Re-running a film after changing thresholds then costs no LLM time.
+    Failures are never cached.
+    """
+
+    inner: LLMBackend = None
+    cache_dir: str = "~/.cache/subtitlekit/llm"
+    hits: int = 0
+
+    @property
+    def name(self) -> str:  # type: ignore[override]
+        return self.inner.name
+
+    def _path(self, prompt: str) -> str:
+        import hashlib
+        import os
+
+        key = f"{self.inner.name}|{getattr(self.inner, 'model', '')}|{prompt}"
+        digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        return os.path.join(os.path.expanduser(self.cache_dir), digest[:2], digest + ".txt")
+
+    def complete(self, prompt: str) -> str:
+        import os
+
+        path = self._path(prompt)
+        if os.path.exists(path):
+            self.hits += 1
+            with open(path, encoding="utf-8") as fh:
+                return fh.read()
+        reply = self.inner.complete(prompt)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(reply)
+        os.replace(tmp, path)
+        return reply
+
+
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
@@ -161,6 +202,13 @@ def extract_json(text: str) -> Any:
 def make_backend(cfg: Optional[Dict[str, Any]] = None) -> LLMBackend:
     """Build a backend from the ``llm`` section of the pipeline config."""
     cfg = cfg or {}
+    backend = _make_uncached(cfg)
+    if cfg.get("cache_dir") and backend.name != "mock":
+        return CachingBackend(inner=backend, cache_dir=cfg["cache_dir"])
+    return backend
+
+
+def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
     kind = cfg.get("backend", "opencode")
     timeout = float(cfg.get("timeout_s", 300))
     opencode = OpenCodeBackend(model=cfg.get("model", "opencode/big-pickle"), timeout=timeout)

@@ -98,9 +98,14 @@ def plan_upload(
         return plan
     real_argv, _ = build_upload_argv(subtitle_path, film, upload_cfg, language, password=pwd, username=user)
     run = runner or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=300))
-    proc = run(real_argv)
     plan.dry_run = False
     plan.executed = True
+    try:
+        proc = run(real_argv)
+    except Exception as exc:  # TimeoutExpired etc. carry the argv: never let it escape
+        plan.returncode = -1
+        plan.output = f"{type(exc).__name__}: " + str(exc).replace(pwd, REDACTED)[-500:]
+        return plan
     plan.returncode = proc.returncode
     plan.output = (proc.stdout + proc.stderr).replace(pwd, REDACTED)[-2000:]
     return plan

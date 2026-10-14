@@ -33,7 +33,13 @@ DEFAULTS: Dict[str, Any] = {
         "skip_if_only_machine_sources": True,
         "reject_release_patterns": [r"\bCAM\b", r"\bHDCAM\b", r"\bTS\b", r"TELESYNC"],
     },
-    "llm": {"backend": "opencode", "model": "opencode/big-pickle", "timeout_s": 300},
+    "llm": {
+        "backend": "opencode",  # opencode | gemini | fallback | mock
+        "model": "opencode/big-pickle",
+        "timeout_s": 300,
+        # Successful replies are cached here (null = no cache).
+        "cache_dir": "~/.cache/subtitlekit/llm",
+    },
     "analysis": {
         "cps_limit": 17.0,
         "cps_hard_limit": 25.0,

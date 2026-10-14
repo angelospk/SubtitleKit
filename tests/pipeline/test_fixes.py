@@ -108,3 +108,17 @@ def test_qa_translation_flags_expansion_numbers_and_repeats():
     assert "longer" in reasons[1]
     assert "numbers" in reasons[2]
     assert "repeats" in reasons[4]
+
+
+def test_malformed_fidelity_verdict_reverts_instead_of_crashing():
+    backend = MockBackend(replies=router(json.dumps({"2": SHORT}, ensure_ascii=False), '{"2": "garbage"}'))
+    rep = run_fixes(film(), backend, CFG)
+    assert rep.cues[1].text == reflow_text(FAST)
+    assert any("malformed" in f.reason for f in rep.flags)
+
+
+def test_qa_translation_flags_lost_negation_as_blocker():
+    src = [Cue(1, 0, 1, "I don't want to go.")]
+    flags = qa_translation(src, [Cue(1, 0, 1, "Θέλω να πάω.")], CFG)
+    assert flags and flags[0].blocker and "negation" in flags[0].reason
+    assert qa_translation(src, [Cue(1, 0, 1, "Δεν θέλω να πάω.")], CFG) == []

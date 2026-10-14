@@ -3,6 +3,7 @@ import subprocess
 import pytest
 
 from subtitlekit.pipeline.llm import (
+    CachingBackend,
     FallbackBackend,
     GeminiCliBackend,
     LLMError,
@@ -92,3 +93,21 @@ def test_make_backend_kinds():
     assert make_backend({"backend": "fallback"}).name == "fallback"
     with pytest.raises(ValueError):
         make_backend({"backend": "nope"})
+
+
+def test_caching_backend_reuses_successful_replies_only(tmp_path):
+    inner = MockBackend(replies=["one", "two"])
+    cached = CachingBackend(inner=inner, cache_dir=str(tmp_path))
+    assert cached.complete("p") == "one"
+    assert cached.complete("p") == "one" and cached.hits == 1
+    assert cached.complete("q") == "two"
+    assert cached.name == "mock"
+    failing = CachingBackend(inner=MockBackend(replies=[]), cache_dir=str(tmp_path / "f"))
+    with pytest.raises(LLMError):
+        failing.complete("x")
+    assert not (tmp_path / "f").exists() or not any((tmp_path / "f").rglob("*.txt"))
+
+
+def test_make_backend_wraps_cache_when_configured(tmp_path):
+    b = make_backend({"backend": "opencode", "cache_dir": str(tmp_path)})
+    assert isinstance(b, CachingBackend) and b.name == "opencode"

@@ -43,7 +43,7 @@ def test_cli_upload_really_refused_by_default_config(tmp_path, monkeypatch, caps
     monkeypatch.setenv("OS_PASSWORD", "p")
     assert run_cli(monkeypatch, "pipeline", "upload", str(out / "Film.2025"), "--really-upload") == 0
     printed = capsys.readouterr().out
-    assert "DRY-RUN" in printed and "allow_real_upload" in printed
+    assert "DRY-RUN" in printed and "real upload refused" in printed
 
 
 def test_cli_analyze_and_init_config(tmp_path, monkeypatch, capsys):

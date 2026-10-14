@@ -5,6 +5,7 @@ import pytest
 from subtitlekit.pipeline.config import DEFAULTS, deep_merge, dump_default_config, load_config
 from subtitlekit.pipeline.llm import MockBackend
 from subtitlekit.pipeline.runner import AUTO, HUMAN, SKIP, run_film
+from subtitlekit.pipeline.translate import prompt_payload
 from subtitlekit.pipeline.srt import Cue, format_srt
 
 FRAME = 1000 / 23.976
@@ -28,16 +29,17 @@ def make_film(tmp_path, greek=None, meta="title: Test Film\nyear: 2025\nimdb_id:
     return film
 
 
-def greek_backend(bad_keys=False):
+def greek_backend(bad_keys=False, text="Γραμμή {k}, φίλε μου."):
     def reply(prompt):
         if prompt.startswith("You shorten") or prompt.startswith("For each id"):
             return "{}"
-        payload = json.loads(prompt.split("Input JSON:\n", 1)[1])
+        payload = prompt_payload(prompt)
         if bad_keys:
             return "{}"
-        return json.dumps({k: f"Γραμμή {k}, φίλε μου." for k in payload}, ensure_ascii=False)
+        return json.dumps({k: text.format(k=k) for k in payload}, ensure_ascii=False)
 
-    return MockBackend(replies=reply)
+    # Named like a real backend: routing treats "mock*" output as never approvable.
+    return MockBackend(replies=reply, name="test-llm")
 
 
 def cfg(**over):
@@ -126,3 +128,46 @@ def test_own_earlier_translation_means_skip(tmp_path):
     rep = run_film(str(film), cfg(), greek_backend(), str(tmp_path / "out"), log=lambda m: None)
     assert rep.decision == SKIP
     assert any("already translated by haroldpoi" in r for r in rep.reasons)
+
+
+def test_mock_backend_output_is_never_auto_approved(tmp_path):
+    film = make_film(tmp_path)
+    backend = greek_backend()
+    backend.name = "mock-transliterate"
+    rep = run_film(str(film), cfg(), backend, str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == HUMAN and any("not a real LLM" in r for r in rep.reasons)
+
+
+def test_number_corruption_blocks_auto_approve_even_below_flag_ratio(tmp_path):
+    film = make_film(tmp_path)
+    english = pro_english()
+    english[5] = english[5].with_text("Meet me at 10, my friend.")
+    (film / "Test.Film.2025.1080p.WEB-DL.eng.srt").write_text(format_srt(english), encoding="utf-8")
+    rep = run_film(str(film), cfg(), greek_backend(text="Γραμμή, φίλε μου."), str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == HUMAN
+    assert any("integrity flags" in r for r in rep.reasons)
+
+
+def test_unbreakable_long_line_blocks_auto_approve(tmp_path):
+    film = make_film(tmp_path)
+    rep = run_film(str(film), cfg(), greek_backend(text="Γραμμή{k}" + "α" * 50), str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == HUMAN
+    assert any("line-length" in r for r in rep.reasons)
+
+
+def test_source_with_only_ads_is_skipped(tmp_path):
+    film = make_film(tmp_path)
+    ads = [Cue(i + 1, i * 3000, i * 3000 + 2000, "Downloaded from YTS.MX") for i in range(5)]
+    (film / "Test.Film.2025.1080p.WEB-DL.eng.srt").write_text(format_srt(ads), encoding="utf-8")
+    rep = run_film(str(film), cfg(worth_it={"allowed_source_classes": ["professional", "amateur"], "min_source_score": -100}),
+                   greek_backend(), str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == SKIP and "no dialogue" in rep.reasons[0]
+
+
+def test_saved_srt_is_validated_after_reading_back(tmp_path):
+    film = make_film(tmp_path)
+    out = tmp_path / "out"
+    run_film(str(film), cfg(), greek_backend(text="Γραμμή {k},\r\n\r\nφίλε μου."), str(out), log=lambda m: None)
+    data = read_report(out)
+    disk = [v for v in data["validations"] if v["stage"] == "serialized"][0]
+    assert disk["ok"], disk

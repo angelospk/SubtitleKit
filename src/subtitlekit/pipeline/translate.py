@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .llm import LLMBackend, LLMError, extract_json
-from .metrics import is_credit
+from .metrics import credit_mask
 from .srt import Cue, visible_text
 
 log = logging.getLogger(__name__)
@@ -56,11 +56,12 @@ def prepare_source(cues: Sequence[Cue]) -> (List[Cue], List[str]):
     kept, notes = [], []
     if any(b.start_ms < a.start_ms for a, b in zip(cues, cues[1:])):
         notes.append("source cues were out of order; sorted by start time")
-    for c in sorted(cues, key=lambda c: c.start_ms):
+    ordered = sorted(cues, key=lambda c: c.start_ms)
+    for c, credit in zip(ordered, credit_mask(ordered)):
         text = visible_text(c.text).strip()
         if not text:
             notes.append(f"dropped empty cue {c.index}")
-        elif is_credit(c):
+        elif credit:
             notes.append(f"dropped credit/ad cue {c.index}: {text[:60]!r}")
         elif all(HI_ONLY_RE.match(line) for line in text.split("\n")):
             notes.append(f"dropped HI-only cue {c.index}: {text[:40]!r}")
@@ -119,6 +120,17 @@ def build_prompt(
     )
 
 
+def normalize_text(text: str) -> str:
+    """One cue body: no CR, no blank lines (a blank line would split the cue in SRT)."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line.strip() for line in lines if line.strip())
+
+
+def prompt_payload(prompt: str) -> Dict[str, str]:
+    """The ``{"id": "text"}`` input of a translation prompt (for mocks/tests)."""
+    return json.loads(prompt.split("Input JSON:\n", 1)[1].split("\n\nRetry ", 1)[0])
+
+
 def _looks_untranslated(src: str, dst: str, target_lang: str) -> bool:
     if target_lang != "el":
         return src.strip() == dst.strip() and len(src.split()) >= 3
@@ -141,7 +153,10 @@ def validate_chunk(chunk: Sequence[Cue], data: Any, target_lang: str) -> (Dict[i
         if not isinstance(value, str) or not visible_text(value).strip():
             problems.append(f"cue {c.index}: empty translation")
             continue
-        value = value.replace("\\n", "\n").strip()
+        value = normalize_text(value.replace("\\n", "\n"))
+        if "-->" in value:
+            problems.append(f"cue {c.index}: contains an SRT timing arrow")
+            continue
         if _looks_untranslated(c.text, value, target_lang):
             problems.append(f"cue {c.index}: looks untranslated")
             continue
@@ -167,22 +182,28 @@ def translate_cues(
             break
         chunk = queue.pop(0)
         pending = list(chunk)
+        last_problem = ""
         for attempt in range(1, max_attempts + 1):
             prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
             prompt = build_prompt(pending, meta, source_lang, target_lang, names,
                                   [(c.text, done[c.index]) for c in prev])
+            if last_problem:
+                # Also changes the cache key, so a retry never replays a cached bad reply.
+                prompt += f"\n\nRetry {attempt}: your previous answer was rejected ({last_problem[:200]}). Follow the rules exactly."
             result.calls += 1
             try:
                 data = extract_json(backend.complete(prompt))
             except LLMError as exc:
                 errors_in_row += 1
+                last_problem = str(exc)
                 result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {exc}")
                 continue
             errors_in_row = 0
             accepted, problems = validate_chunk(pending, data, target_lang)
             done.update(accepted)
             if problems:
-                result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: " + "; ".join(problems[:5]))
+                last_problem = "; ".join(problems[:5])
+                result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {last_problem}")
             pending = [c for c in pending if c.index not in done]
             if not pending:
                 break

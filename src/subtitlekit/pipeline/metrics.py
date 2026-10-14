@@ -14,15 +14,18 @@ from typing import Dict, List, Optional, Sequence
 
 from .srt import Cue, visible_text
 
-# Lines that are not dialogue: ads, release/sync credits.
-CREDIT_RE = re.compile(
-    r"(yts\.|yify|opensubtitles|addic7ed|subs4free|subscene|podnapisi|"
-    r"www\.|https?://|\.com\b|\.org\b|"
-    r"subtitles? by|subbed by|synced? by|sync(ed)? and corrected|ripped by|"
+# Lines that are not dialogue: ads, release/sync credits. Strong patterns
+# count anywhere; weak ones (URLs, a bare "translation" word) only in the
+# first/last EDGE cues, so dialogue such as "Go to example.com now." stays.
+STRONG_CREDIT_RE = re.compile(
+    r"(yts\.(?:lt|mx|am|ag|bz)|yify|opensubtitles|addic7ed|subs4free|subscene|podnapisi|"
+    r"downloaded from|subtitles? by|subbed by|synced? by|sync(ed)? and corrected|ripped by|"
     r"translated by|translation by|corrected by|"
-    r"υπ[οό]τιτλ|μετ[αά]φραση|απ[οό]δοση|επιμ[εέ]λεια|συγχρονισμ[οό]ς|ترجمة)",
+    r"(υπ[οό]τιτλισμ[οό]ς|μετ[αά]φραση|απ[οό]δοση|επιμ[εέ]λεια|συγχρονισμ[οό]ς)\s*:)",
     re.IGNORECASE,
 )
+WEAK_CREDIT_RE = re.compile(r"(www\.|https?://|\.com\b|\.org\b|lnk\.bio|ترجمة)", re.IGNORECASE)
+CREDIT_EDGE = 5
 HI_RE = re.compile(r"^\s*[\[(].+[\])]\s*$|♪|^[A-Z][A-Z .'-]{1,20}:")
 GREEK_RE = re.compile(r"[Ͱ-Ͽἀ-῿]")
 GREEK_TONOS_RE = re.compile(r"[άέήίόύώΆΈΉΊΌΎΏΐΰ]")
@@ -107,7 +110,19 @@ def percentile(values: Sequence[float], p: float) -> float:
 
 
 def is_credit(cue: Cue) -> bool:
-    return bool(CREDIT_RE.search(visible_text(cue.text)))
+    """Strong credit/ad evidence, wherever the cue is."""
+    return bool(STRONG_CREDIT_RE.search(visible_text(cue.text)))
+
+
+def credit_mask(cues: Sequence[Cue]) -> List[bool]:
+    """Per cue: credit/ad? Weak evidence counts only near the start or end."""
+    n = len(cues)
+    out = []
+    for i, c in enumerate(cues):
+        text = visible_text(c.text)
+        edge = i < CREDIT_EDGE or i >= n - CREDIT_EDGE
+        out.append(bool(STRONG_CREDIT_RE.search(text) or (edge and WEAK_CREDIT_RE.search(text))))
+    return out
 
 
 def _frame_aligned(ms: int, fps: float) -> bool:
@@ -120,8 +135,9 @@ def _frame_aligned(ms: int, fps: float) -> bool:
 
 def compute_metrics(cues: Sequence[Cue], limits: Optional[Limits] = None) -> Metrics:
     limits = limits or Limits()
-    credits = [visible_text(c.text).replace("\n", " ") for c in cues if is_credit(c)]
-    dialogue = [c for c in cues if not is_credit(c) and visible_text(c.text).strip()]
+    mask = credit_mask(cues)
+    credits = [visible_text(c.text).replace("\n", " ") for c, m in zip(cues, mask) if m]
+    dialogue = [c for c, m in zip(cues, mask) if not m and visible_text(c.text).strip()]
     n = len(dialogue) or 1
 
     cps = [cue_cps(c) for c in dialogue]

@@ -95,9 +95,15 @@ def format_time(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def _body(text: str) -> str:
+    # A blank line or CR inside a cue body would split the cue when re-read.
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line for line in lines if line.strip())
+
+
 def format_srt(cues: Iterable[Cue]) -> str:
     blocks = [
-        f"{c.index}\n{format_time(c.start_ms)} --> {format_time(c.end_ms)}\n{c.text}"
+        f"{c.index}\n{format_time(c.start_ms)} --> {format_time(c.end_ms)}\n{_body(c.text)}"
         for c in cues
     ]
     return "\n\n".join(blocks) + "\n"

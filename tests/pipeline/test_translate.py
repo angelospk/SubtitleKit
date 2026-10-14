@@ -2,6 +2,7 @@ import json
 import re
 
 from subtitlekit.pipeline.llm import LLMError, MockBackend
+from subtitlekit.pipeline.translate import prompt_payload
 from subtitlekit.pipeline.srt import Cue
 from subtitlekit.pipeline.translate import (
     FilmMeta,
@@ -18,7 +19,7 @@ def cues(n):
 
 
 def payload_of(prompt):
-    return json.loads(prompt.split("Input JSON:\n", 1)[1])
+    return prompt_payload(prompt)
 
 
 def greek_echo(prompt):
@@ -103,3 +104,27 @@ def test_build_prompt_lists_exact_keys():
     p = build_prompt(cues(2), FilmMeta(), "en", "el", [], [])
     assert re.search(r"same keys as the input \(1\.\.2\)", p)
     assert "Greek" in p
+
+
+def test_translation_text_is_normalized_and_timing_arrows_rejected():
+    chunk = cues(2)
+    accepted, problems = validate_chunk(chunk, {"1": "Γεια\r\n\r\nσου", "2": "00:00:01,000 --> 00:00:02,000"}, "el")
+    assert accepted == {1: "Γεια\nσου"}
+    assert "timing arrow" in problems[0]
+
+
+def test_prepare_source_keeps_mid_film_dialogue_with_urls():
+    src = [Cue(i + 1, i * 1000, i * 1000 + 900, f"Line {i}.") for i in range(20)]
+    src[10] = src[10].with_text("Go to example.com now.")
+    out, notes = prepare_source(src)
+    assert len(out) == 20 and notes == []
+    src[0] = src[0].with_text("www.example.com")
+    out, _ = prepare_source(src)
+    assert len(out) == 19
+
+
+def test_retry_prompt_names_the_problem_so_cached_bad_replies_are_not_replayed():
+    backend = MockBackend(replies=['{"1": "μόνο ένα"}', json.dumps({"1": "Ένα", "2": "Δύο"}, ensure_ascii=False)])
+    res = translate_cues(cues(2), backend, chunk_size=2)
+    assert "Retry 2" in backend.prompts[1] and "Retry" not in backend.prompts[0]
+    assert res.untranslated == []

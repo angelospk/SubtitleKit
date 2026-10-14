@@ -94,14 +94,26 @@ def route(report: Dict[str, Any], cfg: Dict[str, Any]) -> (str, List[str]):
     why = []
     if not r["auto_approve"]:
         why.append("auto-approve disabled in config")
+    backend = str(report["translation"].get("backend") or "none")
+    if backend == "none" or backend.startswith("mock"):
+        why.append(f"translated by '{backend}', not a real LLM")
     if not all(v["ok"] for v in report["validations"]):
         why.append("a validator failed")
     n = max(report["output_metrics"]["cue_count"], 1)
+    if report["output_metrics"]["dialogue_count"] == 0:
+        why.append("output has no dialogue")
     if len(report["translation"]["untranslated"]) > r["max_untranslated"]:
         why.append(f"{len(report['translation']['untranslated'])} cues left untranslated")
-    n_flags = len(report["flags"])
-    if n_flags / n > r["max_flag_ratio"]:
-        why.append(f"{n_flags} flags ({n_flags / n:.1%} of cues) > {r['max_flag_ratio']:.0%}")
+    blockers = [f for f in report["flags"] if f.get("blocker")]
+    if blockers:
+        why.append(f"{len(blockers)} integrity flags (numbers/negation/repeats/reverted stage)")
+    advisory = len(report["flags"]) - len(blockers)
+    if advisory / n > r["max_flag_ratio"]:
+        why.append(f"{advisory} advisory flags ({advisory / n:.1%} of cues) > {r['max_flag_ratio']:.0%}")
+    final = next((v for v in report["validations"] if v["stage"] == "final"), {"issues": []})
+    layout = [i for i in final["issues"] if i["code"] in ("long_line", "too_many_lines")]
+    if layout:
+        why.append(f"{len(layout)} cues still break the line-length/line-count limits")
     hard = report["output_metrics"]["share_over_hard_cps"]
     if hard > r["max_share_over_hard_cps"]:
         why.append(f"{hard:.1%} cues over the hard CPS limit")
@@ -151,6 +163,10 @@ def run_film(
     # 3. translate
     chosen = next(c for c in candidates if c.path == analysis.chosen.path)
     source, prep_notes = prepare_source(chosen.cues)
+    if not source:
+        report.decision = SKIP
+        report.reasons = [f"no dialogue left in {os.path.basename(chosen.path)} after removing ads/credits/HI"]
+        return _write(report, film_out, out_dir)
     max_cues = cfg["translate"]["max_cues"]
     if max_cues:
         source = source[: int(max_cues)]
@@ -172,7 +188,7 @@ def run_film(
         max_line_chars=f["max_line_chars"], max_lines=f["max_lines"],
         condense_above_cps=f["condense_above_cps"], fidelity_check=f["fidelity_check"],
     )
-    qa_flags = qa_translation(source, tr.cues, fix_cfg)
+    qa_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
     reference = None
     if meta.get("timing_reference"):
         ref_path = os.path.join(film_dir, meta["timing_reference"])
@@ -181,6 +197,12 @@ def run_film(
     fx = run_fixes(tr.cues, backend, fix_cfg, reference=reference)
     out_srt = film_out / f"{film}.{cfg['target_language']}.srt"
     save_srt(fx.cues, str(out_srt))
+    # The file on disk is what gets uploaded: re-read it and prove it matches.
+    v_disk = validate_structure(fx.cues, load_srt(str(out_srt)), "serialized", max_shift_ms=0)
+    if [c.text for c in load_srt(str(out_srt))] != [c.text for c in fx.cues]:
+        from .validators import Issue
+
+        v_disk.issues.append(Issue("text_changed_on_disk", "re-read SRT text differs from memory"))
 
     before = compute_metrics(source, limits)
     after = compute_metrics(fx.cues, limits)
@@ -193,7 +215,7 @@ def run_film(
         "translation": {"backend": getattr(backend, "name", None), "calls": tr.calls,
                         "untranslated": tr.untranslated, "log": tr.log[-20:]},
         "fixes": fx.to_dict(),
-        "validations": [v_tr.to_dict()] + [v.to_dict() for v in fx.validations],
+        "validations": [v_tr.to_dict()] + [v.to_dict() for v in fx.validations] + [v_disk.to_dict()],
         "flags": [asdict(x) for x in qa_flags] + fx.to_dict()["flags"],
         "source_metrics": before.to_dict(),
         "output_metrics": after.to_dict(),

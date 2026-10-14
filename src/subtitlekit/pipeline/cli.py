@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .config import dump_default_config, load_config
 from .llm import MockBackend, make_backend
+from .translate import prompt_payload
 
 _TRANSLIT = str.maketrans(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -22,7 +23,7 @@ def mock_translator() -> MockBackend:
     def reply(prompt: str) -> str:
         if "Input JSON:\n" not in prompt:
             return "{}"  # condensation / fidelity / judge prompts: no opinion
-        payload = json.loads(prompt.split("Input JSON:\n", 1)[1])
+        payload = prompt_payload(prompt)
         return json.dumps({k: v.translate(_TRANSLIT) for k, v in payload.items()}, ensure_ascii=False)
 
     return MockBackend(replies=reply, name="mock-transliterate")
@@ -111,8 +112,13 @@ def cmd_upload(args):
     report = json.loads(path.read_text(encoding="utf-8"))
     if "output_srt" not in report:
         raise SystemExit(f"{path}: no translated subtitle in this report (decision: {report.get('decision')})")
+    backend = str((report.get("translation") or {}).get("backend") or "none")
+    really = args.really_upload
+    if really and (backend == "none" or backend.startswith("mock")):
+        print(f"real upload refused: this subtitle was produced by '{backend}', not a real LLM")
+        really = False
     plan = plan_upload(report["output_srt"], report.get("film_meta", {}), cfg["upload"], cfg["target_language"],
-                       really_upload=args.really_upload)
+                       really_upload=really)
     print(("DRY-RUN, not executed:" if plan.dry_run else "EXECUTED:"), plan.command)
     for p in plan.problems:
         print("  problem:", p)

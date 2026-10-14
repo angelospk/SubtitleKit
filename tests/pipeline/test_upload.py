@@ -60,3 +60,12 @@ def test_missing_imdb_is_reported_and_blocks_real_upload():
 def test_auto_flag_can_be_disabled_for_human_translations():
     plan = plan_upload("/out/f.srt", FILM, {**CFG, "automatic_translation": False})
     assert "-auto" not in plan.argv
+
+
+def test_timeout_during_real_upload_does_not_leak_password():
+    def boom(argv):
+        raise subprocess.TimeoutExpired(argv, 300)
+
+    plan = plan_upload("/out/f.srt", FILM, {**CFG, "allow_real_upload": True}, really_upload=True, env=ENV, runner=boom)
+    assert plan.returncode == -1 and "TimeoutExpired" in plan.output
+    assert "s3cret" not in str(plan.to_dict())
