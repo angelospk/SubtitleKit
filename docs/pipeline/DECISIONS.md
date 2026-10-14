@@ -186,3 +186,29 @@ after `coderabbit update` to 0.9.0, then scoped with `--dir`). `coderabbit
 doctor`: 9/9 pass; `coderabbit usage`: 3 of 3 reviews remaining. Service-side
 failure; stopped retrying. No CodeRabbit findings to log. To retry:
 `coderabbit review --agent --committed --base main`.
+
+## D13: Text language beats the file-name tag (found by demo run 1)
+- Demo run 1 (real opencode/big-pickle, archived in `~/pipeline-demo/out-run1`)
+  showed the LLM translation check complaining about Spanish words in
+  "Hamnet". The sample `Hamnet 2025 1080p WEB h264-ETHEL.srt` is **Spanish**;
+  the `.eng` tag came from my own demo setup. The same check then showed that
+  the "AMZN" English files of Housemaid and Influencers are **Portuguese**
+  (pt-BR), and the Housemaid "BG" TS file is **Bulgarian**.
+- Choice: `detect_content_language` (script, then stopword share over a
+  sample of the whole film; clear winner needed; Cyrillic split ru/bg) wins
+  over a contradicting tag; the contradiction is shown in the reasons.
+- Knock-on: with no English candidate, the 1:1-copy MT check uses any
+  non-target language as reference (only target-language candidates are
+  checked, so retail foreign packs are still not flagged). Influencers' LLM
+  Greek is again labelled machine (copy of the Portuguese track).
+- Earlier statements corrected: HEURISTICS lists "Influencers eng" and
+  "Housemaid AMZN" as English; they are Portuguese. The cross-candidate
+  numbers stay valid (they compare timing, and ratios vs pt are similar).
+
+## D14: Condensation reliability (found by demo run 1)
+- Run 1: of 111 (Hamnet) and 224 (Housemaid) advisory flags, most were
+  "condensation failed": opencode timed out at 300 s, returned no text, or
+  answered with prose ("The user wants…") instead of JSON, with batches of 25.
+- Choice: batches of 10, one retry per batch with the failure noted in the
+  prompt (also a new cache key); timeout errors shortened (they used to embed
+  the whole prompt).

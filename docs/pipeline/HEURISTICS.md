@@ -7,6 +7,12 @@ amateur; `influencersgr.srt`, `avatargr.srt`, `tran_fixed*.srt` = Harold's
 LLM translations (presumed AI). Treat the thresholds as a first fit to be
 checked against more labelled files.
 
+**Correction (DECISIONS D13):** several "English" samples are not English:
+Influencers AMZN and Housemaid AMZN are Portuguese (pt-BR), Hamnet ETHEL is
+Spanish, Housemaid TELESYNC BG is Bulgarian. Timing/line-length findings
+below are language-independent and still hold; the analyzer now detects the
+language from the text.
+
 ## Observations
 
 | Signal | Professional (WEB/retail) | Amateur (TS / fan) | Presumed AI |
@@ -32,7 +38,7 @@ Pairs of the same film, `sharedStart` = share of cues in B starting within
 | ST eng → ST gre (Netflix) | 1418/1443 | 0.82 | **0.85** | pro template translation, condensed |
 | YTS English → dan/ger/fre/spa/gre (retail) | 968/~941 | 0.48 | 0.83–0.93 | pro, condensed |
 | Influencers eng → playWEB gre | 1232/1126 | 0.94 | 0.95 | human, re-segmented |
-| Influencers eng → `influencersgr` (AI) | 1232/1232 | **1.00** | **0.96** | 1:1 copy, no condensation |
+| Influencers "eng" (actually pt-BR, see D13) → `influencersgr` (AI) | 1232/1232 | **1.00** | **0.96** | 1:1 copy, no condensation |
 | Avatar da → `avatargr` (AI) | 1476/1474 | **1.00** | 1.03 | 1:1 copy |
 | merged en → `tran_fixed` (AI) | 1218/1217 | 0.90 | 0.97 | near copy |
 
