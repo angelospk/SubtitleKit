@@ -137,3 +137,15 @@ def test_credit_detection_needs_explicit_evidence():
              Cue(3, 2, 3, "lnk.bio/haroldpoi"), Cue(4, 3, 4, "Downloaded from\nYTS.MX"),
              Cue(5, 4, 5, "Υποτιτλισμός: haroldpoi")]
     assert credit_mask(cues_) == [False, False, True, True, True]
+
+
+def test_added_dialogue_dashes_are_removed_but_real_ones_kept():
+    from subtitlekit.pipeline.translate import match_dashes
+
+    assert match_dashes("Eso es.", "- Αυτό είναι.") == "Αυτό είναι."
+    assert match_dashes("Toma.\nTenías hambre.", "- Πάρε.\n- Πεινούσες.") == "Πάρε.\nΠεινούσες."
+    assert match_dashes("<i>Hola.</i>", "<i>- Γεια.</i>") == "<i>Γεια.</i>"
+    assert match_dashes("- Sí.\n- No.", "- Ναι.\n- Όχι.") == "- Ναι.\n- Όχι."
+    chunk = cues(1)
+    accepted, _ = validate_chunk(chunk, {"1": "- Γραμμή με τον Μάικ."}, "el")
+    assert accepted == {1: "Γραμμή με τον Μάικ."}

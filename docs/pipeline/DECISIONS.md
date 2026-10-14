@@ -212,3 +212,13 @@ failure; stopped retrying. No CodeRabbit findings to log. To retry:
 - Choice: batches of 10, one retry per batch with the failure noted in the
   prompt (also a new cache key); timeout errors shortened (they used to embed
   the whole prompt).
+
+## D15: LLM-added dialogue dashes (found by demo run 2)
+- Hamnet run 2: 105 of 1308 Greek cues started with "- " where the Spanish
+  source had no dash (the prompt says "keep a leading '-'"; the model reads it
+  as "add one"). Validators did not catch it: count, timing and meaning were
+  fine.
+- Choice: deterministic `match_dashes` after every translation reply: if no
+  source line starts with a dash, leading dashes are removed. The prompt text
+  is left unchanged on purpose: changing it would invalidate the LLM cache of
+  the demo films (≈ 2 h of free-model calls).

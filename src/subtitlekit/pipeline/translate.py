@@ -131,6 +131,17 @@ def prompt_payload(prompt: str) -> Dict[str, str]:
     return json.loads(prompt.split("Input JSON:\n", 1)[1].split("\n\nRetry ", 1)[0])
 
 
+_DASH_RE = re.compile(r"^(\s*(?:<[^>]+>)*)\s*[-–—]\s*")
+
+
+def match_dashes(source: str, translated: str) -> str:
+    """Dialogue dashes follow the source: if no source line starts with a dash,
+    remove dashes the LLM added (seen on 8 % of cues in the Hamnet demo)."""
+    if any(_DASH_RE.match(visible_text(l)) for l in source.split("\n")):
+        return translated
+    return "\n".join(_DASH_RE.sub(r"\1", l, count=1) for l in translated.split("\n"))
+
+
 def _looks_untranslated(src: str, dst: str, target_lang: str) -> bool:
     if target_lang != "el":
         return src.strip() == dst.strip() and len(src.split()) >= 3
@@ -154,6 +165,7 @@ def validate_chunk(chunk: Sequence[Cue], data: Any, target_lang: str) -> (Dict[i
             problems.append(f"cue {c.index}: empty translation")
             continue
         value = normalize_text(value.replace("\\n", "\n"))
+        value = match_dashes(c.text, value)
         if "-->" in value:
             problems.append(f"cue {c.index}: contains an SRT timing arrow")
             continue
