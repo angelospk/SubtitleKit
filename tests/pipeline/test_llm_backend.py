@@ -182,3 +182,114 @@ def test_opencode_error_event_is_reported_even_with_nonzero_exit():
     stdout = '{"type":"error","error":{"message":"getaddrinfo ENOTFOUND opencode.ai"}}'
     with pytest.raises(LLMError, match="ENOTFOUND"):
         OpenCodeBackend(runner=fake_runner(stdout, returncode=1)).complete("hi")
+
+
+# --- E7: more models -------------------------------------------------------
+
+def test_agy_backend_passes_prompt_attached_to_print_and_parses_json():
+    from subtitlekit.pipeline.llm import AGY_TEXT_ONLY, AgyBackend
+
+    calls = []
+    out = '{"conversation_id":"x","status":"SUCCESS","response":"{\\"1\\": \\"Γεια\\"}\\n","num_turns":1}'
+    backend = AgyBackend(model="gemini-3.8-flash-high", timeout=900, runner=fake_runner(out, calls=calls))
+    assert backend.complete("-p looks like a flag") == '{"1": "Γεια"}\n'
+    argv, cwd = calls[0]
+    # agy is an agent: without the text-only line Flash tries to run a command and the turn breaks (E7).
+    assert argv[0] == "agy" and f"--print={AGY_TEXT_ONLY}-p looks like a flag" in argv
+    assert argv[argv.index("--model") + 1] == "gemini-3.8-flash-high"
+    assert argv[argv.index("--output-format") + 1] == "json"
+    assert "--disable-slash-commands" in argv and argv[argv.index("--print-timeout") + 1] == "900s"
+    assert "subtitlekit-llm-" in cwd  # empty temp dir: the agent sees no project files
+    assert backend.name == "agy"
+
+
+def test_agy_backend_raises_on_errors():
+    from subtitlekit.pipeline.llm import AgyBackend
+
+    for stdout, code in [("", 1), ("not json", 0), ('{"status":"ERROR","response":"x"}', 0),
+                         ('{"status":"SUCCESS","response":"  "}', 0), ('[1]', 0)]:
+        with pytest.raises(LLMError):
+            AgyBackend(runner=fake_runner(stdout, returncode=code)).complete("p")
+
+
+def test_bridge_backend_enqueues_then_waits(tmp_path):
+    from subtitlekit.pipeline.llm import BRIDGE_TEXT_ONLY, BridgeBackend
+
+    calls = []
+    long_out = tmp_path / "out.txt"
+    long_out.write_text('{"1": "Γεια"}', encoding="utf-8")
+
+    def run(argv, cwd, timeout):
+        calls.append(argv)
+        if argv[2] == "enqueue":
+            return subprocess.CompletedProcess(argv, 0, stdout='{"job_id": "J1", "status": "queued"}', stderr="")
+        return subprocess.CompletedProcess(argv, 0, stderr="", stdout=(
+            '{"status": "completed", "output": null, "output_file": "%s"}' % long_out))
+
+    backend = BridgeBackend(model="gpt-5.6-luna", effort="medium", client="/x/agent_client.py", runner=run)
+    assert backend.complete("translate this") == '{"1": "Γεια"}'
+    assert calls[0] == ["python3", "/x/agent_client.py", "enqueue", "exec", "-c", "model=gpt-5.6-luna",
+                        "-c", "model_reasoning_effort=medium", BRIDGE_TEXT_ONLY + "translate this"]
+    assert calls[1] == ["python3", "/x/agent_client.py", "wait", "J1"]  # no deadline argument
+    assert backend.name == "bridge"
+
+
+def test_bridge_backend_raises_on_every_non_completed_status():
+    from subtitlekit.pipeline.llm import BridgeBackend
+
+    for status in ("timeout", "failed", "unavailable", "quota_exceeded", "not_found"):
+        def run(argv, cwd, timeout, status=status):
+            if argv[2] == "enqueue":
+                return subprocess.CompletedProcess(argv, 0, stdout='{"job_id": "J"}', stderr="")
+            return subprocess.CompletedProcess(argv, 0, stdout='{"status": "%s", "output": "x"}' % status, stderr="")
+
+        with pytest.raises(LLMError, match=status):
+            BridgeBackend(runner=run).complete("p")
+    with pytest.raises(LLMError):
+        BridgeBackend(runner=fake_runner("no json")).complete("p")
+
+
+def test_make_backend_builds_agy_and_bridge():
+    agy = make_backend({"backend": "agy", "agy_model": "gpt-oss-120b-medium", "timeout_s": 600})
+    assert agy.name == "agy" and agy.model == "gpt-oss-120b-medium" and agy.timeout == 600
+    bridge = make_backend({"backend": "bridge", "bridge_model": "gpt-5.6-luna", "bridge_effort": "low"})
+    assert bridge.name == "bridge" and bridge.model == "gpt-5.6-luna" and bridge.effort == "low"
+
+
+def test_claude_cli_backend_can_allow_web_search_only():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    calls = []
+
+    def run(argv, cwd, timeout, input_text):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout='{"is_error":false,"result":"ok"}', stderr="")
+
+    ClaudeCliBackend(runner=run).complete("p")
+    ClaudeCliBackend(runner=run, tools="WebSearch").complete("p")
+    plain, web = calls
+    assert "--allowedTools" not in plain
+    assert web[web.index("--tools") + 1] == "WebSearch" and web[web.index("--allowedTools") + 1] == "WebSearch"
+    assert make_backend({"backend": "claude", "claude_tools": "WebSearch"}).tools == "WebSearch"
+    assert make_backend({"backend": "claude"}).tools == ""
+
+
+def test_claude_cli_backend_refuses_tools_other_than_web_search():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    for tools in ("Bash", "Read", "WebSearch,Bash"):
+        with pytest.raises(ValueError):
+            ClaudeCliBackend(tools=tools)
+        with pytest.raises(ValueError):
+            make_backend({"backend": "claude", "claude_tools": tools})
+
+
+def test_cache_key_includes_effort_and_tools(tmp_path):
+    from subtitlekit.pipeline.llm import BridgeBackend, ClaudeCliBackend
+
+    def path(inner):
+        return CachingBackend(inner=inner, cache_dir=str(tmp_path))._path("same prompt")
+
+    assert path(BridgeBackend(effort="low")) != path(BridgeBackend(effort="high"))
+    assert path(ClaudeCliBackend()) != path(ClaudeCliBackend(tools="WebSearch"))
+    assert path(ClaudeCliBackend()) == path(ClaudeCliBackend())

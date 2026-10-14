@@ -19,7 +19,9 @@ import yaml
 
 from .analyzer import analyze_film, detect_content_language, discover_candidates
 from .glossary import build_glossary, check_glossary, load_glossary
+from .captions import find_captions, insert_captions, translate_captions
 from .correct import correct_translation
+from .hardlines import retranslate_hard, select_hard_lines
 from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
 from .metrics import Limits, compute_metrics
@@ -133,6 +135,7 @@ def route(report: Dict[str, Any], cfg: Dict[str, Any]) -> (str, List[str]):
 def run_film(
     film_dir: str, cfg: Dict[str, Any], backend: Optional[LLMBackend], out_dir: str,
     force: bool = False, log: Callable[[str], None] = print,
+    translate_backend: Optional[LLMBackend] = None, hard_backend: Optional[LLMBackend] = None,
 ) -> FilmReport:
     film_dir = os.path.abspath(os.path.expanduser(film_dir))
     film = os.path.basename(film_dir)
@@ -247,16 +250,18 @@ def run_film(
             json.dumps(glossary.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     report.data["glossary"] = {"origin": glossary.origin if glossary else None,
                                "terms": len(glossary.terms) if glossary else 0, "problems": gloss_notes[:20]}
+    tr_backend = translate_backend or backend
+    report.data["translate_backend"] = getattr(tr_backend, "name", None)
     log(f"[{film}] translating {len(source)} cues from {chosen.language} with "
-        f"{getattr(backend, 'name', None)}")
+        f"{getattr(tr_backend, 'name', None)}")
     tr = translate_cues(
-        source, backend, FilmMeta.from_dict(meta), chosen.language, cfg["target_language"],
+        source, tr_backend, FilmMeta.from_dict(meta), chosen.language, cfg["target_language"],
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
         hints=hints, hint_lang=hint_lang, budget_cps=cfg["translate"].get("budget_cps"),
         rescue=cfg["translate"].get("rescue_untranslated", True),
         style_rules=cfg.get("style_rules", False), glossary=glossary,
-    ) if backend else _no_llm(source)
+    ) if tr_backend else _no_llm(source)
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
     # 4. fixes
@@ -292,10 +297,30 @@ def run_film(
         report.data["correction"] = crep.to_dict()
         if crep.applied:
             tr.cues = crep.cues
-            qa_flags = (qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
-                        # A verified cue clears only its own verdict, never a batch-level "unchecked" blocker.
-                        + [f for f in fid_flags if not (f.cue in crep.verified and f.reason.startswith("LLM translation check:"))]
-                        + off_flags + gloss_flags)
+            rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+            # A verified cue clears only its own verdict, never a batch-level "unchecked" blocker.
+            fid_flags = [f for f in fid_flags if not (f.cue in crep.verified and f.reason.startswith("LLM translation check:"))]
+            qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
+    tracks = [(c.language, c.cues) for c in candidates
+              if c.language not in (cfg["target_language"], chosen.language)]
+    hcfg = cfg.get("hard_lines", {})
+    if hcfg.get("enabled") and backend:
+        log(f"[{film}] retranslating hard lines")
+        flagged = {f.cue: f.reason for f in qa_flags if f.cue and f.reason.startswith("LLM translation check:")}
+        hard = select_hard_lines(source, tr.cues, backend, flagged=flagged, per_batch=hcfg["per_batch"])
+        cps = cfg["translate"].get("budget_cps")
+        hrep = retranslate_hard(source, tr.cues, hard, tracks, hard_backend or backend, checker=backend,
+                                budgets=char_budgets(source, cps) if cps else None,
+                                known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
+                                max_langs=hcfg["max_langs"], batch=hcfg["batch"], source_lang=src_name, target_lang=tgt_name)
+        report.data["hard_lines"] = hrep.to_dict()
+        if hrep.changed:
+            tr.cues = hrep.cues
+            # A retranslated cue passed its own fidelity recheck: its old fidelity verdict no longer applies.
+            redone = {c["cue"] for c in hrep.changed}
+            rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+            fid_flags = [f for f in fid_flags if not (f.cue in redone and f.reason.startswith("LLM translation check:"))]
+            qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
     reference = None
     if meta.get("timing_reference"):
         ref_path = os.path.join(film_dir, meta["timing_reference"])
@@ -306,6 +331,23 @@ def run_film(
         # Judge the glossary on the final text: condensing may change a rendering after the first check.
         qa_flags = [f for f in qa_flags if f not in gloss_flags]
         qa_flags += [Flag(i, reason) for i, reason in check_glossary(source, fx.cues, glossary)]
+    report.data["captions"] = {"found": 0, "added": 0, "skipped": [], "problems": []}
+    ccfg = cfg["captions"]
+    if ccfg["enabled"] and backend:
+        caps = find_captions(tracks, source, ccfg["window_ms"], ccfg["min_languages"])
+        if caps:
+            log(f"[{film}] adding on-screen captions")
+            names = [(t.source, t.greek) for t in glossary.terms if t.kind in ("name", "place")] if glossary else []
+            texts, problems = translate_captions(caps, backend, cfg["target_language"], names)
+            res = insert_captions(fx.cues, [(c, t) for c, t in zip(caps, texts) if t], min_ms=ccfg["min_ms"])
+            fx.cues = res.cues
+            qa_flags = [dataclasses.replace(f, cue=res.mapping.get(f.cue, f.cue)) if f.cue != 0 else f
+                        for f in qa_flags]
+            fx.flags = [dataclasses.replace(f, cue=res.mapping.get(f.cue, f.cue)) if f.cue != 0 else f
+                        for f in fx.flags]
+            qa_flags += [Flag(i, "caption added from foreign tracks") for i in res.added]
+            report.data["captions"] = {"found": len(caps), "added": len(res.added),
+                                       "skipped": [list(x) for x in res.skipped[:20]], "problems": problems[:10]}
     out_srt = film_out / f"{film}.{cfg['target_language']}.srt"
     save_srt(fx.cues, str(out_srt))
     # The file on disk is what gets uploaded: re-read it and prove it matches.
@@ -396,6 +438,8 @@ def render_markdown(d: Dict[str, Any]) -> str:
               *([f"- Glossary: {d['glossary']['origin']}, {d['glossary']['terms']} terms"] if "glossary" in d else []),
               *([f"- Correction: {d['correction']['applied']} applied, {d['correction']['rejected']} rejected, "
                  f"{d['correction']['reverted']} reverted"] if "correction" in d else []),
+              *([f"- Hard lines: {d['hard_lines'].get('changed')} changed of {d['hard_lines'].get('selected')} selected, "
+                 f"{d['hard_lines'].get('web_lookups')} web lookups"] if "hard_lines" in d else []),
               f"- Timing changes: {fx['timing_changes']}",
               f"- Reflowed lines: {fx['reflowed']}; condensed: {fx['condensed']}; condensations reverted: {fx['condense_rejected']}; "
               f"style fixes: {fx.get('styled')}",

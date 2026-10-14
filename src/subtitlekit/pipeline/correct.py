@@ -45,8 +45,20 @@ CORRECTION_PROMPT = """You correct Greek subtitles translated from {source}. Λ�
 {payload}"""
 
 
-def correction_prompt(payload: str, source_lang: str = "English") -> str:
-    return CORRECTION_PROMPT.format(source=source_lang, style=STYLE_RULES_EL, vocab=VOCAB_EL, payload=payload)
+HUMAN_NOTE = """
+ΠΡΟΣΟΧΗ: ο υπότιτλος είναι επαγγελματική ανθρώπινη μετάφραση. Διόρθωσε ΜΟΝΟ ξεκάθαρα λάθη: ορθογραφικά,
+γραμματικά, και λάθη νοήματος σε σχέση με το "src". Μην αλλάζεις ύφος, λεξιλόγιο, τόνο ή σειρά λέξεων
+για φυσικότητα ή σύντμηση· οι επιλογές του μεταφραστή μένουν. "type" μόνο "γραμματική" ή "νόημα".
+"""
+# Human mode (E9 enrich): only these correction types are applied.
+HUMAN_TYPES = ("γραμματική", "νόημα")
+
+
+def correction_prompt(payload: str, source_lang: str = "English", human: bool = False) -> str:
+    prompt = CORRECTION_PROMPT.format(source=source_lang, style=STYLE_RULES_EL, vocab=VOCAB_EL, payload=payload)
+    if human:
+        prompt = prompt.replace("\n\nΤο JSON στο τέλος", "\n" + HUMAN_NOTE + "\nΤο JSON στο τέλος", 1)
+    return prompt
 
 
 # An unflagged cue that already fits its budget keeps at least this share of its characters.
@@ -143,6 +155,19 @@ def check_correction(before: str, after: str, allowed_chars: int, known_names: S
     return problems
 
 
+def check_change(before: str, after: str, source: str, allowed_chars: int, known_names: Sequence[str] = (),
+                 source_lang: str = "English") -> List[str]:
+    """check_correction, but a change that brings numbers or negation back in line with the source is a fix."""
+    bad = check_correction(before, after, allowed_chars, known_names)
+    src_text = visible_text(source)
+    if sorted(validators.NUMBER_RE.findall(src_text)) == sorted(validators.NUMBER_RE.findall(visible_text(after))):
+        bad = [b for b in bad if b != "numbers changed"]
+    # The English regex only: other sources keep the strict rule.
+    if source_lang == "English" and negations(after) >= len(SOURCE_NEGATION_RE.findall(src_text)):
+        bad = [b for b in bad if b != "negation lost"]
+    return bad
+
+
 @dataclass
 class Applied:
     cue: int
@@ -189,8 +214,12 @@ def correct_translation(
     source: Sequence[Cue], translated: Sequence[Cue], backend: LLMBackend, flags: Sequence[Any] = (),
     budgets: Optional[Dict[int, int]] = None, batch: int = 300,
     source_lang: str = "English", target_lang: str = "Greek", known_names: Sequence[str] = (),
+    human: bool = False,
 ) -> CorrectionReport:
-    """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run."""
+    """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
+
+    human: the Greek is a professional translation (E9 enrich): fix clear errors only, never restyle.
+    """
     reasons: Dict[int, List[str]] = {}
     for f in flags:
         if f.cue != 0:
@@ -208,7 +237,7 @@ def correct_translation(
             {str(t.index): {"src": s.text, "el": current[t.index],
                             **({"problem": problems[t.index]} if t.index in problems else {})} for s, t in part},
             ensure_ascii=False, indent=0)
-        prompt = correction_prompt(payload, source_lang)
+        prompt = correction_prompt(payload, source_lang, human)
         try:
             data = extract_json(backend.complete(prompt))
         except LLMError:
@@ -225,6 +254,9 @@ def correct_translation(
             if cid is None or cid not in ids:
                 rep.rejected.append((cid or 0, "unknown id"))
                 continue
+            if human and str(item.get("type", "")).strip() not in HUMAN_TYPES:
+                rep.rejected.append((cid, f"style change on a human translation ({item.get('type')})"))
+                continue
             new = apply_correction(current[cid], item["rx"], item["sb"])
             if new is None:
                 rep.rejected.append((cid, "rx not found"))
@@ -233,18 +265,11 @@ def correct_translation(
             allowed = _length(original[cid])
             if cid in problems:
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
-            bad = check_correction(original[cid], new, allowed, known_names)
+            bad = check_change(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
             # E6: most losing corrections cut a line that already fit its budget down to a stub.
             fits = budgets is not None and _length(original[cid]) <= budgets.get(cid, 0)
             if cid not in problems and fits and _length(new) < MIN_KEEP * _length(original[cid]):
                 bad.append(f"cut too much ({_length(new)} < {MIN_KEEP:.0%} of {_length(original[cid])})")
-            # A change that brings numbers or negation back in line with the source is a fix, not a loss.
-            src_text = visible_text(src_by_id[cid])
-            if sorted(validators.NUMBER_RE.findall(src_text)) == sorted(validators.NUMBER_RE.findall(visible_text(new))):
-                bad = [b for b in bad if b != "numbers changed"]
-            # The English regex only: other sources keep the strict rule.
-            if source_lang == "English" and negations(new) >= len(SOURCE_NEGATION_RE.findall(src_text)):
-                bad = [b for b in bad if b != "negation lost"]
             if bad:
                 rep.rejected.append((cid, "; ".join(bad)))
                 continue

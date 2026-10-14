@@ -35,6 +35,7 @@ film() {
 # Variant configs live in ~/pipeline-demo/eval/cfg-<variant>.yaml (run_sweep.sh): "en" = no budget,
 # no style rules; "enb" = budget only (E3; "enbr" = its E4 repeat); "enbs" = budget + Greek style rules (E4);
 # "enc" = enbs with 300-cue chunks, "encg" = enc + film glossary (E5).
+# "m<model>" = E7: the encg pipeline (glossary from the encg run) with another model for the translate stage.
 film Euphoria.S03E01 ~/Downloads/Subtitles-1/43c52854aee2ff8b/Euphoria.US.S03E01.1080p.WEB.h264-ETHEL_track \
   Euphoria.US.S03E01.1080p.WEB.h264-ETHEL "title: Euphoria (season 3, episode 1)
 year: 2026
@@ -45,7 +46,8 @@ release: Euphoria.US.S03E01.1080p.WEB.h264-ETHEL
 fps: 23.976" \
   "en:3_[eng]:eng" "fr:14_[fre]:fre" "es:10_[spa]:spa" "it:20_[ita]:ita" "de:8_[ger]:ger" "pt:29_[por]:por" \
   "en+pt:3_[eng]:eng:29_[por]:por" "enb:3_[eng]:eng" \
-  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng" "enc:3_[eng]:eng" "encg:3_[eng]:eng"
+  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng" "enc:3_[eng]:eng" "encg:3_[eng]:eng" \
+  "mhaiku:3_[eng]:eng" "msonnet:3_[eng]:eng" "mflash:3_[eng]:eng" "moss:3_[eng]:eng" "mluna:3_[eng]:eng"
 
 # Stranger Things S05E08 (Netflix, 2 h). pt track 27 is European Portuguese ("vamos a isto").
 film Stranger.Things.S05E08 ~/Downloads/Subtitles/8023c67d80b190ea/Stranger.Things.S05E08.1080p.WEB.h264-ETHEL_track \
@@ -57,4 +59,15 @@ cast: [Millie Bobby Brown as Eleven, Finn Wolfhard as Mike, Winona Ryder as Joyc
 release: Stranger.Things.S05E08.1080p.WEB.h264-ETHEL
 fps: 23.976" \
   "en:3_[eng]:eng" "enb:3_[eng]:eng" "pt:27_[por]:por" "de:8_[ger]:ger" \
-  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng" "enc:3_[eng]:eng" "encg:3_[eng]:eng"
+  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng" "enc:3_[eng]:eng" "encg:3_[eng]:eng" \
+  "mhaiku:3_[eng]:eng" "msonnet:3_[eng]:eng" "mflash:3_[eng]:eng" "moss:3_[eng]:eng" "mluna:3_[eng]:eng"
+
+# E7: every model variant translates with the same glossary (the one the encg run built).
+for name in Euphoria.S03E01 Stranger.Things.S05E08; do
+  g=~/pipeline-demo/eval/out/$name.encg/glossary.json
+  [ -f "$g" ] || { echo "missing $g (run encg first)" >&2; exit 1; }
+  for v in mhaiku msonnet mflash moss mluna; do
+    cp "$g" "$F/$name.$v/glossary.json"
+    echo "glossary: glossary.json" >> "$F/$name.$v/film.yaml"
+  done
+done

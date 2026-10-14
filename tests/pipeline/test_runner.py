@@ -365,3 +365,105 @@ def test_verified_correction_keeps_an_unchecked_batch_blocker(tmp_path):
     rep = read_report(tmp_path / "out")
     assert rep["correction"]["applied"] == 1
     assert any("fidelity unchecked" in f["reason"] for f in rep["flags"])  # cue 1 verified; the others still not
+
+
+def test_translate_backend_override_gets_only_the_translation_prompts(tmp_path):
+    film = make_film(tmp_path)
+    main, tr = greek_backend(), greek_backend(text="Άλλο μοντέλο {k}.")
+    run_film(str(film), cfg(), main, str(tmp_path / "out"), log=lambda m: None, translate_backend=tr)
+    assert tr.prompts and all("Input JSON:" in p for p in tr.prompts)
+    assert not any("Input JSON:" in p for p in main.prompts)  # glossary, checks, correction stay on main
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Άλλο μοντέλο" in srt
+    assert read_report(tmp_path / "out")["translate_backend"] == "test-llm"
+
+
+def test_cli_builds_the_translate_backend_from_config():
+    from subtitlekit.pipeline.cli import translate_backend_from
+
+    assert translate_backend_from({"llm": {"backend": "claude"}, "translate": {}}) is None
+    b = translate_backend_from({"llm": {"backend": "claude", "timeout_s": 600, "cache_dir": None},
+                                "translate": {"llm": {"backend": "agy", "agy_model": "gemini-3.8-flash-high"}}})
+    assert b.name == "agy" and b.model == "gemini-3.8-flash-high" and b.timeout == 600
+
+
+def test_captions_from_foreign_tracks_are_added_in_free_time(tmp_path):
+    film = make_film(tmp_path)
+    end = pro_english()[-1].end_ms
+    for lang, sign in (("fre", "QUELQUE PART AU MEXIQUE"), ("spa", "EN ALGÚN LUGAR DE MÉXICO"),
+                       ("ger", "IRGENDWO IN MEXIKO")):
+        cues = [Cue(c.index, c.start_ms, c.end_ms, f"Ligne {c.index}.") for c in pro_english()]
+        cues.append(Cue(61, end + 3000, end + 6000, sign))
+        (film / f"Test.Film.2025.1080p.WEB-DL.{lang}.srt").write_text(format_srt(cues), encoding="utf-8")
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You translate on-screen text"):
+            return json.dumps({"1": "Κάπου στο Μεξικό"}, ensure_ascii=False)
+        return base.replies(prompt)
+
+    run_film(str(film), cfg(), MockBackend(replies=reply, name="test-llm"), str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert rep["captions"]["added"] == 1 and rep["source"]["language"] == "en"
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert srt.rstrip().endswith("ΚΑΠΟΥ ΣΤΟ ΜΕΞΙΚΟ") and "\n61\n" in srt
+    assert DEFAULTS["captions"]["enabled"] is True
+
+
+def test_hard_lines_stage_retranslates_selected_cues_with_its_own_backend(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def hard_reply(prompt):
+        if prompt.startswith("You find hard subtitle lines"):
+            return json.dumps({"3": "idiom"})
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            return json.dumps({"3": {"meaning": "m", "el": "Νέα γραμμή 3.", "web": True}}, ensure_ascii=False)
+        return base.replies(prompt)
+
+    main = MockBackend(replies=hard_reply, name="test-llm")
+    hard = MockBackend(replies=hard_reply, name="test-hard")
+    run_film(str(film), cfg(hard_lines={"enabled": True}), main, str(tmp_path / "out"), log=lambda m: None,
+             hard_backend=hard)
+    assert [p for p in hard.prompts if p.startswith("You retranslate")] and len(hard.prompts) == 1
+    assert any(p.startswith("You find hard subtitle lines") for p in main.prompts)
+    rep = read_report(tmp_path / "out")
+    assert rep["hard_lines"]["changed"] == 1 and rep["hard_lines"]["web_lookups"] == 1
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Νέα γραμμή 3." in srt
+    assert DEFAULTS["hard_lines"]["enabled"] is False
+
+
+def test_hard_lines_stage_off_by_default(tmp_path):
+    film = make_film(tmp_path)
+    main = greek_backend()
+    run_film(str(film), cfg(), main, str(tmp_path / "out"), log=lambda m: None)
+    assert not any(p.startswith("You find hard subtitle lines") for p in main.prompts)
+    assert "hard_lines" not in read_report(tmp_path / "out")
+
+
+def test_cli_builds_the_hard_lines_backend_from_config():
+    from subtitlekit.pipeline.cli import hard_backend_from
+
+    assert hard_backend_from({"llm": {"backend": "claude"}, "hard_lines": {}}) is None
+    b = hard_backend_from({"llm": {"backend": "claude", "timeout_s": 600, "cache_dir": None},
+                           "hard_lines": {"llm": {"claude_model": "claude-sonnet-5-5", "claude_tools": "WebSearch"}}})
+    assert b.model == "claude-sonnet-5-5" and b.tools == "WebSearch" and b.timeout == 600
+
+
+def test_hard_lines_fix_clears_the_rule_flags_it_fixed(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend(text="Γραμμή, φίλε μου.")  # every cue loses its number: rule flag on each
+
+    def reply(prompt):
+        if prompt.startswith("You find hard subtitle lines"):
+            return json.dumps({"3": "mistranslation"})
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            return json.dumps({"3": {"meaning": "m", "el": "Γραμμή 3, φίλε.", "web": False}}, ensure_ascii=False)
+        return base.replies(prompt)
+
+    run_film(str(film), cfg(hard_lines={"enabled": True}), MockBackend(replies=reply, name="test-llm"),
+             str(tmp_path / "out"), log=lambda m: None)
+    flags = read_report(tmp_path / "out")["flags"]
+    numbers = {f["cue"] for f in flags if "numbers differ" in f["reason"]}
+    assert 3 not in numbers and 4 in numbers

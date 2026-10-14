@@ -1,16 +1,17 @@
-"""E6: blind A/B of the corrected cues only (before vs after the correction pass), Sonnet as judge.
+"""E6/E10: blind A/B of the changed cues only (before vs after one stage), Sonnet or Gemini Flash as judge.
 
-Usage: ab_changed.py <film>.<variant>   (needs out/<variant> and out/<variant>c from correct_only.py)
-Prints after/before/tie counts and writes compare/<variant>c-ab.json.
+Usage: ab_changed.py [--suffix c] [--judge sonnet|flash] <film>.<variant>...
+Needs out/<variant> and out/<variant><suffix> (correct_only.py: c, hard_only.py: h).
+Prints after/before/tie counts and writes compare/<variant><suffix>-ab[-<judge>].json.
 """
 
 import glob
 import json
 import os
+import argparse
 import random
-import sys
 
-from subtitlekit.pipeline.llm import ClaudeCliBackend, extract_json
+from subtitlekit.pipeline.llm import AgyBackend, ClaudeCliBackend, extract_json
 from subtitlekit.pipeline.srt import load_srt
 from subtitlekit.pipeline.translate import prepare_source
 
@@ -25,11 +26,17 @@ Return ONLY JSON: {{"<id>": {{"better": "A" | "B" | "tie", "why": "<max 12 words
 {payload}"""
 
 
-def main(variant: str) -> None:
-    src_path = glob.glob(f"{E}/films/{variant}/*.eng.srt")[0]
+JUDGES = {"sonnet": lambda: ClaudeCliBackend(model="claude-sonnet-5-5", timeout=900),
+          "flash": lambda: AgyBackend(model="gemini-3.8-flash-high", timeout=900)}
+
+
+def main(variant: str, suffix: str = "c", judge: str = "sonnet") -> None:
+    film = variant.rsplit(".", 1)[0]
+    found = glob.glob(f"{E}/films/{variant}/*.eng.srt") or glob.glob(f"{E}/films/{film}.encg/*.eng.srt")
+    src_path = found[0]
     source, _ = prepare_source(load_srt(src_path))
     before = load_srt(f"{E}/out/{variant}/{variant}.el.srt")
-    after = load_srt(f"{E}/out/{variant}c/{variant}c.el.srt")
+    after = load_srt(f"{E}/out/{variant}{suffix}/{variant}{suffix}.el.srt")
     rng = random.Random(0)
     items, key = {}, {}
     for s, b, a in zip(source, before, after):
@@ -40,7 +47,7 @@ def main(variant: str) -> None:
         x, y = (a.text, b.text) if swap else (b.text, a.text)
         items[str(b.index)] = {"SOURCE": s.text.replace("\n", " / "), "A": x.replace("\n", " / "),
                                "B": y.replace("\n", " / ")}
-    data = extract_json(ClaudeCliBackend(model="claude-sonnet-5-5", timeout=900).complete(
+    data = extract_json(JUDGES[judge]().complete(
         PROMPT.format(payload=json.dumps(items, ensure_ascii=False, indent=0))))
     counts = {"after": 0, "before": 0, "tie": 0, "missing": 0}
     rows = []
@@ -58,11 +65,17 @@ def main(variant: str) -> None:
         rows.append({"id": int(i), "winner": who, "why": v.get("why", "") if isinstance(v, dict) else "",
                      "source": item["SOURCE"], "before": b, "after": a})
     os.makedirs(f"{E}/compare", exist_ok=True)
-    with open(f"{E}/compare/{variant}c-ab.json", "w", encoding="utf-8") as fh:
+    name = f"{variant}{suffix}-ab" + ("" if judge == "sonnet" else f"-{judge}")
+    with open(f"{E}/compare/{name}.json", "w", encoding="utf-8") as fh:
         json.dump({"counts": counts, "rows": rows}, fh, ensure_ascii=False, indent=1)
-    print(variant, len(items), "changed:", counts)
+    print(f"{variant}{suffix} [{judge}]", len(items), "changed:", counts)
 
 
 if __name__ == "__main__":
-    for v in sys.argv[1:]:
-        main(v)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--suffix", default="c")
+    ap.add_argument("--judge", default="sonnet", choices=sorted(JUDGES))
+    ap.add_argument("variants", nargs="+")
+    a = ap.parse_args()
+    for v in a.variants:
+        main(v, a.suffix, a.judge)

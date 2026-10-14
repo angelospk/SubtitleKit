@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -uo pipefail
 # Run eval folders (<film>.<variant>) with Haiku, all in parallel so all load the same code.
-# Config: $E/cfg-<variant>.yaml (variant = text after the last dot); required for en/enb/enbr/enbs/enc/encg,
+# Config: $E/cfg-<variant>.yaml (variant = text after the last dot); required for en/enb/enbr/enbs/enc/encg/m*,
 # other variants fall back to haiku.yaml.
 cd ~/.t3/worktrees/submerge/feat-subtitle-pipeline
 E=~/pipeline-demo/eval
 run() {
   local cfg=$E/cfg-${1##*.}.yaml
   case ${1##*.} in
-    en|enb|enbr|enbs|enc|encg) [ -f "$cfg" ] || { echo "missing config $cfg" >&2; return 1; } ;;
+    en|enb|enbr|enbs|enc|encg|m*) [ -f "$cfg" ] || { echo "missing config $cfg" >&2; return 1; } ;;
     *) [ -f "$cfg" ] || cfg=$E/haiku.yaml ;;
   esac
   if .venv/bin/subtitlekit pipeline run "$E/films/$1" -c "$cfg" --out "$E/out" > "$E/logs/$1.log" 2>&1; then

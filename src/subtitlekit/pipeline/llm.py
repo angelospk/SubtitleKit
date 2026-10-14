@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -123,6 +124,9 @@ CLAUDE_SYSTEM = (
 )
 
 
+CLAUDE_TOOLS = ("", "WebSearch")
+
+
 @dataclass
 class ClaudeCliBackend(LLMBackend):
     """Claude Code CLI in headless mode (`claude -p`), e.g. Haiku 5.5. Prompt goes on stdin."""
@@ -130,16 +134,24 @@ class ClaudeCliBackend(LLMBackend):
     model: str = "claude-haiku-5-5"
     binary: str = "claude"
     timeout: float = 300.0
+    tools: str = ""
     runner: InputRunner = field(default=_run_input, repr=False)
     name: str = "claude"
+
+    def __post_init__(self) -> None:
+        # Web search is the only tool a subtitle prompt may get: never shell or file access.
+        if self.tools not in CLAUDE_TOOLS:
+            raise ValueError(f"claude tools not allowed: {self.tools!r} (allowed: {', '.join(map(repr, CLAUDE_TOOLS))})")
 
     def complete(self, prompt: str) -> str:
         argv = [
             self.binary, "-p", "--model", self.model, "--output-format", "json",
-            "--setting-sources", "", "--tools", "", "--no-session-persistence",
+            "--setting-sources", "", "--tools", self.tools, "--no-session-persistence",
             "--strict-mcp-config",
             "--system-prompt", CLAUDE_SYSTEM,
         ]
+        if self.tools:
+            argv += ["--allowedTools", self.tools]
         # Empty working dir: the agent must not see project files.
         with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
             try:
@@ -162,6 +174,110 @@ class ClaudeCliBackend(LLMBackend):
         if not isinstance(result, str) or not result.strip():
             raise LLMError("claude returned no text")
         return result
+
+
+# agy runs an agent: asked for exact character counts, Gemini Flash tries to run a command, the call is
+# denied and the turn ends with "The stream was interrupted" (E7). This line keeps it to a text answer.
+AGY_TEXT_ONLY = "Do not use any tools or run any commands: answer directly in text.\n\n"
+
+
+@dataclass
+class AgyBackend(LLMBackend):
+    """Antigravity CLI headless (`agy --print`); the prompt is attached to --print= so a leading dash is safe."""
+
+    model: str = "gemini-3.8-flash-high"
+    binary: str = "agy"
+    timeout: float = 300.0
+    runner: Runner = field(default=_run, repr=False)
+    name: str = "agy"
+
+    def complete(self, prompt: str) -> str:
+        argv = [
+            self.binary, f"--print={AGY_TEXT_ONLY}{prompt}", "--model", self.model, "--output-format", "json",
+            "--disable-slash-commands", "--print-timeout", f"{int(self.timeout)}s",
+        ]
+        # Empty working dir: the agent must not see project files.
+        with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
+            try:
+                proc = self.runner(argv, cwd, self.timeout)
+            except subprocess.TimeoutExpired as exc:
+                raise LLMError(f"agy timed out after {self.timeout:.0f} s") from exc
+            except OSError as exc:
+                raise LLMError(f"agy failed to run: {exc}") from exc
+        if proc.returncode != 0:
+            raise LLMError(f"agy exit {proc.returncode}: {(proc.stderr or proc.stdout)[-300:]}")
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise LLMError(f"agy returned invalid JSON: {proc.stdout[:200]!r}") from exc
+        if not isinstance(data, dict):
+            raise LLMError(f"agy returned unexpected JSON: {proc.stdout[:200]!r}")
+        if data.get("status") != "SUCCESS":
+            raise LLMError(f"agy status {data.get('status')!r}: {str(data.get('response'))[:300]}")
+        response = data.get("response")
+        if not isinstance(response, str) or not response.strip():
+            raise LLMError("agy returned no text")
+        return response
+
+
+BRIDGE_TEXT_ONLY = ("Answer from the text below only: do not run commands, read or write files, or browse. "
+                    "Reply with the requested output only.\n\n")
+
+
+@dataclass
+class BridgeBackend(LLMBackend):
+    """Codex via agent-bridge: enqueue an `exec` job, then wait for it (no deadline argument).
+
+    For model comparisons only. The bridge worker runs Codex in its own sandbox and accepts no isolation
+    flags from the client, so the prompt itself asks for a text-only answer (BRIDGE_TEXT_ONLY).
+    """
+
+    model: str = "gpt-5.6-luna"
+    effort: str = "medium"
+    client: str = field(default_factory=lambda: os.path.expanduser("~/agent-bridge/agent_client.py"))
+    timeout: float = 1800.0
+    runner: Runner = field(default=_run, repr=False)
+    name: str = "bridge"
+
+    def _call(self, argv: List[str], cwd: str, what: str) -> Dict[str, Any]:
+        try:
+            proc = self.runner(argv, cwd, self.timeout)
+        except subprocess.TimeoutExpired as exc:
+            raise LLMError(f"bridge {what} timed out after {self.timeout:.0f} s") from exc
+        except OSError as exc:
+            raise LLMError(f"bridge {what} failed to run: {exc}") from exc
+        if proc.returncode != 0:
+            raise LLMError(f"bridge {what} exit {proc.returncode}: {(proc.stderr or proc.stdout)[-300:]}")
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise LLMError(f"bridge {what} returned invalid JSON: {proc.stdout[:200]!r}") from exc
+        if not isinstance(data, dict):
+            raise LLMError(f"bridge {what} returned unexpected JSON: {proc.stdout[:200]!r}")
+        return data
+
+    def complete(self, prompt: str) -> str:
+        enqueue = [
+            "python3", self.client, "enqueue", "exec", "-c", f"model={self.model}",
+            "-c", f"model_reasoning_effort={self.effort}", BRIDGE_TEXT_ONLY + prompt,
+        ]
+        with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
+            job_id = self._call(enqueue, cwd, "enqueue").get("job_id")
+            if not isinstance(job_id, str) or not job_id:
+                raise LLMError("bridge enqueue returned no job_id")
+            done = self._call(["python3", self.client, "wait", job_id], cwd, "wait")
+        if done.get("status") != "completed":
+            raise LLMError(f"bridge job {job_id} ended with status {done.get('status')!r}")
+        text = done.get("output")
+        if text is None and done.get("output_file"):
+            try:
+                with open(done["output_file"], encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError as exc:
+                raise LLMError(f"bridge output file unreadable: {exc}") from exc
+        if not isinstance(text, str) or not text.strip():
+            raise LLMError("bridge returned no text")
+        return text
 
 
 @dataclass
@@ -217,7 +333,9 @@ class CachingBackend(LLMBackend):
         import hashlib
         import os
 
-        key = f"{self.inner.name}|{getattr(self.inner, 'model', '')}|{prompt}"
+        # Settings that change the reply are part of the key; none set keeps the old keys valid.
+        extras = "".join(f"{k}={getattr(self.inner, k)}|" for k in ("effort", "tools") if getattr(self.inner, k, ""))
+        key = f"{self.inner.name}|{getattr(self.inner, 'model', '')}|{extras}{prompt}"
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
         return os.path.join(os.path.expanduser(self.cache_dir), digest[:2], digest + ".txt")
 
@@ -301,7 +419,13 @@ def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
     if kind == "gemini":
         return gemini
     if kind == "claude":
-        return ClaudeCliBackend(model=cfg.get("claude_model", "claude-haiku-5-5"), timeout=timeout)
+        return ClaudeCliBackend(model=cfg.get("claude_model", "claude-haiku-5-5"), timeout=timeout,
+                                tools=cfg.get("claude_tools", ""))
+    if kind == "agy":
+        return AgyBackend(model=cfg.get("agy_model", "gemini-3.8-flash-high"), timeout=timeout)
+    if kind == "bridge":
+        return BridgeBackend(model=cfg.get("bridge_model", "gpt-5.6-luna"),
+                             effort=cfg.get("bridge_effort", "medium"), timeout=timeout)
     if kind == "fallback":
         return FallbackBackend([opencode, gemini])
     if kind == "mock":

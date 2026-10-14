@@ -1,6 +1,6 @@
 import json
 
-from subtitlekit.pipeline.correct import apply_correction, check_correction, correct_translation
+from subtitlekit.pipeline.correct import apply_correction, check_correction, correct_translation, correction_prompt
 from subtitlekit.pipeline.fixes import Flag
 from subtitlekit.pipeline.llm import LLMError, MockBackend
 from subtitlekit.pipeline.srt import Cue
@@ -168,3 +168,18 @@ def test_a_cue_that_already_fits_its_budget_is_not_cut_down_to_a_stub():
 def test_check_correction_rejects_english_words_left_in():
     assert check_correction("Ποιο χρηματοκιβώτιο;", "Ποιο safe;", 20) == ["latin letters added"]
     assert check_correction("Το Netflix άργησε.", "Το Netflix αργεί.", 20) == []
+
+
+def test_human_mode_fixes_only_clear_errors_of_a_professional_translation():
+    src, el = src_and_greek()
+    corrections = [
+        {"id": 1, "rx": "Πηγαίνω στο σπίτι μου", "sb": "Πάω σπίτι", "rate": 6, "type": "σύντμηση"},
+        {"id": 2, "rx": "Αν θες ενοχές,", "sb": "Αν θες τύψεις,", "rate": 9, "type": "νόημα"},
+        {"id": 3, "rx": "Κάνει νόημα.", "sb": "Έχει νόημα.", "rate": 9, "type": "γραμματική"},
+    ]
+    backend = router(corrections)
+    rep = correct_translation(src, el, backend, budgets={1: 30, 2: 34, 3: 30}, human=True)
+    assert [c.cue for c in rep.applied] == [2, 3]
+    assert [i for i, r in rep.rejected if "style change" in r] == [1]
+    assert "επαγγελματική" in backend.prompts[0]
+    assert "επαγγελματική" not in router([]).prompts and "επαγγελματική" not in correction_prompt("{}")

@@ -8,8 +8,10 @@ import os
 import sys
 from pathlib import Path
 
-from .config import dump_default_config, load_config
-from .llm import MockBackend, make_backend
+from typing import Optional
+
+from .config import deep_merge, dump_default_config, load_config
+from .llm import LLMBackend, MockBackend, make_backend
 from .translate import prompt_payload
 
 _TRANSLIT = str.maketrans(
@@ -36,6 +38,18 @@ def _backend(args, cfg):
     if getattr(args, "mock_llm", False):
         return mock_translator()
     return make_backend(cfg["llm"])
+
+
+def translate_backend_from(cfg) -> Optional[LLMBackend]:
+    """Backend for the translate stage only, from ``translate.llm`` (merged over ``llm``); None = use the main one."""
+    override = cfg["translate"].get("llm")
+    return make_backend(deep_merge(cfg["llm"], override)) if override else None
+
+
+def hard_backend_from(cfg) -> Optional[LLMBackend]:
+    """Backend for the hard-lines retranslation only, from ``hard_lines.llm`` (merged over ``llm``); None = use the main one."""
+    override = cfg.get("hard_lines", {}).get("llm")
+    return make_backend(deep_merge(cfg["llm"], override)) if override else None
 
 
 def cmd_init_config(args):
@@ -86,11 +100,15 @@ def cmd_run(args):
     if not films:
         raise SystemExit("no film folders given (pass paths or --all)")
     backend = _backend(args, cfg)
+    mocked = getattr(args, "no_llm", False) or getattr(args, "mock_llm", False)
+    translate_backend = None if mocked else translate_backend_from(cfg)
+    hard_backend = None if mocked else hard_backend_from(cfg)
     print(f"LLM backend: {getattr(backend, 'name', 'none')}  output: {out}", flush=True)
     failed = []
     for film in films:
         try:
-            rep = run_film(film, cfg, backend, out, force=args.force, log=lambda m: print(m, flush=True))
+            rep = run_film(film, cfg, backend, out, force=args.force, log=lambda m: print(m, flush=True),
+                           translate_backend=translate_backend, hard_backend=hard_backend)
         except Exception as exc:  # one broken film must not stop the batch
             failed.append(film)
             print(f"==> {os.path.basename(film)}: ERROR {type(exc).__name__}: {exc}", flush=True)
@@ -101,6 +119,19 @@ def cmd_run(args):
         print(f"    report: {os.path.join(out, rep.film, 'report.md')}", flush=True)
     if failed:
         raise RuntimeError(f"{len(failed)} film(s) failed: {', '.join(failed)}")
+
+
+def cmd_enrich(args):
+    from .enrich import enrich_film, ntfy_notifier
+
+    cfg = load_config(args.config)
+    backend = _backend(args, cfg)
+    topic = os.environ.get("SUBTITLEKIT_NTFY_TOPIC")
+    rep = enrich_film(args.film_dir, args.greek, cfg, backend, args.out,
+                      notify=ntfy_notifier(topic) if topic else None, log=lambda m: print(m, flush=True),
+                      light=args.light)
+    print(f"enriched: {rep.output}")
+    return 0
 
 
 def cmd_upload(args):
@@ -221,6 +252,15 @@ def add_pipeline_parser(subparsers):
     sp.add_argument("--force", action="store_true", help="ignore the worth-it gate (result goes to human review)")
     common(sp)
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("enrich", help="add on-screen captions and corrections to an existing Greek subtitle")
+    sp.add_argument("film_dir")
+    sp.add_argument("--greek", required=True, help="the existing Greek subtitle (.srt); never modified")
+    sp.add_argument("--out", default="review", help="review folder (default: review)")
+    sp.add_argument("--light", action="store_true",
+                    help="fix only clear errors (spelling, grammar, meaning); default: the full correction pass")
+    common(sp)
+    sp.set_defaults(func=cmd_enrich)
 
     sp = sub.add_parser("upload", help="build (dry-run) or execute the upload for a reviewed film")
     sp.add_argument("report", help="film output folder or its report.json")
