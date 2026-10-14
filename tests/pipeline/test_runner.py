@@ -270,4 +270,7 @@ def test_budget_cps_in_config_reaches_the_translation_prompt(tmp_path):
     backend = greek_backend()
     run_film(str(film), cfg(translate={"budget_cps": 17}), backend, str(out), log=lambda m: None)
     assert any("Budget JSON:" in p for p in backend.prompts)
-    assert DEFAULTS["translate"]["budget_cps"] is None  # off unless configured
+    assert DEFAULTS["translate"]["budget_cps"] == 17  # on by default (D19)
+    off = greek_backend()
+    run_film(str(film), cfg(translate={"budget_cps": None}), off, str(tmp_path / "off"), log=lambda m: None)
+    assert off.prompts and not any("Budget JSON:" in p for p in off.prompts)

@@ -146,7 +146,7 @@ experiment; keep them short and concrete. Details and tables live in
   films to human review, but a retry would fix them. German "erledigt"
   became a nonsense word (caught by the fidelity check).
 - Lessons: 11–12 above.
-- Next: turn the budget on by default (Harold's call: it trades a little
-  completeness for easier reading); retry untranslated cues once; then a
+- Decision: the budget is on by default (17 CPS, Harold, D19).
+- Next: Harold's own translation rules; retry untranslated cues once; then a
   film whose Greek track is not built on the same template.
 

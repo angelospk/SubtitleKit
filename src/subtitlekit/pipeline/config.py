@@ -49,8 +49,9 @@ DEFAULTS: Dict[str, Any] = {
         "tiny_gap_frames": 2,
         "llm_judge": False,
     },
-    # budget_cps: per-cue character budget in the translation prompt; null = off.
-    "translate": {"chunk_size": 40, "context_lines": 4, "max_cues": None, "budget_cps": None},
+    # budget_cps: per-cue character budget in the translation prompt (E3: 17 keeps the meaning
+    # at professional reading speed); null = off.
+    "translate": {"chunk_size": 40, "context_lines": 4, "max_cues": None, "budget_cps": 17},
     "fixes": {
         "min_gap_ms": 84,
         "min_duration_ms": 833,

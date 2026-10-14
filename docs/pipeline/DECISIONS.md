@@ -442,8 +442,8 @@ Details and lessons: `EXPERIMENTS.md` E3.
 - Result with `budget_cps: 17`, English source: judge score unchanged on
   two films (Euphoria 38 vs 40 wins, Stranger Things 25 vs 23), CPS p95 21.1
   → 17.0 and 19.2 → 17.0, cues over 20 CPS 6 % → 1 % and 3 % → 0 %.
-- Decision: keep the default off in this change; recommend `17` as the
-  default (Harold decides). The eval scripts take `<film>.<variant>`
+- Decision: Harold chose `budget_cps: 17` as the default (null turns it
+  off). The eval scripts take `<film>.<variant>`
   folders; a variant ending in `.enb` runs with the budget config.
 
 ### Review log (D19)
