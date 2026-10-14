@@ -149,7 +149,7 @@ def test_samples_are_anchored_on_reference_cues_across_variants():
     rb = compare_subtitles(split, ref, sample=8, seed=4)
     assert [s["anchor_ms"] for s in ra["samples"]] == [s["anchor_ms"] for s in rb["samples"]]
     assert len(ra["samples"]) == 8
-    assert rb["samples"][0]["ours"].count(" / ") == 1  # both halves of the split moment
+    assert rb["samples"][0]["ours"].count(" || ") == 1  # both halves of the split moment
     assert ra["samples"][0]["ours_cps"] > 0 and ra["samples"][0]["ref_cps"] > 0
 
 
@@ -172,3 +172,17 @@ def test_missing_and_oversized_moments_are_counted_separately():
     assert res["coverage"]["oversized_anchors"] == 1   # five of our cues inside one reference cue
     assert res["coverage"]["skipped_anchors"] == 2
     assert [s["anchor_ms"] for s in res["samples"]] == [0]
+
+
+def test_judge_prompt_names_harolds_naturalness_rules():
+    from subtitlekit.pipeline.compare import JUDGE_PROMPT
+
+    for needle in ["Κάνει νόημα", "Οκέι", "pronouns", "final-ν", "ends with an article"]:
+        assert needle in JUDGE_PROMPT, needle
+
+
+def test_judge_text_tells_line_breaks_from_cue_boundaries():
+    from subtitlekit.pipeline.compare import JUDGE_PROMPT, _text
+
+    assert _text([Cue(1, 0, 1000, "Πήγα στο\nσπίτι."), Cue(2, 1000, 2000, "Ναι.")]) == "Πήγα στο / σπίτι. || Ναι."
+    assert '" / "' in JUDGE_PROMPT and '" || "' in JUDGE_PROMPT

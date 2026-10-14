@@ -16,6 +16,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from .greek_style import STYLE_RULES_EL
 from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import credit_mask
 from .srt import Cue, visible_text
@@ -152,6 +153,8 @@ def char_budgets(
     return out
 
 
+STYLE_RULES = {"el": STYLE_RULES_EL}
+
 PROMPT = """You are a professional subtitle translator. Translate the subtitle lines below from {source} into {target}.
 {movie}
 Rules:
@@ -160,7 +163,7 @@ Rules:
 - At most 2 lines per subtitle; mark a line break with "\\n". Keep a leading "-" for dialogue lines.
 - Keep names, numbers and units unchanged in meaning. {names_rule}
 - Keep <i>...</i> tags where the source has them.
-{glossary}{context}{hints}{budget}
+{style}{glossary}{context}{hints}{budget}
 Input JSON:
 {payload}"""
 
@@ -169,7 +172,7 @@ def build_prompt(
     chunk: Sequence[Cue], meta: FilmMeta, source_lang: str, target_lang: str,
     names: Sequence[str], context: Sequence[tuple],
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
-    budgets: Optional[Dict[int, int]] = None,
+    budgets: Optional[Dict[int, int]] = None, style_rules: bool = False,
 ) -> str:
     movie = ""
     if meta.title:
@@ -205,11 +208,12 @@ def build_prompt(
             "drop filler, hesitations, repetitions, tag questions and names used only in address.\nBudget JSON:\n"
             + json.dumps(chunk_budgets) + "\n"
         )
+    style = "\n" + STYLE_RULES[target_lang] if style_rules and target_lang in STYLE_RULES else ""
     payload = json.dumps({str(c.index): c.text for c in chunk}, ensure_ascii=False, indent=0)
     target = LANG_NAMES.get(target_lang, target_lang)
     return PROMPT.format(
         source=LANG_NAMES.get(source_lang, source_lang), target=LANG_NAMES.get(target_lang, target_lang),
-        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, hints=hint_block, budget=budget_block, payload=payload,
+        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, hints=hint_block, budget=budget_block, payload=payload, style=style,
         names_rule=NAME_RULES.get(target_lang, DEFAULT_NAME_RULE.format(target=target)),
     )
 
@@ -276,7 +280,7 @@ def translate_cues(
     context_lines: int = 4, max_attempts: int = 2, max_consecutive_errors: int = 4,
     progress: Optional[Callable[[int, int], None]] = None,
     hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
-    budget_cps: Optional[float] = None,
+    budget_cps: Optional[float] = None, style_rules: bool = False,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
     if budget_cps is not None and not (math.isfinite(budget_cps) and budget_cps > 0):
@@ -297,7 +301,7 @@ def translate_cues(
         for attempt in range(1, max_attempts + 1):
             prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
             prompt = build_prompt(pending, meta, source_lang, target_lang, names,
-                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets)
+                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang, budgets, style_rules)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += f"\n\nRetry {attempt}: your previous answer was rejected ({last_problem[:200]}). Follow the rules exactly."

@@ -1,4 +1,4 @@
-"""Fix stage: resync → timing → line reflow → LLM condensation, each validated.
+"""Fix stage: resync → timing → line reflow → LLM condensation → Greek style fixes, each validated.
 
 Every sub-stage is checked with ``validate_structure``; a failing sub-stage
 is reverted as a whole. Condensed lines are checked one by one (rule checks
@@ -13,6 +13,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
+from .greek_style import fix_final_n, has_bad_break, rebreak
 from .llm import LLMBackend, LLMError, extract_json, forget
 from .metrics import cue_cps
 from .srt import Cue, visible_text
@@ -32,6 +33,7 @@ class FixConfig:
     condense_attempts: int = 2
     fidelity_check: str = "llm"  # llm | rules
     max_expansion: float = 1.6  # translated/source chars per cue, for QA flags
+    style_rules: bool = False
 
 
 @dataclass
@@ -55,6 +57,7 @@ class FixReport:
     condensed: int = 0
     condense_rejected: int = 0
     resync: Optional[Dict[str, Any]] = None
+    styled: Dict[str, int] = field(default_factory=lambda: {"final_n": 0, "rebroken": 0})
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -65,6 +68,7 @@ class FixReport:
             "condensed": self.condensed,
             "condense_rejected": self.condense_rejected,
             "resync": self.resync,
+            "styled": self.styled,
         }
 
 
@@ -87,8 +91,8 @@ def reflow_text(text: str, max_chars: int = 42, max_lines: int = 2) -> str:
         a, b = " ".join(words[:i]), " ".join(words[i:])
         la, lb = len(visible_text(a)), len(visible_text(b))
         over = max(0, la - max_chars) + max(0, lb - max_chars)
-        # Prefer no overflow, then balance, then a bottom-heavy pyramid.
-        cost = (over, abs(la - lb), la > lb)
+        # Prefer no overflow, no dangling function word, then balance, then a bottom-heavy pyramid.
+        cost = (over, has_bad_break(f"{a}\n{b}"), abs(la - lb), la > lb)
         if best_cost is None or cost < best_cost:
             best, best_cost = f"{a}\n{b}", cost
     return best or text
@@ -343,6 +347,15 @@ def run_fixes(
     if stage("condense", condensed, max_shift_ms=0):
         rep.condensed, rep.condense_rejected = ok, bad
         rep.flags += flags
+
+    if cfg.style_rules:
+        fixed = [fix_final_n(c.text) for c in rep.cues]
+        # An added ν can push a full line over the limit: reflow then re-breaks it.
+        styled = [c.with_text(reflow_text(rebreak(t, cfg.max_line_chars), cfg.max_line_chars, cfg.max_lines))
+                  for c, (t, _) in zip(rep.cues, fixed)]
+        n_rebroken = sum(1 for (t, _), s in zip(fixed, styled) if s.text != t)
+        if stage("style", styled, max_shift_ms=0):
+            rep.styled = {"final_n": sum(n for _, n in fixed), "rebroken": n_rebroken}
 
     rep.validations.append(validate_structure(
         cues, rep.cues, "final", min_gap_ms=tcfg.min_gap_ms,

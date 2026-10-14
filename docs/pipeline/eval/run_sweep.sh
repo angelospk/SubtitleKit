@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -uo pipefail
 # Run eval folders (<film>.<variant>) with Haiku, all in parallel so all load the same code.
-# Variant "enb" uses the per-cue character budget config.
+# Config: $E/cfg-<variant>.yaml (variant = text after the last dot); required for en/enb/enbr/enbs,
+# other variants fall back to haiku.yaml.
 cd ~/.t3/worktrees/submerge/feat-subtitle-pipeline
 E=~/pipeline-demo/eval
 run() {
-  local cfg=$E/haiku.yaml
-  [[ $1 == *.enb ]] && cfg=$E/haiku-budget.yaml
+  local cfg=$E/cfg-${1##*.}.yaml
+  case ${1##*.} in
+    en|enb|enbr|enbs) [ -f "$cfg" ] || { echo "missing config $cfg" >&2; return 1; } ;;
+    *) [ -f "$cfg" ] || cfg=$E/haiku.yaml ;;
+  esac
   if .venv/bin/subtitlekit pipeline run "$E/films/$1" -c "$cfg" --out "$E/out" > "$E/logs/$1.log" 2>&1; then
     echo "done $1"
   else

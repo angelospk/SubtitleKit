@@ -41,6 +41,12 @@ experiment; keep them short and concrete. Details and tables live in
 12. **Check each new release type for shared timing.** Netflix tracks of
     one release share the cue timing (start difference 0 ms), so every
     source keeps the professional segmentation; HBO tracks do not.
+13. **Turn the LLM cache off for repeat runs** (`llm.cache_dir: null`). The
+    cache replays every identical prompt, so a "repeat" with the cache on is
+    a copy, not a second sample.
+14. **The judge score moves ±5 wins between two identical runs** (E4).
+    Treat smaller gaps as a tie. Style changes need their own measure:
+    count style markers (`summary.py`), which stay stable between runs.
 
 ## E1: French vs English source (2026-10-14, Euphoria S03E01)
 
@@ -149,4 +155,61 @@ experiment; keep them short and concrete. Details and tables live in
 - Decision: the budget is on by default (17 CPS, Harold, D19).
 - Next: Harold's own translation rules; retry untranslated cues once; then a
   film whose Greek track is not built on the same template.
+
+## E4: Harold's Greek style rules (2026-10-14)
+
+- Hypothesis: Harold's style rules (his manual translation prompt, stage 3
+  of his workflow) in the translation prompt, plus code checks for the
+  mechanical ones, make the Greek more natural without a loss of meaning.
+- Setup: English source, budget 17 CPS, Haiku 5.5, both films.
+  "enb" = E3 run (no rules); "enbr" = a fresh repeat of enb with the LLM
+  cache off (noise measure); "enbs" = rules on: a "Greek style" block in
+  the prompt (calques, OK ban, pro-drop, elision, εσύ/εσείς, final ν,
+  line breaks, register) and a validated code stage (final ν for
+  την/τη and στην/στη, no line that ends with an article or preposition).
+  The judge prompt now names the same naturalness rules, so all variants
+  were judged again (E3 numbers are not comparable). The vocabulary list
+  (idioms, slang, insults) is kept for the correction pass (E5), not the
+  translation prompt (Harold's choice).
+- Result, judge (ours / pro / tie) and style per 100 cues:
+
+  | Film | Variant | Judge | Our top errors | Bad breaks | Final-ν errors |
+  |---|---|---|---|---|---|
+  | Euphoria (60 anchors) | enb | 44 / 7 / 9 | naturalness 10 | 2.3 | 0.6 |
+  | | enbr | 41 / 12 / 7 | naturalness 8 | 1.1 | 0.3 |
+  | | **enbs** | 42 / 10 / 8 | naturalness 9 | **0.1** | **0.0** |
+  | | professional | | | 0.0 | 0.3 |
+  | Stranger Things (59) | enb | 33 / 10 / 16 | naturalness 10 | 1.6 | 0.1 |
+  | | enbr | 33 / 13 / 13 | naturalness 10 | 0.1 | 0.2 |
+  | | **enbs** | 30 / 13 / 16 | naturalness 9 | **0.0** | **0.0** |
+  | | professional | | | 0.5 | 0.0 |
+
+- Style markers (whole file):
+
+  | Marker | Euphoria enb / enbr / **enbs** / pro | Stranger Things enb / enbr / **enbs** / pro |
+  |---|---|---|
+  | "Θεέ μου" (calque) | 4 / 4 / **0** / 1 | 10 / 13 / **2** / 8 |
+  | elision (απ', σ', 'ναι…) | 3 / 3 / **11** / 1 | 9 / 11 / **26** / 29 |
+  | "ρε" | 3 / 5 / **10** / 0 | 2 / 1 / **8** / 8 |
+
+- Judge: **a tie on both films.** The repeat run moved 3–5 wins with the same
+  settings, so the 2–3 win gap is noise. The judge does not reward the style
+  change; naturalness errors stay at 9–10 in every variant.
+- Style: **the rules work as written.** The calque "Θεέ μου" almost
+  disappears, elision triples, and "ρε" appears. On Stranger Things this
+  matches the Netflix track (elision 26 vs 29, "ρε" 8 vs 8); the HBO track
+  of Euphoria hardly uses either, so the two professional tracks differ in
+  register. Mechanical errors (final ν, bad breaks) drop to about zero, but
+  the repeat run also had fewer bad breaks than E3, so part of that drop
+  comes from the new reflow cost, not from the rules.
+- Caveat: the enbs runs started before the round-1 review fixes to the
+  style stage (dashes, overflow, adjacent words). That stage changed 2 cues
+  (Euphoria) and 8 cues (Stranger Things), so the effect is small.
+- New tool: `docs/pipeline/eval/xray.py`, a per-minute view of a run
+  (reading speed, length against the pro track, check flags, style, judge
+  verdicts) plus the worst moments with EN / ours / pro side by side.
+- Lessons: 13–14 above.
+- Next (E5): Harold's correction pass (rx/sb, his vocabulary list, his
+  hard rules enforced in code: never longer, no added words or pronouns),
+  fed with the fidelity-check flags; retry untranslated lines one by one.
 

@@ -245,3 +245,15 @@ def test_char_budgets_never_go_negative_and_reject_bad_cps():
     for cps in (0, -5, math.nan, math.inf):
         with pytest.raises(ValueError):
             translate_cues([Cue(1, 0, 1000, "Hi there, friend.")], MockBackend(replies=lambda p: "{}"), budget_cps=cps)
+
+
+def test_greek_style_rules_go_into_the_prompt_only_when_on_and_target_is_greek():
+    on = build_prompt(cues(2), FilmMeta(), "en", "el", [], [], style_rules=True)
+    off = build_prompt(cues(2), FilmMeta(), "en", "el", [], [])
+    fr = build_prompt(cues(2), FilmMeta(), "en", "fr", [], [], style_rules=True)
+    assert "Greek style:" in on and "Οκέι" in on
+    assert on.index("Greek style:") < on.index("Input JSON:")
+    assert "Greek style:" not in off and "Greek style:" not in fr
+    backend = MockBackend(replies=lambda p: json.dumps({k: "Γεια." for k in prompt_payload(p)}))
+    translate_cues(cues(2), backend, style_rules=True)
+    assert "Greek style:" in backend.prompts[0]

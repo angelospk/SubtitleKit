@@ -230,6 +230,7 @@ def run_film(
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
         hints=hints, hint_lang=hint_lang, budget_cps=cfg["translate"].get("budget_cps"),
+        style_rules=cfg.get("style_rules", False),
     ) if backend else _no_llm(source)
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
@@ -240,6 +241,7 @@ def run_film(
                             max_duration_ms=f["max_duration_ms"], target_cps=f["target_cps"]),
         max_line_chars=f["max_line_chars"], max_lines=f["max_lines"],
         condense_above_cps=f["condense_above_cps"], fidelity_check=f["fidelity_check"],
+        style_rules=cfg.get("style_rules", False),
     )
     qa_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
     if cfg["review"]["translation_fidelity"] == "llm":
@@ -344,7 +346,8 @@ def render_markdown(d: Dict[str, Any]) -> str:
               f"- LLM backend: {d['translation']['backend']}, calls: {d['translation']['calls']}, "
               f"untranslated: {len(d['translation']['untranslated'])}",
               f"- Timing changes: {fx['timing_changes']}",
-              f"- Reflowed lines: {fx['reflowed']}; condensed: {fx['condensed']}; condensations reverted: {fx['condense_rejected']}",
+              f"- Reflowed lines: {fx['reflowed']}; condensed: {fx['condensed']}; condensations reverted: {fx['condense_rejected']}; "
+              f"style fixes: {fx.get('styled')}",
               f"- Resync: {fx['resync']['notes'] if fx['resync'] else 'no reference'}",
               f"- CPS p95 source → output: {sm['cps_p95']} → {om['cps_p95']}; over 25 CPS: "
               f"{sm['share_over_hard_cps']:.1%} → {om['share_over_hard_cps']:.1%}; overlaps: {om['overlaps']}", "",

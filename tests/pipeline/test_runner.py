@@ -274,3 +274,17 @@ def test_budget_cps_in_config_reaches_the_translation_prompt(tmp_path):
     off = greek_backend()
     run_film(str(film), cfg(translate={"budget_cps": None}), off, str(tmp_path / "off"), log=lambda m: None)
     assert off.prompts and not any("Budget JSON:" in p for p in off.prompts)
+
+
+def test_style_rules_in_config_reach_prompt_and_fix_stage(tmp_path):
+    film = make_film(tmp_path)
+    assert DEFAULTS["style_rules"] is True  # Harold's rules, on by default (D20)
+    on = greek_backend(text="Πάμε στη πόλη {k}.")
+    run_film(str(film), cfg(), on, str(tmp_path / "on"), log=lambda m: None)
+    assert any("Greek style:" in p for p in on.prompts)
+    rep = read_report(tmp_path / "on")
+    assert rep["fixes"]["styled"]["final_n"] > 0
+    off = greek_backend(text="Πάμε στη πόλη {k}.")
+    run_film(str(film), cfg(style_rules=False), off, str(tmp_path / "off"), log=lambda m: None)
+    assert not any("Greek style:" in p for p in off.prompts)
+    assert read_report(tmp_path / "off")["fixes"]["styled"] == {"final_n": 0, "rebroken": 0}

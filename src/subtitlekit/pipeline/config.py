@@ -11,6 +11,8 @@ DEFAULTS: Dict[str, Any] = {
     # Preferred source languages, best first. Also the reference languages for
     # the "1:1 uncondensed copy" machine-translation check.
     "source_languages": ["en"],
+    # Harold's Greek style rules (E4): prompt block + deterministic fixes (final ν, line breaks).
+    "style_rules": True,
     "scan": {
         # Each subfolder of films_dir is one film: candidate .srt files plus an
         # optional film.yaml (title, year, imdb_id, release, fps, timing_reference)

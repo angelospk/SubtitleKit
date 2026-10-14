@@ -458,3 +458,41 @@ Codex `review` lane, 2 rounds (cap reached), then fixes without a round 3:
   `run_compare.sh` checks every folder name before it starts any job.
 - CodeRabbit: 0 findings.
 
+## D20: Harold's Greek style rules (E4)
+
+Details: `EXPERIMENTS.md` E4. Harold's own 4-stage manual workflow
+(glossary, gender/formality notes, style prompt, correction pass) is the
+target; E4 adds stage 3.
+
+- New: `greek_style.py` with the prompt block `STYLE_RULES_EL` and code
+  checks: `fix_final_n` (την/τη and στην/στη only: keep ν before vowels,
+  κ π τ ξ ψ, μπ ντ γκ; drop it before other consonants), `has_bad_break`
+  and `rebreak` (no first line that ends with an article, preposition or
+  particle), `count_ok_words`, `style_lint`. A new validated fix stage
+  "style" runs after condensation; `reflow_text` also avoids bad breaks.
+  Config: top-level `style_rules` (default true).
+- Not auto-fixed on purpose: το/τον (the pronoun τον and the neuter το
+  look the same), δεν/δε and μην/μη (not in Harold's rule).
+- The judge prompt now lists the naturalness rules, and it shows line
+  breaks (" / ") apart from subtitle boundaries (" || ").
+- Result: judge tie on both films; calques, final-ν errors and bad breaks
+  drop to about zero; elision and "ρε" rise to the level of the Netflix
+  professional track.
+- Decision: keep `style_rules: true` (Harold's rules, no measurable loss).
+- Found on the way: the LLM reply cache made a first "repeat" run a copy
+  of E3; repeats now run with `cache_dir: null`.
+
+### Review log (D20)
+
+Codex `review` lane, 2 rounds (cap reached), then a fix without a round 3:
+- Round 1 REVISE, 5 important + 1 nit, all fixed with tests: dialogue
+  lines with – or — were rebroken; an added ν could make a 43-character
+  line (the stage now reflows); adjacent "τη στη" checked only the first;
+  tags or quotes before the next word hid it; the judge could not tell a
+  line break from a subtitle boundary; NFD text and ’ escaped the checks.
+- Round 2: 5 confirmed fixed; 1 open, fixed after the round with a test:
+  a closing tag or a space inside a tag between the article and the next
+  word (`<i>τη</i> αλήθεια`).
+- CodeRabbit: 1 finding (minor, fixed): `run_sweep.sh` fell back to the
+  default config when a named variant config was missing; it now stops.
+

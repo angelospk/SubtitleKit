@@ -130,3 +130,29 @@ def test_condensation_retries_once_after_unusable_reply():
     rep = run_fixes(film(), backend, CFG)
     assert rep.cues[1].text == SHORT
     assert "Retry 2" in backend.prompts[1]
+
+
+def test_reflow_never_ends_the_first_line_with_a_preposition():
+    from subtitlekit.pipeline.greek_style import has_bad_break
+
+    out = reflow_text("Πρέπει να μιλήσουμε σοβαρά για όλα αυτά που έγιναν χθες το βράδυ", 42, 2)
+    assert len(out.split("\n")) == 2 and not has_bad_break(out)
+
+
+def test_style_stage_fixes_final_n_and_bad_breaks_only_when_on():
+    cues = [tight("Πάμε στη πόλη.", 0, idx=1), tight("Πήγαμε μαζί στο\nσπίτι της γιαγιάς μου.", 3000, idx=2)]
+    on = run_fixes(cues, None, FixConfig(timing=TimingConfig(target_cps=17), style_rules=True))
+    assert on.cues[0].text == "Πάμε στην πόλη."
+    assert on.cues[1].text != cues[1].text and on.cues[1].text.split() == cues[1].text.split()
+    assert on.styled == {"final_n": 1, "rebroken": 1}
+    assert on.to_dict()["styled"] == {"final_n": 1, "rebroken": 1}
+    off = run_fixes(cues, None, FixConfig(timing=TimingConfig(target_cps=17)))
+    assert [c.text for c in off.cues] == [c.text for c in cues]
+
+
+def test_style_stage_never_leaves_a_line_over_the_limit():
+    line = "Αύριο θα έρθω να δω τη Άννα και τα παιδιά!"  # 42 chars; "την Άννα" makes 43
+    assert len(line) == 42
+    rep = run_fixes([tight(line, 0, dur=6000)], None, FixConfig(timing=TimingConfig(target_cps=17), style_rules=True))
+    assert "την Άννα" in rep.cues[0].text
+    assert all(len(l) <= 42 for l in rep.cues[0].text.split("\n"))

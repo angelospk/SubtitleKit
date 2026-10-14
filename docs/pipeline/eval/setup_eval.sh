@@ -32,7 +32,8 @@ film() {
 }
 
 # Euphoria S03E01 (HBO). Where a language has two tracks: the one with the lower CPS p95.
-# "enb" = English with the per-cue character budget (budget set by the run config, not here).
+# Variant configs live in ~/pipeline-demo/eval/cfg-<variant>.yaml (run_sweep.sh): "en" = no budget,
+# no style rules; "enb" = budget only (E3; "enbr" = its E4 repeat); "enbs" = budget + Greek style rules (E4).
 film Euphoria.S03E01 ~/Downloads/Subtitles-1/43c52854aee2ff8b/Euphoria.US.S03E01.1080p.WEB.h264-ETHEL_track \
   Euphoria.US.S03E01.1080p.WEB.h264-ETHEL "title: Euphoria (season 3, episode 1)
 year: 2026
@@ -42,7 +43,8 @@ cast: [Zendaya as Rue, Hunter Schafer as Jules, Sydney Sweeney as Cassie, Jacob 
 release: Euphoria.US.S03E01.1080p.WEB.h264-ETHEL
 fps: 23.976" \
   "en:3_[eng]:eng" "fr:14_[fre]:fre" "es:10_[spa]:spa" "it:20_[ita]:ita" "de:8_[ger]:ger" "pt:29_[por]:por" \
-  "en+pt:3_[eng]:eng:29_[por]:por" "enb:3_[eng]:eng"
+  "en+pt:3_[eng]:eng:29_[por]:por" "enb:3_[eng]:eng" \
+  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng"
 
 # Stranger Things S05E08 (Netflix, 2 h). pt track 27 is European Portuguese ("vamos a isto").
 film Stranger.Things.S05E08 ~/Downloads/Subtitles/8023c67d80b190ea/Stranger.Things.S05E08.1080p.WEB.h264-ETHEL_track \
@@ -53,4 +55,5 @@ synopsis: Eleven and her friends in Hawkins, Indiana, make a last stand against 
 cast: [Millie Bobby Brown as Eleven, Finn Wolfhard as Mike, Winona Ryder as Joyce, David Harbour as Hopper, Gaten Matarazzo as Dustin, Caleb McLaughlin as Lucas, Noah Schnapp as Will, Sadie Sink as Max]
 release: Stranger.Things.S05E08.1080p.WEB.h264-ETHEL
 fps: 23.976" \
-  "en:3_[eng]:eng" "enb:3_[eng]:eng" "pt:27_[por]:por" "de:8_[ger]:ger"
+  "en:3_[eng]:eng" "enb:3_[eng]:eng" "pt:27_[por]:por" "de:8_[ger]:ger" \
+  "enbr:3_[eng]:eng" "enbs:3_[eng]:eng"
