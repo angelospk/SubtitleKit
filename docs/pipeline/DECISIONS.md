@@ -39,3 +39,23 @@ where asked. Dead ends are logged too.
   a JSON file next to the film (same shape as API v1 `attributes`). The
   fixture in tests is **synthetic**, built from `opensubtitles-go/types.go`
   field names, not recorded from the live API.
+
+## D5: Own `Cue` model instead of pysrt objects
+- Context: stages must be compared before/after by validators.
+- Choice: frozen `Cue(index, start_ms, end_ms, text)` + tolerant parser
+  (`pipeline/srt.py`). pysrt stays for the legacy tools.
+- Why: pure functions, cheap equality, no shared mutable state.
+
+## D6: Analyzer heuristics from observation
+- Context: needed a professional / amateur / machine classifier.
+- Study: ~60 local files (see HEURISTICS.md). Discriminative: line length
+  ≤ 42, centisecond timestamps (Aegisub/ASR), zero gaps, frame snapping, and
+  cross-candidate 1:1 timing copies without condensation. Not
+  discriminative: Greek tonos ratio, final-period share (dead ends, kept as
+  report fields only).
+- Dead end: a first version flagged every retail foreign track as "machine"
+  (they share one template with each other, dan↔gre ratio ≈ 1). Fix: only
+  a reference language (`en`) counts as the origin of a copy.
+- Dead end: the AI copy got "professional" points for frame-snapped timing
+  it inherited. Fix: copied timing earns no timing-quality points.
+- Choice: additive points per class → softmax confidence; ties → amateur.
