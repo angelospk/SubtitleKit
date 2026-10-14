@@ -122,3 +122,11 @@ def test_qa_translation_flags_lost_negation_as_blocker():
     flags = qa_translation(src, [Cue(1, 0, 1, "Θέλω να πάω.")], CFG)
     assert flags and flags[0].blocker and "negation" in flags[0].reason
     assert qa_translation(src, [Cue(1, 0, 1, "Δεν θέλω να πάω.")], CFG) == []
+
+
+def test_condensation_retries_once_after_unusable_reply():
+    replies = iter(["Sure, here is my plan...", json.dumps({"2": SHORT}, ensure_ascii=False), '{"2": {"ok": true}}'])
+    backend = MockBackend(replies=lambda p: next(replies))
+    rep = run_fixes(film(), backend, CFG)
+    assert rep.cues[1].text == SHORT
+    assert "Retry 2" in backend.prompts[1]

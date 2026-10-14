@@ -6,9 +6,10 @@ D=~/Downloads
 E=~/projects/eng-sub-trans-optimize
 R=${1:-~/pipeline-demo}
 F=$R/films
+rm -rf "$F"/{Hamnet.2025,The.Housemaid.2025,Influencers.2025,Avatar.Fire.and.Ash.2025}  # only our 4 demo folders
 mkdir -p "$F"/{Hamnet.2025,The.Housemaid.2025,Influencers.2025,Avatar.Fire.and.Ash.2025}
 
-ln -sf "$D/Hamnet 2025 1080p WEB h264-ETHEL.srt" "$F/Hamnet.2025/Hamnet.2025.1080p.WEB.h264-ETHEL.eng.srt"
+ln -sf "$D/Hamnet 2025 1080p WEB h264-ETHEL.srt" "$F/Hamnet.2025/Hamnet.2025.1080p.WEB.h264-ETHEL.srt"  # Spanish text; no tag, the analyzer detects it
 cat > "$F/Hamnet.2025/film.yaml" <<'YAML'
 title: Hamnet
 year: 2025
@@ -22,8 +23,8 @@ YAML
 
 H=$F/The.Housemaid.2025
 ln -sf "$E/webeng.srt" "$H/The.Housemaid.2025.WEB.eng.srt"
-ln -sf "$D/The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.srt" "$H/The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.eng.srt"
-ln -sf "$D/The.Housemaid.2025.1080p.TELESYNC.x264.BG.srt" "$H/The.Housemaid.2025.1080p.TELESYNC.x264.BG.eng.srt"
+ln -sf "$D/The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.srt" "$H/The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.por.srt"  # Portuguese text
+ln -sf "$D/The.Housemaid.2025.1080p.TELESYNC.x264.BG.srt" "$H/The.Housemaid.2025.1080p.TELESYNC.x264.BG.srt"  # Bulgarian text
 ln -sf "$D/The.Housemaid.2025.1080p.TS.V2.PT-BR.srt" "$H/The.Housemaid.2025.1080p.TS.V2.por.srt"
 ln -sf "$D/frThe.Housemaid.2025.1080p.TS.V2.EN-RGBfre.srt" "$H/The.Housemaid.2025.1080p.TS.V2.fre.srt"
 cat > "$H/film.yaml" <<'YAML'
@@ -35,11 +36,11 @@ synopsis: Millie takes a job as a live-in housemaid for the wealthy Nina and And
 cast: [Sydney Sweeney, Amanda Seyfried, Brandon Sklenar]
 release: The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR
 fps: 23.976
-timing_reference: The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.eng.srt
+timing_reference: The.Housemaid.2025.1080p.AMZN.WEB-DL.DDP5.1.Atmos.H.264-BYNDR.por.srt
 YAML
 
 I=$F/Influencers.2025
-ln -sf "$D/Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB.srt" "$I/Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB.eng.srt"
+ln -sf "$D/Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB.srt" "$I/Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB.por.srt"  # Portuguese text
 ln -sf "$D/Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB.gre.srt" "$I/"
 ln -sf "$D/influencersgr.srt" "$I/influencers.llm.gre.srt"
 printf 'title: Influencers\nyear: 2025\nrelease: Influencers.2025.1080p.AMZN.WEB-DL.DD.5.1.H.264-playWEB\n' > "$I/film.yaml"

@@ -106,21 +106,72 @@ class FilmAnalysis:
 # ---------------------------------------------------------------- discovery
 
 
-def guess_language(path: str, cues: Sequence[Cue]) -> str:
-    stem = Path(path).stem.lower()
-    tokens = re.split(r"[\s._\-\[\]()]+", stem)
-    for token in reversed(tokens):
-        if token in LANG_TAGS:
-            return LANG_TAGS[token]
-    text = " ".join(visible_text(c.text) for c in cues[:300])
+STOPWORDS = {
+    "en": "the you and what is it to that this have not are was don't i'm know",
+    "es": "que el la de no es y los en por qué lo se una las está eso",
+    "fr": "le la les de et est que pas vous je ne un une ce qui c'est",
+    "de": "der die das und ist nicht ich du sie es ein eine was zu mit",
+    "it": "che non il di è la un una per sono ma mi ti questo cosa",
+    "pt": "que não o a de é um uma você eu isso para com está os",
+    "nl": "de het een en is niet ik je dat van wat zijn we hij",
+    "da": "det er og jeg ikke du at en til på har med vi der",
+    "sv": "det är och jag inte du att en på har med vi som för",
+    "no": "det er og jeg ikke du at en til på har med vi som",
+    "tr": "bir ve bu ne de da mi için ben sen değil çok",
+    "pl": "nie się to jest że na co jak tak ja ty mnie",
+    "ru": "не что это я ты он как вы мы она так все его",
+    "bg": "не е да се на и ще това какво той си ти ми съм",
+}
+# Script → languages that share it; stopwords decide between them.
+SCRIPT_LANGS = {"ru": ("ru", "bg")}
+_STOP = {lang: set(words.split()) for lang, words in STOPWORDS.items()}
+
+
+def detect_content_language(cues: Sequence[Cue]) -> (str, float):
+    """Language from the text itself: script first, then stopword share. Returns (lang, share)."""
+    step = max(1, len(cues) // 400)  # sample the whole film, not only the opening
+    text = " ".join(visible_text(c.text) for c in cues[::step])
     letters = max(len(re.findall(r"\w", text)), 1)
+    words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text.lower())
+    langs = list(_STOP)
     for lang, script in SCRIPTS.items():
-        if len(re.findall(script, text)) > 0.3 * letters:
-            return lang
-    words = re.findall(r"[a-z']+", text.lower())
-    if words and sum(w in {"the", "you", "and", "what", "is", "i"} for w in words) / len(words) > 0.08:
-        return "en"
-    return "und"
+        share = len(re.findall(script, text)) / letters
+        if share > 0.3:
+            if lang not in SCRIPT_LANGS:
+                return lang, round(share, 3)
+            langs = list(SCRIPT_LANGS[lang])
+            break
+    else:
+        langs = [l for l in langs if l not in ("ru", "bg")]
+    if len(words) < 30:
+        return "und", 0.0
+    scores = {lang: sum(w in _STOP[lang] for w in words) / len(words) for lang in langs}
+    best = max(scores, key=scores.get)
+    ranked = sorted(scores.values(), reverse=True)
+    # Needs a clear winner: related languages (da/no/sv) share many words.
+    if ranked[0] >= 0.10 and ranked[0] >= 1.3 * ranked[1]:
+        return best, round(ranked[0], 3)
+    return "und", round(ranked[0], 3)
+
+
+def tag_language(path: str) -> Optional[str]:
+    tokens = re.split(r"[\s._\-\[\]()]+", Path(path).stem.lower())
+    return next((LANG_TAGS[t] for t in reversed(tokens) if t in LANG_TAGS), None)
+
+
+def guess_language(path: str, cues: Sequence[Cue]) -> str:
+    return resolve_language(path, cues)[0]
+
+
+def resolve_language(path: str, cues: Sequence[Cue]) -> (str, Optional[str]):
+    """(language, note). The text wins over a contradicting file-name tag."""
+    tag = tag_language(path)
+    content, share = detect_content_language(cues)
+    if tag and content != "und" and content != tag:
+        return content, f"file name says '{tag}' but the text is '{content}' (stopword share {share})"
+    if tag:
+        return tag, None
+    return content, None
 
 
 def discover_candidates(folder: str, metadata_file: Optional[str] = None) -> List[Candidate]:
@@ -135,9 +186,12 @@ def discover_candidates(folder: str, metadata_file: Optional[str] = None) -> Lis
         cues = load_srt(str(path))
         if not cues:
             continue
-        attrs = meta.get(path.name, {})
-        lang = attrs.get("language") or guess_language(str(path), cues)
-        lang = LANG_TAGS.get(str(lang).lower(), lang)
+        attrs = dict(meta.get(path.name, {}))
+        lang, note = resolve_language(str(path), cues)
+        if attrs.get("language"):
+            lang = LANG_TAGS.get(str(attrs["language"]).lower(), attrs["language"])
+        if note:
+            attrs["language_note"] = note
         out.append(Candidate(str(path), lang, attrs.get("release") or path.stem, attrs, cues))
     return out
 
@@ -354,6 +408,8 @@ def source_score(
     why = []
     score = CLASS_BASE[cls.label] * (0.5 + 0.5 * cls.confidence)
     why.append(f"{cls.label} ({cls.confidence:.0%}) base {score:.0f}")
+    if cand.metadata.get("language_note"):
+        why.append(cand.metadata["language_note"])
     if cand.language == "und":
         score -= 30
         why.append("language unknown -30")
@@ -390,8 +446,14 @@ def analyze_film(
     metrics = {c.path: compute_metrics(c.cues, limits) for c in candidates}
     max_span = max((m.span_ms for m in metrics.values()), default=0)
     reports = []
+    # MT/AI copies are judged against the preferred source language; when the
+    # film has none, any non-target language is a possible origin (only
+    # target-language candidates are then checked, so retail foreign packs
+    # sharing one template are not flagged).
+    langs = {c.language for c in candidates}
+    references = [l for l in preferred_languages if l in langs] or sorted(langs - {target_language})
     for cand in candidates:
-        derived = find_derivation(cand, candidates, preferred_languages)
+        derived = find_derivation(cand, candidates, references)
         llm = llm_judge(cand, judge) if judge else None
         cls = classify(metrics[cand.path], cand.metadata, cand.release, derived, llm)
         score, why = source_score(cand, metrics[cand.path], cls, max_span, list(preferred_languages))

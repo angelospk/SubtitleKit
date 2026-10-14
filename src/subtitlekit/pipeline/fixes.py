@@ -28,7 +28,8 @@ class FixConfig:
     max_line_chars: int = 42
     max_lines: int = 2
     condense_above_cps: float = 20.0
-    condense_batch: int = 25
+    condense_batch: int = 10
+    condense_attempts: int = 2
     fidelity_check: str = "llm"  # llm | rules
     max_expansion: float = 1.6  # translated/source chars per cue, for QA flags
 
@@ -132,16 +133,25 @@ def condense(
             {str(c.index): {"text": c.text, "max_chars": _target_chars(c, target)} for c in batch},
             ensure_ascii=False, indent=0,
         )
-        prompt = CONDENSE_PROMPT.format(language=language, payload=payload)
-        try:
-            proposals = extract_json(backend.complete(prompt))
-        except LLMError as exc:
-            forget(backend, prompt)
-            flags += [Flag(c.index, f"too fast, condensation failed: {exc}"[:200], c.text) for c in batch]
-            continue
+        base_prompt = CONDENSE_PROMPT.format(language=language, payload=payload)
+        prompt, proposals, error = base_prompt, None, ""
+        for attempt in range(1, cfg.condense_attempts + 1):
+            try:
+                proposals = extract_json(backend.complete(prompt))
+            except LLMError as exc:
+                forget(backend, prompt)
+                error = str(exc)
+                proposals = None
+            if isinstance(proposals, dict):
+                break
+            if proposals is not None:
+                forget(backend, prompt)
+                error = "reply was not a JSON object"
+            # The note also changes the cache key for the retry.
+            prompt = base_prompt + f"\n\nRetry {attempt + 1}: previous answer unusable ({error[:120]}). Reply with the JSON object only."
         if not isinstance(proposals, dict):
-            forget(backend, prompt)
-            proposals = {}
+            flags += [Flag(c.index, f"too fast, condensation failed: {error}"[:200], c.text) for c in batch]
+            continue
         candidates = {}
         for c in batch:
             new = proposals.get(str(c.index))

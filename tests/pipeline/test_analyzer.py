@@ -130,3 +130,31 @@ def test_llm_judge_parses_reply_and_feeds_classification():
     assert "Random sample" in backend.prompts[0]
     analysis = analyze_film([cand], judge=MockBackend(replies=lambda p: "not json"))
     assert analysis.ranked[0].llm_judgement is None
+
+
+def test_text_language_overrides_wrong_file_tag(tmp_path):
+    spanish = [Cue(i + 1, i * 2000, i * 2000 + 1500, t) for i, t in enumerate(
+        ["Eso es lo que no sé.", "¿Qué es esto?", "No lo conoce, por eso se fue.", "La casa de los padres."] * 10)]
+    (tmp_path / "Film.2025.WEB.eng.srt").write_text(format_srt(spanish), encoding="utf-8")
+    cand = discover_candidates(str(tmp_path))[0]
+    assert cand.language == "es"
+    assert "file name says 'en'" in cand.metadata["language_note"]
+    report = analyze_film([cand]).ranked[0]
+    assert any("file name says" in r for r in report.source_reasons)
+    assert not any("preferred source language" in r for r in report.source_reasons)
+
+
+def test_content_language_detection_needs_enough_text():
+    from subtitlekit.pipeline.analyzer import detect_content_language
+
+    assert detect_content_language([Cue(1, 0, 1, "Hi.")])[0] == "und"
+    english = [Cue(i, 0, 1, "I don't know what you want, and that is the problem.") for i in range(10)]
+    assert detect_content_language(english)[0] == "en"
+
+
+def test_without_english_any_source_language_is_an_mt_reference():
+    pt = Candidate("film.por.srt", "pt", cues=pro_cues(text="Olá, meu amigo querido."))
+    el_mt = Candidate("film.ai.el.srt", "el", cues=[c.with_text("Γεια σου, αγαπημένε μου φίλε.") for c in pt.cues])
+    analysis = analyze_film([pt, el_mt], target_language="el")
+    assert analysis.target_existing[0].classification.label == "machine"
+    assert analysis.ranked[0].classification.label != "machine"

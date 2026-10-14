@@ -51,7 +51,9 @@ class OpenCodeBackend(LLMBackend):
         with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
             try:
                 proc = self.runner(argv, cwd, self.timeout)
-            except (OSError, subprocess.TimeoutExpired) as exc:
+            except subprocess.TimeoutExpired as exc:
+                raise LLMError(f"opencode timed out after {self.timeout:.0f} s") from exc
+            except OSError as exc:
                 raise LLMError(f"opencode failed to run: {exc}") from exc
         if proc.returncode != 0:
             raise LLMError(f"opencode exit {proc.returncode}: {proc.stderr[-300:]}")
@@ -96,7 +98,9 @@ class GeminiCliBackend(LLMBackend):
         with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
             try:
                 proc = self.runner(argv, cwd, self.timeout)
-            except (OSError, subprocess.TimeoutExpired) as exc:
+            except subprocess.TimeoutExpired as exc:
+                raise LLMError(f"gemini timed out after {self.timeout:.0f} s") from exc
+            except OSError as exc:
                 raise LLMError(f"gemini failed to run: {exc}") from exc
         if proc.returncode != 0 or not proc.stdout.strip():
             raise LLMError(f"gemini exit {proc.returncode}: {proc.stderr[-300:]}")
