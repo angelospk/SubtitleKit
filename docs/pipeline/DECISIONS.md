@@ -138,3 +138,51 @@ where asked. Dead ends are logged too.
   a donation link. The 1:1 timing-copy rule labels the LLM file correctly.
 - Choice: `analysis.llm_judge: false` by default; when on, it adds at most
   +3 × confidence and never overrides the metadata/timing evidence alone.
+
+## D12: LLM reply cache
+- Context: a full film is 30–50 translation calls (~30 s each); demo reruns
+  after a code fix would repeat all of them.
+- Choice: `CachingBackend` (disk, sha256 of backend+model+prompt) under
+  `~/.cache/subtitlekit/llm`. Only accepted replies stay: callers `forget()` a
+  reply they reject; retry prompts carry the rejection reason, so a retry
+  never replays a cached bad reply. Unique temp files + `os.replace`; cache
+  I/O errors never fail a call.
+
+## Review log (Codex, bridge `review` lane, gpt-6.1-sol @ high)
+
+### Round 1 — job 7e5be61ec01349f689c3bfce73cfaaa2 — REVISE
+| Sev | Finding | Outcome |
+|---|---|---|
+| critical | upload: TimeoutExpired text / process list expose the password | Exceptions caught, see round 2 for the final fix |
+| important | translation meaning not checked; can auto-approve | QA blockers (numbers, negation, repeats); round 2 added per-cue LLM check |
+| important | number corruption auto-approves under 2 % flags | Flags split into blocker/advisory; any blocker → human |
+| important | > 42-char lines only warn | Final long_line / too_many_lines block auto-approve |
+| important | CR in LLM text creates an extra cue on disk | Text normalized, `-->` rejected, `format_srt` sanitizes, saved file re-read and validated (`serialized` stage) |
+| important | all-ads source → empty output auto-approves | Skip: "no dialogue left" |
+| important | mock output auto-approves | mock/none backend → always human; CLI refuses real upload of mock output |
+| important | malformed fidelity verdict crashes the film | Verdict type checked → revert + flag |
+| important | URL dialogue deleted as a credit | Strong/weak credit patterns, weak only at the file edges |
+
+### Round 2 — job ac9dbafe80074fd480c8f0ed880b99ea (follow-up) — REVISE
+6 of 9 round-1 findings confirmed FIXED. Remaining and new:
+| Sev | Finding | Outcome |
+|---|---|---|
+| critical | password still in argv (process list) | **Fixed by refusal**: real upload now needs `upload.password_transport: env` (CLI reads `OS_PASSWORD` from its environment; argv has no password). Today's upload_cli does not support that → real upload impossible until a small Go change (open decision in RUNBOOK). |
+| critical | exception text can embed passwords with odd characters | Output now holds only the exception type; regression test with `\\`, newline, quote in the password |
+| important | translation fidelity unchecked | `check_translation`: every translated cue goes to an LLM check (batch 40, `{"id": true | "problem"}`); a problem or a missing verdict is a blocker → human review. Not reverted to English on purpose (worse than a flagged Greek line). `review.translation_fidelity: none` → always human. |
+| important | URL dialogue near the edges still dropped; "downloaded from" too broad | Weak evidence now needs the cue to be only the link (≤ 2 other words); "downloaded from" needs a domain after it; regression test |
+| important | rejected replies stay cached | `forget()` on every rejection path (translate, condense, fidelity) |
+| important | concurrent cache writes share a temp name | `mkstemp` per write; cache errors tolerated |
+| nit / look | RUNBOOK and setup_demo.sh not visible to the reviewer | Not code; setup script only creates symlinks under `~/pipeline-demo` |
+
+Round 3 (rebuttal only) not used: no disagreement with round 2. The round-2
+fixes were not re-reviewed by Codex (round cap); they are covered by the
+regression tests listed above (118 tests).
+
+### CodeRabbit — not available tonight
+`coderabbit review --agent --committed --base main` failed 4 times with
+"Review failed: Failed to start review" (0.7.6 twice incl. `--light`, then
+after `coderabbit update` to 0.9.0, then scoped with `--dir`). `coderabbit
+doctor`: 9/9 pass; `coderabbit usage`: 3 of 3 reviews remaining. Service-side
+failure; stopped retrying. No CodeRabbit findings to log. To retry:
+`coderabbit review --agent --committed --base main`.
