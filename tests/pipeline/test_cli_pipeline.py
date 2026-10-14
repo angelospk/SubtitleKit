@@ -55,3 +55,16 @@ def test_cli_analyze_and_init_config(tmp_path, monkeypatch, capsys):
     assert "allow_real_upload: false" in cfg.read_text(encoding="utf-8")
     assert run_cli(monkeypatch, "pipeline", "queue", "--out", str(tmp_path / "none")) == 0
     assert "empty" in capsys.readouterr().out
+
+
+def test_cli_run_continues_after_a_broken_film(tmp_path, monkeypatch, capsys):
+    good = film(tmp_path)
+    bad = tmp_path / "Broken.2025"
+    bad.mkdir()
+    (bad / "film.yaml").write_text("title: a: b\n", encoding="utf-8")
+    out = tmp_path / "out"
+    code = run_cli(monkeypatch, "pipeline", "run", str(bad), str(good), "--mock-llm", "--out", str(out))
+    printed = capsys.readouterr()
+    assert code == 1
+    assert "Broken.2025: ERROR" in printed.out and "==> Film.2025:" in printed.out
+    assert (out / "Film.2025" / "report.json").exists()

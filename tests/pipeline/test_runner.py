@@ -117,3 +117,12 @@ def test_config_file_merges_and_rejects_unknown_keys(tmp_path):
     with pytest.raises(ValueError):
         load_config(str(p))
     assert "allow_real_upload: false" in dump_default_config()
+
+
+def test_own_earlier_translation_means_skip(tmp_path):
+    greek = [Cue(1, 0, 2000, "Υποτιτλισμός: haroldpoi")] + [
+        Cue(c.index + 1, c.start_ms + 2500, c.end_ms + 2400, "Γραμμή, φίλε μου, τι κάνεις;") for c in pro_english()]
+    film = make_film(tmp_path, greek=greek)
+    rep = run_film(str(film), cfg(), greek_backend(), str(tmp_path / "out"), log=lambda m: None)
+    assert rep.decision == SKIP
+    assert any("already translated by haroldpoi" in r for r in rep.reasons)

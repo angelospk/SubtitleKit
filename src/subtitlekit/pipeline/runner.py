@@ -62,6 +62,13 @@ def worth_it(analysis, film_meta: Dict[str, Any], cfg: Dict[str, Any]) -> List[s
     if w["skip_if_target_professional"] and pro_target:
         why.append(f"a professional {analysis.target_language} subtitle exists: "
                    f"{os.path.basename(pro_target[0].path)}")
+    own = [c.lower() for c in w.get("own_credits", [])]
+    for r in analysis.target_existing:
+        credits = " ".join(r.metrics.get("credit_lines", [])).lower()
+        hit = next((c for c in own if c in credits), None)
+        if hit:
+            why.append(f"already translated by {hit}: {os.path.basename(r.path)}")
+            break
     if not analysis.ranked:
         why.append("no source-language candidates")
         return why

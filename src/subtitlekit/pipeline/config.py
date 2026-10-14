@@ -26,6 +26,8 @@ DEFAULTS: Dict[str, Any] = {
     },
     "worth_it": {
         "skip_if_target_professional": True,
+        # Credit lines that mean "we already translated this film" (case-insensitive).
+        "own_credits": ["haroldpoi"],
         "allowed_source_classes": ["professional"],
         "min_source_score": 50,
         "skip_if_only_machine_sources": True,

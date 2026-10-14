@@ -234,7 +234,7 @@ def classify(
 
     def add(label: str, pts: float, reason: str) -> None:
         s[label] += pts
-        why.append(f"{label} {pts:+.0f}: {reason}")
+        why.append(f"{label} {pts:+g}: {reason}")
 
     # 1. metadata
     if metadata.get("ai_translated"):

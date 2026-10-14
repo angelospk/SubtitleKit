@@ -112,3 +112,29 @@ where asked. Dead ends are logged too.
   starting within 200 ms of an AMZN cue 3 % → 57 % (different segmentation).
   Housemaid TS → AMZN: score 0.36 → refused (TS rip has a different edit).
   Piecewise (non-linear) sync for edited/TS releases is out of scope.
+
+## D10: Routing rules and the worth-it gate
+- Worth-it gate (skip before any LLM call): a professional Greek subtitle
+  exists; a Greek subtitle credits Harold (`own_credits: [haroldpoi]`); only
+  machine sources; best source not in `allowed_source_classes`
+  (professional); source score < 50; release matches CAM/HDCAM/TS/TELESYNC.
+- auto_approve only if: all validators pass, 0 untranslated cues, flags ≤ 2 %
+  of cues, ≤ 1 % cues over 25 CPS, source class professional, not a partial
+  run. Anything else → `review_queue/<film>.json`.
+- `--force` runs a gated film anyway but always routes it to a human.
+- Upload: auto-approved films get the dry-run plan executed (logged only);
+  human-review films get the same plan prepared for the reviewer
+  (`subtitlekit pipeline upload <film-out>`). `-auto` (automatic translation)
+  is set by default: the text is LLM-made, OpenSubtitles should know.
+- Real upload needs three keys at once: `upload.allow_real_upload: true`,
+  `--really-upload`, and `OS_USERNAME`/`OS_PASSWORD` in the environment. The
+  password is replaced by `***` in every report and log.
+- A broken film (bad YAML etc.) is reported as ERROR and the batch continues.
+
+## D11: LLM judgement is not reliable for AI detection (dead end)
+- Real run (opencode/big-pickle) on Influencers: the LLM-made Greek
+  (`influencersgr.srt`) was judged "professional" (0.72): modern LLM Greek is
+  fluent. Harold's own fan translation was judged "amateur" only because of
+  a donation link. The 1:1 timing-copy rule labels the LLM file correctly.
+- Choice: `analysis.llm_judge: false` by default; when on, it adds at most
+  +3 × confidence and never overrides the metadata/timing evidence alone.

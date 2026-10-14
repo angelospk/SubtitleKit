@@ -84,13 +84,21 @@ def cmd_run(args):
     if not films:
         raise SystemExit("no film folders given (pass paths or --all)")
     backend = _backend(args, cfg)
-    print(f"LLM backend: {getattr(backend, 'name', 'none')}  output: {out}")
+    print(f"LLM backend: {getattr(backend, 'name', 'none')}  output: {out}", flush=True)
+    failed = []
     for film in films:
-        rep = run_film(film, cfg, backend, out, force=args.force)
+        try:
+            rep = run_film(film, cfg, backend, out, force=args.force, log=lambda m: print(m, flush=True))
+        except Exception as exc:  # one broken film must not stop the batch
+            failed.append(film)
+            print(f"==> {os.path.basename(film)}: ERROR {type(exc).__name__}: {exc}", flush=True)
+            continue
         print(f"==> {rep.film}: {rep.decision}")
         for reason in rep.reasons:
             print(f"    - {reason}")
-        print(f"    report: {os.path.join(out, rep.film, 'report.md')}")
+        print(f"    report: {os.path.join(out, rep.film, 'report.md')}", flush=True)
+    if failed:
+        raise RuntimeError(f"{len(failed)} film(s) failed: {', '.join(failed)}")
 
 
 def cmd_upload(args):
