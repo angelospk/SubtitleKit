@@ -1,7 +1,8 @@
 """Pluggable, headless LLM backends.
 
 Primary: OpenCode CLI with a free model (`opencode run --format json`).
-Fallback: Gemini CLI. Tests use ``MockBackend``; nothing here is called by
+Fallback: Gemini CLI. Also Claude Code CLI in headless mode (`claude -p`).
+Tests use ``MockBackend``; nothing here is called by
 the test-suite with a real process (the process runner is injectable).
 """
 
@@ -18,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 log = logging.getLogger(__name__)
 
 Runner = Callable[[List[str], str, float], "subprocess.CompletedProcess[str]"]
+InputRunner = Callable[[List[str], str, float, str], "subprocess.CompletedProcess[str]"]
 
 
 class LLMError(RuntimeError):
@@ -27,6 +29,14 @@ class LLMError(RuntimeError):
 def _run(argv: List[str], cwd: str, timeout: float) -> "subprocess.CompletedProcess[str]":
     return subprocess.run(
         argv, cwd=cwd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL
+    )
+
+
+def _run_input(
+    argv: List[str], cwd: str, timeout: float, input_text: str
+) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(
+        argv, cwd=cwd, input=input_text, capture_output=True, text=True, timeout=timeout
     )
 
 
@@ -55,9 +65,9 @@ class OpenCodeBackend(LLMBackend):
                 raise LLMError(f"opencode timed out after {self.timeout:.0f} s") from exc
             except OSError as exc:
                 raise LLMError(f"opencode failed to run: {exc}") from exc
+        text = parse_opencode_json(proc.stdout)  # raises on an "error" event (it is on stdout)
         if proc.returncode != 0:
-            raise LLMError(f"opencode exit {proc.returncode}: {proc.stderr[-300:]}")
-        text = parse_opencode_json(proc.stdout)
+            raise LLMError(f"opencode exit {proc.returncode}: {(proc.stderr or proc.stdout)[-300:]}")
         if not text.strip():
             raise LLMError("opencode returned no text")
         return text
@@ -105,6 +115,53 @@ class GeminiCliBackend(LLMBackend):
         if proc.returncode != 0 or not proc.stdout.strip():
             raise LLMError(f"gemini exit {proc.returncode}: {proc.stderr[-300:]}")
         return proc.stdout
+
+
+CLAUDE_SYSTEM = (
+    "You are a text-processing engine. Follow the user's instructions exactly "
+    "and reply with the requested output only."
+)
+
+
+@dataclass
+class ClaudeCliBackend(LLMBackend):
+    """Claude Code CLI in headless mode (`claude -p`), e.g. Haiku 5.5. Prompt goes on stdin."""
+
+    model: str = "claude-haiku-5-5"
+    binary: str = "claude"
+    timeout: float = 300.0
+    runner: InputRunner = field(default=_run_input, repr=False)
+    name: str = "claude"
+
+    def complete(self, prompt: str) -> str:
+        argv = [
+            self.binary, "-p", "--model", self.model, "--output-format", "json",
+            "--setting-sources", "", "--tools", "", "--no-session-persistence",
+            "--strict-mcp-config",
+            "--system-prompt", CLAUDE_SYSTEM,
+        ]
+        # Empty working dir: the agent must not see project files.
+        with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
+            try:
+                proc = self.runner(argv, cwd, self.timeout, prompt)
+            except subprocess.TimeoutExpired as exc:
+                raise LLMError(f"claude timed out after {self.timeout:.0f} s") from exc
+            except OSError as exc:
+                raise LLMError(f"claude failed to run: {exc}") from exc
+        if proc.returncode != 0:
+            raise LLMError(f"claude exit {proc.returncode}: {(proc.stderr or proc.stdout)[-300:]}")
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise LLMError(f"claude returned invalid JSON: {proc.stdout[:200]!r}") from exc
+        if not isinstance(data, dict):
+            raise LLMError(f"claude returned unexpected JSON: {proc.stdout[:200]!r}")
+        if data.get("is_error"):
+            raise LLMError(f"claude error: {str(data.get('result'))[:300]}")
+        result = data.get("result")
+        if not isinstance(result, str) or not result.strip():
+            raise LLMError("claude returned no text")
+        return result
 
 
 @dataclass
@@ -243,6 +300,8 @@ def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
         return opencode
     if kind == "gemini":
         return gemini
+    if kind == "claude":
+        return ClaudeCliBackend(model=cfg.get("claude_model", "claude-haiku-5-5"), timeout=timeout)
     if kind == "fallback":
         return FallbackBackend([opencode, gemini])
     if kind == "mock":

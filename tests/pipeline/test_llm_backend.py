@@ -126,3 +126,59 @@ def test_forget_evicts_rejected_reply_and_cache_errors_are_tolerated(tmp_path):
     blocked.write_text("x")
     unwritable = CachingBackend(inner=MockBackend(replies=["ok"]), cache_dir=str(blocked))
     assert unwritable.complete("p") == "ok"
+
+
+def test_claude_cli_backend_sends_prompt_on_stdin_and_parses_result():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    calls = []
+
+    def run(argv, cwd, timeout, input_text):
+        calls.append((argv, cwd, input_text))
+        return subprocess.CompletedProcess(argv, 0, stdout='{"type":"result","is_error":false,"result":"{\\"1\\": \\"Γεια\\"}"}', stderr="")
+
+    backend = ClaudeCliBackend(runner=run)
+    assert backend.complete("hi there") == '{"1": "Γεια"}'
+    argv, cwd, input_text = calls[0]
+    assert argv[:4] == ["claude", "-p", "--model", "claude-haiku-5-5"]
+    for flag in ("--output-format", "--setting-sources", "--tools", "--no-session-persistence", "--system-prompt",
+                 "--strict-mcp-config"):
+        assert flag in argv
+    assert argv[argv.index("--output-format") + 1] == "json"
+    assert argv[argv.index("--setting-sources") + 1] == ""
+    assert argv[argv.index("--tools") + 1] == ""
+    assert "hi there" not in argv  # the prompt never appears in the process list
+    assert input_text == "hi there"
+    assert "subtitlekit-llm-" in cwd
+    assert backend.name == "claude"
+
+
+def test_claude_cli_backend_raises_on_errors():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    def runner(stdout, code=0):
+        return lambda argv, cwd, timeout, input_text: subprocess.CompletedProcess(argv, code, stdout=stdout, stderr="x")
+
+    for stdout, code in [
+        ('{"type":"result","is_error":true,"result":"rate limited"}', 0),
+        ("not json", 0),
+        ('{"type":"result","is_error":false,"result":"  "}', 0),
+        ('{"type":"result","is_error":false,"result":"ok"}', 1),
+    ]:
+        with pytest.raises(LLMError):
+            ClaudeCliBackend(runner=runner(stdout, code)).complete("p")
+
+
+def test_make_backend_builds_claude_backend():
+    from subtitlekit.pipeline.llm import ClaudeCliBackend
+
+    backend = make_backend({"backend": "claude", "claude_model": "claude-sonnet-5-5", "timeout_s": 60})
+    assert isinstance(backend, ClaudeCliBackend)
+    assert backend.model == "claude-sonnet-5-5" and backend.timeout == 60
+    assert make_backend({"backend": "claude"}).model == "claude-haiku-5-5"
+
+
+def test_opencode_error_event_is_reported_even_with_nonzero_exit():
+    stdout = '{"type":"error","error":{"message":"getaddrinfo ENOTFOUND opencode.ai"}}'
+    with pytest.raises(LLMError, match="ENOTFOUND"):
+        OpenCodeBackend(runner=fake_runner(stdout, returncode=1)).complete("hi")

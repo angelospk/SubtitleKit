@@ -158,3 +158,10 @@ def test_without_english_any_source_language_is_an_mt_reference():
     analysis = analyze_film([pt, el_mt], target_language="el")
     assert analysis.target_existing[0].classification.label == "machine"
     assert analysis.ranked[0].classification.label != "machine"
+
+
+def test_llm_judge_rejects_malformed_confidence_and_clamps():
+    cand = Candidate("a.srt", "en", cues=pro_cues(30))
+    assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": "high"}'])) is None
+    assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": null}'])) is None
+    assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": 7}']))["confidence"] == 1.0

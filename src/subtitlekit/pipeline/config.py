@@ -34,8 +34,9 @@ DEFAULTS: Dict[str, Any] = {
         "reject_release_patterns": [r"\bCAM\b", r"\bHDCAM\b", r"\bTS\b", r"TELESYNC"],
     },
     "llm": {
-        "backend": "opencode",  # opencode | gemini | fallback | mock
+        "backend": "opencode",  # opencode | claude | gemini | fallback | mock
         "model": "opencode/big-pickle",
+        "claude_model": "claude-haiku-5-5",
         "timeout_s": 300,
         # Successful replies are cached here (null = no cache).
         "cache_dir": "~/.cache/subtitlekit/llm",

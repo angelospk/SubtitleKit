@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -141,6 +142,54 @@ def cmd_queue(args):
             print(f"   - {r}")
 
 
+def _add_compare_args(sp):
+    sp.add_argument("ours", help="our Greek subtitle (.srt)")
+    sp.add_argument("ref", help="professional reference subtitle (.srt)")
+    sp.add_argument("--source", help="original-dialogue subtitle (.srt), shown to the judge")
+    sp.add_argument("--judge", default="claude-sonnet-5-5",
+                    help='judge model; "none" = no judge, "opencode" = OpenCode backend')
+    sp.add_argument("--sample", type=int, default=60, help="segments to sample for the judge/table")
+    sp.add_argument("--seed", type=int, default=0)
+    sp.add_argument("--output", "-o", required=True, help="output directory")
+
+
+def cmd_compare(args):
+    from .compare import compare_subtitles, render_compare_markdown
+    from .llm import ClaudeCliBackend, OpenCodeBackend
+    from .srt import load_srt
+
+    judge = None
+    if args.judge == "opencode":
+        judge = OpenCodeBackend()
+    elif args.judge != "none":
+        judge = ClaudeCliBackend(model=args.judge)
+    source = load_srt(args.source) if args.source else None
+    res = compare_subtitles(
+        load_srt(args.ours), load_srt(args.ref), source=source, judge=judge,
+        sample=args.sample, seed=args.seed,
+    )
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "compare.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out / "compare.md").write_text(render_compare_markdown(res), encoding="utf-8")
+    cov, tim = res["coverage"], res["timing"]
+    print(f"cues: ours {res['counts']['ours']}, ref {res['counts']['ref']}; "
+          f"coverage ours {cov['ours_matched']:.0%}, ref {cov['ref_matched']:.0%}")
+    print(f"1:1 segments {tim['one_to_one']}, start diff median {tim['start_diff_median_ms']} ms, "
+          f"chars ratio {res['chars']['ratio']}")
+    j = res["judge"]
+    print(f"judge: ours {j['ours_wins']}, ref {j['ref_wins']}, ties {j['ties']}, failed {j['failed']}"
+          if j else f"judge: skipped; wrote {out}")
+
+
+def main_compare(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="subtitlekit-compare", description="Compare our Greek subtitle with a reference"
+    )
+    _add_compare_args(parser)
+    cmd_compare(parser.parse_args(argv))
+
+
 def add_pipeline_parser(subparsers):
     p = subparsers.add_parser("pipeline", help="Find → analyze → translate → fix → review → upload (dry-run)")
     sub = p.add_subparsers(dest="pipeline_command", required=True)
@@ -184,6 +233,11 @@ def add_pipeline_parser(subparsers):
     sp.add_argument("--out")
     common(sp, llm=False)
     sp.set_defaults(func=cmd_queue)
+
+    sp = sub.add_parser("compare", help="compare our Greek subtitle with a professional reference")
+    _add_compare_args(sp)
+    common(sp, llm=False)
+    sp.set_defaults(func=cmd_compare)
     return p
 
 

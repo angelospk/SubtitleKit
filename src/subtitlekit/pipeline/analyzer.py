@@ -390,10 +390,13 @@ def llm_judge(cand: Candidate, backend: LLMBackend, seed: int = 0) -> Optional[D
         data = extract_json(backend.complete(prompt))
     except LLMError:
         return None
-    if not isinstance(data, dict) or data.get("label") not in LABELS:
+    if not isinstance(data, dict) or not isinstance(data.get("label"), str) or data["label"] not in LABELS:
         return None
-    return {"label": data["label"], "confidence": float(data.get("confidence", 0.5)),
-            "reason": str(data.get("reason", ""))}
+    try:
+        confidence = min(max(float(data.get("confidence", 0.5)), 0.0), 1.0)
+    except (TypeError, ValueError):
+        return None
+    return {"label": data["label"], "confidence": confidence, "reason": str(data.get("reason", ""))}
 
 
 # ----------------------------------------------------------------- ranking
