@@ -59,7 +59,7 @@ subtitlekit = "subtitlekit.cli.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-subtitlekit = ["ui/locales/*.json", "optimizer/interjections/*.txt"]
+subtitlekit = ["ui/locales/*.json", "optimizer/interjections/*.txt", "pipeline/opencode_text.json"]
 
 [tool.setuptools_scm]
 write_to = "src/subtitlekit/_version.py"

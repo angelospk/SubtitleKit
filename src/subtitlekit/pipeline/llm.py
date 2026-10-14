@@ -48,8 +48,18 @@ class LLMBackend:
         raise NotImplementedError
 
 
+OPENCODE_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "opencode_text.json")
+OPENCODE_TEXT_ONLY = "Do not use any tools: answer directly in text.\n\n"
+
+
 @dataclass
 class OpenCodeBackend(LLMBackend):
+    """`opencode run` on a private server with the text-only config (OPENCODE_CONFIG), in an empty temp dir.
+
+    The free models refuse a request without the usual tools, so the config keeps every tool listed as
+    "ask" (a non-interactive run rejects each one) and removes only "execute", which "ask" does not stop.
+    """
+
     model: str = "opencode/big-pickle"
     binary: str = "opencode"
     timeout: float = 300.0
@@ -57,9 +67,17 @@ class OpenCodeBackend(LLMBackend):
     name: str = "opencode"
 
     def complete(self, prompt: str) -> str:
-        argv = [self.binary, "run", "--format", "json", "-m", self.model, prompt]
-        # Empty working dir: the OpenCode agent must not see project files.
-        with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
+        # Empty working dir: the OpenCode agent must not see project files. Empty HOME and XDG_CONFIG_HOME: the
+        # user's global config and ~/.opencode (agents, plugins, skills, MCP servers, allow rules) must not merge
+        # into the text-only one. Data, cache and state stay the user's own (login, downloaded binaries).
+        real = {"XDG_DATA_HOME": "~/.local/share", "XDG_CACHE_HOME": "~/.cache", "XDG_STATE_HOME": "~/.local/state"}
+        keep = [f"{k}={os.environ.get(k) or os.path.expanduser(v)}" for k, v in real.items()]
+        with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd, \
+                tempfile.TemporaryDirectory(prefix="subtitlekit-oc-home-") as home:
+            argv = ["env", "-u", "OPENCODE_CONFIG_CONTENT", "-u", "OPENCODE_CONFIG_DIR", f"HOME={home}",
+                    f"XDG_CONFIG_HOME={os.path.join(home, '.config')}", *keep, f"OPENCODE_CONFIG={OPENCODE_CONFIG}",
+                    self.binary, "run", "--standalone", "--agent", "build",
+                    "--format", "json", "-m", self.model, "--", OPENCODE_TEXT_ONLY + prompt]
             try:
                 proc = self.runner(argv, cwd, self.timeout)
             except subprocess.TimeoutExpired as exc:
@@ -415,7 +433,7 @@ def make_backend(cfg: Optional[Dict[str, Any]] = None) -> LLMBackend:
 def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
     kind = cfg.get("backend", "opencode")
     timeout = float(cfg.get("timeout_s", 300))
-    opencode = OpenCodeBackend(model=cfg.get("model", "opencode/big-pickle"), timeout=timeout)
+    opencode = OpenCodeBackend(model=cfg.get("opencode_model", cfg.get("model", "opencode/big-pickle")), timeout=timeout)
     gemini = GeminiCliBackend(model=cfg.get("gemini_model"), timeout=timeout)
     if kind == "opencode":
         return opencode

@@ -137,7 +137,7 @@ def run_film(
     film_dir: str, cfg: Dict[str, Any], backend: Optional[LLMBackend], out_dir: str,
     force: bool = False, log: Callable[[str], None] = print,
     translate_backend: Optional[LLMBackend] = None, hard_backend: Optional[LLMBackend] = None,
-    review_backend: Optional[LLMBackend] = None,
+    review_backend: Optional[LLMBackend] = None, correct_backend: Optional[LLMBackend] = None,
 ) -> FilmReport:
     film_dir = os.path.abspath(os.path.expanduser(film_dir))
     film = os.path.basename(film_dir)
@@ -293,7 +293,7 @@ def run_film(
         log(f"[{film}] correcting translation")
         cps = cfg["translate"].get("budget_cps")
         budgets = char_budgets(source, cps) if cps else None
-        crep = correct_translation(source, tr.cues, backend, flags=qa_flags, budgets=budgets,
+        crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
                                    batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
                                    known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else ())
         report.data["correction"] = crep.to_dict()

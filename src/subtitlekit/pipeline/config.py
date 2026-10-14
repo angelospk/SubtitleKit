@@ -58,7 +58,7 @@ DEFAULTS: Dict[str, Any] = {
     "translate": {"chunk_size": 300, "context_lines": 4, "max_cues": None, "budget_cps": 17,
                   "rescue_untranslated": True, "llm": None},
     # Correction pass (E6, Harold's stage 4): LLM proposes rx/sb edits; code enforces no growth, no added pronouns/names, numbers, negation, then rechecks fidelity.
-    "correction": {"enabled": True, "batch": 300},
+    "correction": {"enabled": True, "batch": 300, "llm": None},
     # Film glossary (E5): built by the LLM once per film, or loaded from film.yaml `glossary: <file>`; saved as glossary.json in the output folder.
     "glossary": {"enabled": True, "max_terms": 150},
     # On-screen captions from foreign tracks (E8): signs/titles the English track does not subtitle.

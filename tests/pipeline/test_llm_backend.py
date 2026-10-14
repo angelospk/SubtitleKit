@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import pytest
@@ -37,12 +38,47 @@ def test_parse_opencode_json_joins_text_parts():
 
 
 def test_opencode_backend_builds_argv_and_runs_in_temp_dir():
+    from subtitlekit.pipeline.llm import OPENCODE_CONFIG, OPENCODE_TEXT_ONLY
+
     calls = []
     backend = OpenCodeBackend(model="opencode/x-free", runner=fake_runner(OPENCODE_STDOUT, calls=calls))
-    assert backend.complete("hi") == '{"1": "Γεια"}'
+    assert backend.complete("-x hi") == '{"1": "Γεια"}'
     argv, cwd = calls[0]
-    assert argv == ["opencode", "run", "--format", "json", "-m", "opencode/x-free", "hi"]
+    # A private server (--standalone) reads OPENCODE_CONFIG; the shared background service would use the
+    # user's global config, where shell and file tools are allowed. The environment drops inherited config
+    # overrides, and an empty XDG_CONFIG_HOME hides the user's global config and plugins.
+    # A temp HOME hides ~/.opencode (skills, plugin packages) too; data, cache and state stay the user's own,
+    # so the login and the downloaded binaries still work.
+    assert argv[:5] == ["env", "-u", "OPENCODE_CONFIG_CONTENT", "-u", "OPENCODE_CONFIG_DIR"]
+    env = dict(a.split("=", 1) for a in argv[5:11])
+    home = env["HOME"]
+    assert "subtitlekit-oc-home-" in home and not home.startswith(cwd)
+    assert env["XDG_CONFIG_HOME"] == os.path.join(home, ".config")
+    assert env["XDG_DATA_HOME"] == os.path.expanduser("~/.local/share") or "XDG_DATA_HOME" in os.environ
+    assert set(env) == {"HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME",
+                        "OPENCODE_CONFIG"} and env["OPENCODE_CONFIG"] == OPENCODE_CONFIG
+    assert argv[11:] == ["opencode", "run", "--standalone", "--agent", "build",
+                         "--format", "json", "-m", "opencode/x-free", "--", OPENCODE_TEXT_ONLY + "-x hi"]
     assert "subtitlekit-llm-" in cwd
+
+
+def test_opencode_config_keeps_tools_listed_but_never_runs_them():
+    import json as _json
+    import os as _os
+
+    from subtitlekit.pipeline.llm import OPENCODE_CONFIG
+
+    assert _os.path.isfile(OPENCODE_CONFIG)
+    conf = _json.load(open(OPENCODE_CONFIG, encoding="utf-8"))
+    perm = conf["agent"]["build"]["permission"]
+    assert conf["permission"] == perm  # the same rules for every agent (subagents included)
+    # The free tier rejects a request without the usual tools ("deny" removes a tool from the request), so
+    # every tool stays listed as "ask", and a non-interactive run rejects every ask. "execute" (a script
+    # sandbox whose fetch reads local files) ignores "ask", so it is the one tool removed.
+    assert perm["*"] == "ask" and perm["execute"] == "deny"
+    assert perm["external_directory"] == "deny" and perm["question"] == "deny"
+    assert "allow" not in perm.values()
+    assert {k for k, v in perm.items() if v == "deny"} == {"execute", "external_directory", "question"}
 
 
 def test_opencode_backend_raises_on_failure():
@@ -90,6 +126,8 @@ def test_extract_json_raises_without_json():
 
 def test_make_backend_kinds():
     assert make_backend({"backend": "opencode"}).name == "opencode"
+    assert make_backend({"backend": "opencode", "opencode_model": "opencode/mimo-v2.6-flash-free"}).model \
+        == "opencode/mimo-v2.6-flash-free"
     assert make_backend({"backend": "fallback"}).name == "fallback"
     with pytest.raises(ValueError):
         make_backend({"backend": "nope"})

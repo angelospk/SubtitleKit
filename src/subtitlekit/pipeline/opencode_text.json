@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "*": "ask",
+    "execute": "deny",
+    "external_directory": "deny",
+    "question": "deny"
+  },
+  "agent": {
+    "build": {
+      "permission": {
+        "*": "ask",
+        "execute": "deny",
+        "external_directory": "deny",
+        "question": "deny"
+      }
+    }
+  }
+}

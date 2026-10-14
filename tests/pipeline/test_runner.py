@@ -349,6 +349,27 @@ def test_correction_pass_runs_after_translation_and_lands_in_the_output(tmp_path
     assert not any(p.startswith("You correct Greek subtitles") for p in off.prompts)
 
 
+def test_correction_pass_uses_its_own_backend_when_configured(tmp_path):
+    # Free translator, strongest corrector: the correction pass runs on correction.llm, the rest on llm.
+    film = make_film(tmp_path)
+    fix = [{"id": 3, "rx": "φίλε μου", "sb": "φίλε", "rate": 5, "type": "σύντμηση"}]
+    main = greek_backend()
+    corrector = greek_backend(corrections=fix)
+    run_film(str(film), cfg(), main, str(tmp_path / "out"), log=lambda m: None, correct_backend=corrector)
+    assert any(p.startswith("You correct Greek subtitles") for p in corrector.prompts)
+    assert not any(p.startswith("You correct Greek subtitles") for p in main.prompts)
+    assert read_report(tmp_path / "out")["correction"]["applied"] == 1
+
+
+def test_cli_builds_the_correction_backend_from_config():
+    from subtitlekit.pipeline.cli import correct_backend_from
+
+    assert correct_backend_from({"llm": {"backend": "claude"}, "correction": {}}) is None
+    b = correct_backend_from({"llm": {"backend": "claude", "timeout_s": 600, "cache_dir": None},
+                              "correction": {"llm": {"claude_model": "claude-opus-5-5", "claude_effort": "medium"}}})
+    assert b.model == "claude-opus-5-5" and b.effort == "medium" and b.timeout == 600
+
+
 def test_verified_correction_keeps_an_unchecked_batch_blocker(tmp_path):
     film = make_film(tmp_path)
     base = greek_backend(corrections=[{"id": 1, "rx": "φίλε μου", "sb": "φίλε"}])
