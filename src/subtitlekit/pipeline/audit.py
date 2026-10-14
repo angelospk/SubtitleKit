@@ -86,12 +86,15 @@ def audit_cues(source: Sequence[Cue], ours: Sequence[Cue], backend: LLMBackend, 
                context: int = 2, source_lang: str = "English") -> AuditReport:
     pairs = list(zip(source, ours))
     rep = AuditReport(cues=len(pairs))
-    for start in range(0, len(pairs), batch):
-        part = pairs[start : start + batch]
+    # A failed batch (a bridge job stops at 240 s, a broken stream, bad JSON) is tried once more (as two halves).
+    queue = [(start, min(start + batch, len(pairs)), True) for start in range(0, len(pairs), batch)]
+    while queue:
+        start, end, retry = queue.pop(0)
+        part = pairs[start:end]
         ids = {t.index for _, t in part}
         payload = {"before": [_pair(s, t) for s, t in pairs[max(start - context, 0) : start]],
                    "audit": {str(t.index): _pair(s, t) for s, t in part},
-                   "after": [_pair(s, t) for s, t in pairs[start + batch : start + batch + context]]}
+                   "after": [_pair(s, t) for s, t in pairs[end : end + context]]}
         prompt = AUDIT_PROMPT.format(source=source_lang, kinds=" | ".join(KINDS),
                                      payload=json.dumps(payload, ensure_ascii=False, indent=0))
         try:
@@ -100,7 +103,13 @@ def audit_cues(source: Sequence[Cue], ours: Sequence[Cue], backend: LLMBackend, 
             data = None
         if not isinstance(data, dict):
             forget(backend, prompt)
-            rep.failed_batches += 1
+            if retry and end - start > 1:
+                mid = (start + end) // 2
+                queue[:0] = [(start, mid, False), (mid, end, False)]
+            elif retry:
+                queue.insert(0, (start, end, False))
+            else:
+                rep.failed_batches += 1
             continue
         for key, item in data.items():
             try:

@@ -131,3 +131,22 @@ Calibration: 9 of the 20 lines were "serious" for one auditor; Harold
 accepts 8 and calls 1 borderline. The confirm step had rejected all of
 those 8, so two judges are needed. The one line confirmed by both judges
 (429) is borderline for Harold.
+
+## Spot-check 2 (Harold, 11 lines that sol found serious and Sonnet confirmed)
+
+Severity 3 (serious): "Έξι μικρά κοτομπουκιά" (gender/number), "η κατάρα ...
+επιτέλους έλυσε" (voice: should be "λύθηκε"), "Πρέπει να είσαι περήφανος" to
+a mother (gender). All three are in Stranger Things. Severity 2 (noticeable):
+"μεγαλύτερός της" for size, "Πουρ 90Χ", "Ίζιπιλ Γκίβερ Κατ" (puns). OK: the
+other 5.
+
+Harold-calibrated serious per hour for Lopus2: Euphoria 0 (one borderline),
+Stranger Things 3 / 2.04 h = 1.47, Kumail 0. Stranger Things misses the Full
+Stop. The serious ones are grammar errors that sol finds and Sonnet misses.
+Q5: `review_pass` with gpt-6.1-sol as the reviewer (`cfg-Lopus3.yaml`).
+Measurement: the sol audit after a sol review is partly circular. The
+Sonnet-audit pair stays independent, and Harold checks the changed lines.
+- Q5 first try: the review audit lost 1 of 5 Euphoria batches, because a
+  bridge job stops at 240 s and 150 cues with sol took longer. Fix:
+  `audit_cues` retries a failed batch once (as two halves), and
+  `cfg-Lopus3.yaml` sets the review batch to 75. All 3 films restarted.

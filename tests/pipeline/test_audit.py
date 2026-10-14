@@ -47,7 +47,27 @@ def test_audit_backend_failure_counts_a_failed_batch():
         raise LLMError("down")
 
     rep = audit_cues(src, el, MockBackend(replies=boom))
-    assert rep.items == {} and rep.failed_batches == 1
+    assert rep.items == {} and rep.failed_batches == 2  # the batch, retried as two halves, failed all three times
+
+
+def test_audit_retries_a_failed_batch_as_two_halves_with_their_context():
+    # Bridge jobs stop at 240 s: a long batch can time out once, a half batch then fits.
+    src, el = films(4)
+    calls = []
+
+    def reply(prompt):
+        payload = json.loads(prompt.rsplit("\n\n", 1)[1])
+        calls.append(sorted(payload["audit"]))
+        if len(calls) == 1:
+            raise LLMError("bridge wait timed out")
+        if "3" in payload["audit"]:
+            assert [c["src"] for c in payload["before"]] == ["Line 1.", "Line 2."]  # context of the half
+            return json.dumps({"3": {"sev": 3, "kind": "meaning", "why": "wrong person"}})
+        return "{}"
+
+    rep = audit_cues(src, el, MockBackend(replies=reply), batch=150)
+    assert calls == [["1", "2", "3", "4"], ["1", "2"], ["3", "4"]]
+    assert sorted(rep.items) == [3] and rep.failed_batches == 0
 
 
 def test_confirm_serious_asks_only_about_sev_3():
