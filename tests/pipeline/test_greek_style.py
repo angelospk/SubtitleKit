@@ -101,3 +101,11 @@ def test_fix_forms_uses_the_spoken_imperative():
     assert fix_forms("Θα σου ευχηθώ, και εύχου κι εσύ.") == ("Θα σου ευχηθώ, και ευχήσου κι εσύ.", 1)
     assert fix_forms("Ευχούλα και προσευχούλα.") == ("Ευχούλα και προσευχούλα.", 0)  # whole words only
     assert "Ευχήσου" in STYLE_RULES_EL
+
+
+def test_fix_forms_uses_kai_before_a_consonant():
+    # E12 audit: "Κι σκέφτηκα", "κι μετά", "κι πάντα"; κι stays only before a vowel ("κι εγώ", "κι αν").
+    assert fix_forms("Κι σκέφτηκα μήπως.") == ("Και σκέφτηκα μήπως.", 1)
+    assert fix_forms("Δεξιά κι μετά αριστερά,\nκι πάντα πρόστυχες.") == ("Δεξιά και μετά αριστερά,\nκαι πάντα πρόστυχες.", 2)
+    assert fix_forms("Κι εγώ, κι αν, κι όταν, κι ύστερα.") == ("Κι εγώ, κι αν, κι όταν, κι ύστερα.", 0)
+    assert fix_forms("Ένα ουίσκι του αφεντικού, ΚΙ ΔΕΝ.") == ("Ένα ουίσκι του αφεντικού, ΚΑΙ ΔΕΝ.", 1)  # whole word only

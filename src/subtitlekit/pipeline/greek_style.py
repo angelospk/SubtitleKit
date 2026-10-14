@@ -67,10 +67,12 @@ def fix_final_n(text: str) -> Tuple[str, int]:
 
 # Learned forms a model writes where spoken Greek uses another one (Harold's spot-check, 2026-10-14).
 SPOKEN_FORMS = {"εύχου": "ευχήσου"}
+# "κι" only before a vowel ("κι εγώ"); before a consonant it is "και" (E12 audit: "Κι σκέφτηκα", "κι μετά").
+_KI_RE = re.compile(r"(?<!\w)(κι|Κι|ΚΙ)(?=\s+[βγδζθκλμνξπρστφχψΒΓΔΖΘΚΛΜΝΞΠΡΣΤΦΧΨ])")
 
 
 def fix_forms(text: str) -> Tuple[str, int]:
-    """Replace learned forms (SPOKEN_FORMS) with the spoken ones, whole words only, keeping the case."""
+    """Replace learned forms (SPOKEN_FORMS) with the spoken ones and "κι" before a consonant with "και"; whole words, case kept."""
     text = unicodedata.normalize("NFC", text)
     changes = 0
     for learned, spoken in SPOKEN_FORMS.items():
@@ -79,7 +81,8 @@ def fix_forms(text: str) -> Tuple[str, int]:
         for old, new in pairs.items():
             text, n = re.subn(rf"(?<!\w){re.escape(old)}(?!\w)", new, text)
             changes += n
-    return text, changes
+    text, n = _KI_RE.subn(lambda m: {"κι": "και", "Κι": "Και", "ΚΙ": "ΚΑΙ"}.get(m.group(1), m.group(1)), text)
+    return text, changes + n
 
 
 def has_bad_break(text: str) -> bool:
