@@ -157,3 +157,23 @@ def test_retranslate_hard_retries_a_single_cue_batch_once():
 
     rep = retranslate_hard(source, ours, {2: "idiom"}, [], MockBackend(replies=reply))
     assert len(calls) == 2 and rep.cues[1].text == "Τα τίναξε." and rep.failed_batches == 0
+
+
+def test_retranslate_hard_allows_a_fix_up_to_a_quarter_over_the_budget():
+    # E12: 479 meaning fixes were rejected as "longer than allowed", median 1.21x the budget. A right line a
+    # little over the 17 CPS budget beats a wrong one that fits; the timing stage handles the rest.
+    source, ours = films()
+    ours[1] = ours[1].with_text("Κλότσησε.")  # 9 chars, wrong
+    proposals = {"2": "Πέθανε ο γέρος, τα τίναξε."}  # 26 chars
+
+    def backend(text):
+        return MockBackend(replies=lambda p: json.dumps({k: {"meaning": "m", "el": text, "web": False}
+                                                         for k in ("2",)}, ensure_ascii=False)
+                           if p.startswith("You retranslate")
+                           else json.dumps({k: True for k in json.loads(p.rsplit("\n\n", 1)[1])}))
+
+    ok = retranslate_hard(source, ours, {2: "wrong meaning"}, [], backend(proposals["2"]), budgets={2: 21})
+    assert ok.cues[1].text == "Πέθανε ο γέρος, τα τίναξε."  # 26 <= 21 * 1.25
+    long = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός."  # 38 > 26
+    rej = retranslate_hard(source, ours, {2: "wrong meaning"}, [], backend(long), budgets={2: 21})
+    assert rej.cues[1].text == "Κλότσησε." and "longer than allowed" in rej.rejected[0][1]

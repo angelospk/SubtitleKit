@@ -118,6 +118,9 @@ def select_hard_lines(source: Sequence[Cue], ours: Sequence[Cue], backend: LLMBa
     return dict(sorted(picked.items()))
 
 
+FIX_SLACK = 1.25
+
+
 def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int, str],
                      tracks: Sequence[Tuple[str, Sequence[Cue]]], backend: LLMBackend,
                      checker: Optional[LLMBackend] = None, budgets: Optional[Dict[int, int]] = None,
@@ -174,7 +177,9 @@ def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int,
                 # The fidelity check skips text equal to its source, so this would pass unchecked.
                 rep.rejected.append((i, "same as the source text"))
                 continue
-            allowed = max(_length(current[i]), budgets.get(i, 0) if budgets else 0)
+            # A known-wrong line: a right one up to FIX_SLACK over the budget beats a wrong one that fits
+            # (E12: 479 fixes rejected as too long, median 1.21x); the timing stage handles the reading speed.
+            allowed = max(_length(current[i]), int(budgets.get(i, 0) * FIX_SLACK) if budgets else 0)
             bad = check_change(current[i], new, src[i].text, allowed, known_names, source_lang)
             if bad:
                 rep.rejected.append((i, "; ".join(bad)))
