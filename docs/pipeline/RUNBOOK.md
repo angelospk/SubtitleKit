@@ -68,9 +68,10 @@ search, για τα πεδία `ai_translated`, `from_trusted` κ.λπ.).
 | analyze | CPS (p50/p90/p95), γραμμές > 42, overlaps, μικρά κενά, διάρκειες, frame-snapping, timestamps σε 10 ms, credits, 1:1 αντιγραφή timing από αγγλικά χωρίς συμπύκνωση → professional / amateur / machine | — |
 | worth-it | υπάρχει επαγγελματικός ελληνικός; υπάρχει δικός σου (`haroldpoi`); η πηγή είναι professional με score ≥ 50; release όχι CAM/TS | `skip` με λόγους, καμία κλήση LLM |
 | translate | chunks των 40 γραμμών σε JSON, ταινία + ονόματα ως context· το timing δεν περνά από το LLM | οι γραμμές μένουν αμετάφραστες → human review |
+| translation check | κάθε μεταφρασμένη γραμμή ελέγχεται ξανά από το LLM απέναντι στο πρωτότυπο· κανόνες για αριθμούς, άρνηση, επαναλήψεις | flag «blocker» → πάντα human review |
 | fixes | resync (αν δοθεί `timing_reference`), overlaps, κενό ≥ 2 frames, επέκταση διάρκειας προς 17 CPS, αναδίπλωση ≤ 42, συμπύκνωση με LLM όσων μένουν > 20 CPS | κάθε στάδιο ελέγχεται· αν σπάσει κάτι, γυρίζει πίσω |
 | validators | ίδιος αριθμός και σειρά, χωρίς overlaps, θετικές διάρκειες· κάθε συμπυκνωμένη γραμμή: ίδιοι αριθμοί, ονόματα, άρνηση, ερώτηση + έλεγχος νοήματος από το LLM | η γραμμή επιστρέφει στο πριν και μπαίνει flag |
-| route | auto_approve μόνο αν όλα περνούν, 0 αμετάφραστα, flags ≤ 2 %, ≤ 1 % πάνω από 25 CPS | `review_queue/<film>.json` |
+| route | auto_approve μόνο αν: όλοι οι validators περνούν, 0 αμετάφραστα, 0 blocker flags, advisory flags ≤ 2 %, ≤ 1 % πάνω από 25 CPS, καμία γραμμή > 42, πραγματικό LLM (όχι mock) | `review_queue/<film>.json` |
 | upload | φτιάχνει την ακριβή εντολή `upload_cli` του opensubtitles-go | πάντα dry-run απόψε |
 
 ## Αποτελέσματα demo (νύχτα 2026-10-14)
@@ -80,11 +81,15 @@ search, για τα πεδία `ai_translated`, `from_trusted` κ.λπ.).
 
 ## Ανοιχτές αποφάσεις για σένα
 
-1. **Πραγματικό upload.** Πότε επιτρέπεται; Πρόταση: μόνο μετά από δική σου
-   έγκριση ανά ταινία, για τις πρώτες 10 ταινίες. Χρειάζονται και τα τρία:
-   `upload.allow_real_upload: true`, `--really-upload`, `OS_USERNAME` /
-   `OS_PASSWORD` στο περιβάλλον. Σημείωση: το upload_cli παίρνει τον κωδικό
-   ως όρισμα, άρα φαίνεται στη λίστα διεργασιών όσο τρέχει.
+1. **Πραγματικό upload.** Σήμερα είναι αδύνατο, επίτηδες. Το `upload_cli`
+   παίρνει τον κωδικό ως όρισμα `-password=…`, και αυτό φαίνεται στη λίστα
+   διεργασιών όσο τρέχει (εύρημα critical του Codex). Για να ανοίξει:
+   (α) μικρή αλλαγή στο opensubtitles-go: αν το `-password` είναι κενό, να
+   διαβάζει `OS_PASSWORD` από το περιβάλλον· (β) στο config
+   `upload.password_transport: env` και `upload.allow_real_upload: true`·
+   (γ) `--really-upload` στην εντολή· (δ) `OS_USERNAME` / `OS_PASSWORD` στο
+   περιβάλλον. Πρόταση: μόνο μετά από δική σου έγκριση ανά ταινία, για τις
+   πρώτες 10 ταινίες.
 2. **Σήμανση AI.** Το `-auto` (automatic translation) μπαίνει από default.
    Θέλεις να το κρατήσεις και μετά από δική σου επιμέλεια;
 3. **Όρια.** `cps_limit` 17, συμπύκνωση πάνω από 20 CPS, flags ≤ 2 %,
