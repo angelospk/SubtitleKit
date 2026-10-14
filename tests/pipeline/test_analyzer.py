@@ -165,3 +165,22 @@ def test_llm_judge_rejects_malformed_confidence_and_clamps():
     assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": "high"}'])) is None
     assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": null}'])) is None
     assert llm_judge(cand, MockBackend(replies=['{"label": "machine", "confidence": 7}']))["confidence"] == 1.0
+
+
+def test_credits_are_detected_in_many_languages():
+    from subtitlekit.pipeline.metrics import is_credit
+
+    credits = [
+        "Adaptation : Clotilde Maville", "Sous-titrage : DUBBING BROTHERS", "Traduction : Jean Dupont",
+        "Subtítulos: Ana López", "Traducción: Pedro Ruiz", "Sottotitoli: Mario Rossi", "Traduzione: Anna Bianchi",
+        "Untertitel: Max Muster", "Übersetzung: Eva Schmidt", "Legendas: João Silva", "Tradução: Maria Souza",
+        "Ondertiteling: Jan de Vries", "Översättning: Anna Berg", "Tekstning: Ole Hansen",
+        "Napisy: Jan Kowalski", "Tłumaczenie: Ewa Nowak", "Перевод: Иван Петров", "Субтитры: Анна",
+        "Subtitles: Iyuno", "SDI Media",
+    ]
+    for text in credits:
+        assert is_credit(Cue(1, 0, 1000, text)), text
+    for text in ["Quelle adaptation !", "La traduction est mauvaise.", "Necesito una traducción.", "Was ist die Übersetzung?",
+                 "Here is the translation: get out.", "He wore a splint.", "Subtitles: they are on.",
+                 "Translation: I hate you, Nate.", 'Translation: "go."', "Subtitles: ...", "Adaptation : 3 jours"]:
+        assert not is_credit(Cue(1, 0, 1000, text)), text

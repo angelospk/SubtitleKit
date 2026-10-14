@@ -13,7 +13,8 @@ link() {  # link <target> <path>: replace only an existing symlink
   ln -sfn "$1" "$2"
 }
 
-for pair in "fr:14_[fre]:fre" "en:3_[eng]:eng"; do
+# variant:track:tag. Where a language has two tracks, the one with the lower CPS p95.
+for pair in "en:3_[eng]:eng" "fr:14_[fre]:fre" "es:10_[spa]:spa" "it:20_[ita]:ita" "de:8_[ger]:ger" "pt:29_[por]:por"; do
   IFS=: read -r v track tag <<<"$pair"
   d="$F/Euphoria.S03E01.$v"
   mkdir -p "$d"
@@ -28,6 +29,13 @@ release: Euphoria.US.S03E01.1080p.WEB.h264-ETHEL
 fps: 23.976
 YAML
 done
+# Hybrid: English meaning + Portuguese segmentation/condensation hints (pt won E2 on meaning errors).
+d="$F/Euphoria.S03E01.en+pt"
+mkdir -p "$d"
+link "${S}3_[eng].srt" "$d/$R.eng.srt"
+link "${S}29_[por].srt" "$d/$R.por.srt"
+sed -n '/^title:/,/^fps:/p' "$F/Euphoria.S03E01.en/film.yaml" > "$d/film.yaml"
+echo "segmentation_reference: $R.por.srt" >> "$d/film.yaml"
 # Reference (professional Greek) and original dialogue, outside the film folders:
 echo "ref:    ${S}9_[gre].srt"
 echo "source: ${S}3_[eng].srt"

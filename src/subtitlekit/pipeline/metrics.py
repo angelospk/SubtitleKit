@@ -21,7 +21,25 @@ STRONG_CREDIT_RE = re.compile(
     r"(yts\.(?:lt|mx|am|ag|bz)|yify|opensubtitles|addic7ed|subs4free|subscene|podnapisi|"
     r"downloaded from\s+\S+\.[a-z]{2,}|subtitles? by|subbed by|synced? by|sync(ed)? and corrected|ripped by|"
     r"translated by|translation by|corrected by|"
-    r"(υπ[οό]τιτλισμ[οό]ς|μετ[αά]φραση|απ[οό]δοση|επιμ[εέ]λεια|συγχρονισμ[οό]ς)\s*:)",
+    r"(υπ[οό]τιτλισμ[οό]ς|μετ[αά]φραση|απ[οό]δοση|επιμ[εέ]λεια|συγχρονισμ[οό]ς)\s*:"
+    r")",
+    re.IGNORECASE,
+)
+# "<subtitles/translation/adaptation>: <Name>" credit lines of retail tracks, many languages. The rest of the
+# line must look like a name (1-5 words, capitalised), so dialogue such as "Translation: get out." stays.
+LABEL_CREDIT_RE = re.compile(
+    r"^\s*(?:"
+    r"subtitles?|translation|sous-titrage|sous-titres|adaptation|traduction|"
+    r"subt[ií]tulos|subtitulado|traducci[oó]n|adaptaci[oó]n|sottotitoli|traduzione|adattamento|"
+    r"untertitel|[üu]bersetzung|legendas|legendagem|tradu[çc][ãa]o|adapta[çc][ãa]o|"
+    r"ondertiteling|vertaling|[öo]vers[äa]ttning|overs[æa]ttelse|oversettelse|tekstning|"
+    r"undertekster|undertexter|napisy|t[łl]umaczenie|titulky|p[řr]eklad|altyaz[ıi]|[çc]eviri|"
+    r"subtitrare|traducere|felirat|ford[ií]t[aá]s|перевод|субтитры|превод|субтитри|переклад"
+    r")\s*:\s*(.+)$",
+    re.IGNORECASE,
+)
+VENDOR_RE = re.compile(
+    r"\b(dubbing brothers|sdi media|iyuno|hiventy|titrafilm|plint|deluxe media|pixelogic|zoo digital)\b",
     re.IGNORECASE,
 )
 WEAK_CREDIT_RE = re.compile(r"(www\.|https?://|\.com\b|\.org\b|lnk\.bio|ترجمة)", re.IGNORECASE)
@@ -110,9 +128,32 @@ def percentile(values: Sequence[float], p: float) -> float:
     return ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo)
 
 
+# Lowercase particles inside surnames ("Jan de Vries", "Ludwig van Beethoven").
+NAME_PARTICLES = {"de", "da", "di", "del", "della", "van", "von", "der", "den", "ten", "ter", "du", "la", "le",
+                  "dos", "das", "bin", "al", "el"}
+
+
+def _label_credit(text: str) -> bool:
+    """A "<label>: <Name>" line: the rest is 1-5 words, each capitalised (or a name particle)."""
+    for line in text.split("\n"):
+        m = LABEL_CREDIT_RE.match(line)
+        if not m:
+            continue
+        words = m.group(1).split()
+        # Every token must be a capitalised word or a name particle: quotes, digits or dots mean dialogue.
+        if 1 <= len(words) <= 5 and all((w[0].isalpha() and w[0].isupper()) or w.lower() in NAME_PARTICLES
+                                        for w in words):
+            return True
+    return False
+
+
+def _strong_credit(text: str) -> bool:
+    return bool(STRONG_CREDIT_RE.search(text) or VENDOR_RE.search(text) or _label_credit(text))
+
+
 def is_credit(cue: Cue) -> bool:
     """Strong credit/ad evidence, wherever the cue is."""
-    return bool(STRONG_CREDIT_RE.search(visible_text(cue.text)))
+    return _strong_credit(visible_text(cue.text))
 
 
 def credit_mask(cues: Sequence[Cue]) -> List[bool]:
@@ -126,7 +167,7 @@ def credit_mask(cues: Sequence[Cue]) -> List[bool]:
         # "Go to example.com now." is dialogue even in the first cues.
         words_left = len(re.findall(r"\w+", URL_TOKEN_RE.sub(" ", text)))
         weak = edge and WEAK_CREDIT_RE.search(text) and words_left <= 2
-        out.append(bool(STRONG_CREDIT_RE.search(text) or weak))
+        out.append(bool(_strong_credit(text) or weak))
     return out
 
 

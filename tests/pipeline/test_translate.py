@@ -149,3 +149,55 @@ def test_added_dialogue_dashes_are_removed_but_real_ones_kept():
     chunk = cues(1)
     accepted, _ = validate_chunk(chunk, {"1": "- Γραμμή με τον Μάικ."}, "el")
     assert accepted == {1: "Γραμμή με τον Μάικ."}
+
+
+def test_greek_prompt_asks_for_names_in_greek_script():
+    from subtitlekit.pipeline.translate import FilmMeta, build_prompt
+
+    chunk = [Cue(1, 0, 1000, "Jules?")]
+    el = build_prompt(chunk, FilmMeta(), "en", "el", ["Jules"], [])
+    assert "Greek script" in el and "Τζουλς" in el
+    de = build_prompt(chunk, FilmMeta(), "en", "de", ["Jules"], [])
+    assert "Greek script" not in de
+
+
+def test_merge_for_hybrid_maps_meaning_text_onto_segmentation_cues():
+    from subtitlekit.pipeline.translate import merge_for_hybrid
+
+    seg = [Cue(1, 0, 2000, "Merde."), Cue(2, 2000, 4000, "On y va."), Cue(3, 6000, 7000, "Silence.")]
+    meaning = [
+        Cue(1, 0, 1000, "Fuck."),
+        Cue(2, 1000, 2100, "Shit."),       # overlaps seg 1 by 1000 ms, seg 2 by 100 ms → seg 1
+        Cue(3, 2100, 3900, "Let's go."),
+        Cue(4, 4500, 4800, "Hey."),        # no overlap; nearest seg cue within 1 s → seg 2
+        Cue(5, 20000, 21000, "Far away."),  # no overlap, too far → dropped
+    ]
+    cues, hints, notes = merge_for_hybrid(seg, meaning)
+    # seg cue 3 has no English: it is dropped, never sent as if it were English
+    assert [(c.index, c.start_ms, c.end_ms) for c in cues] == [(1, 0, 2000), (2, 2000, 4000)]
+    assert [c.text for c in cues] == ["Fuck.\nShit.", "Let's go.\nHey."]
+    assert hints == {1: "Merde.", 2: "On y va."}
+    assert any("1 segmentation cue" in n and "dropped" in n for n in notes)
+    assert any("dropped 1 meaning" in n for n in notes)
+    assert merge_for_hybrid(seg, [])[0] == []
+
+
+def test_translate_cues_puts_hints_before_the_input():
+    from subtitlekit.pipeline.translate import translate_cues
+
+    prompts = []
+
+    def reply(prompt):
+        prompts.append(prompt)
+        return json.dumps({k: "Γεια σου, φίλε μου." for k in prompt_payload(prompt)}, ensure_ascii=False)
+
+    cues = [Cue(1, 0, 1000, "Hello, my friend."), Cue(2, 1000, 2000, "Hello again, friend.")]
+    res = translate_cues(cues, MockBackend(replies=reply), hints={1: "Salut, mon ami.", 2: "Re-salut."}, hint_lang="fr")
+    assert not res.untranslated
+    p = prompts[0]
+    assert "Hints JSON:" in p and p.index("Hints JSON:") < p.index("Input JSON:")
+    assert '"1": "Salut, mon ami."' in p and "French" in p
+    assert prompt_payload(p) == {"1": "Hello, my friend.", "2": "Hello again, friend."}
+    plain = []
+    translate_cues(cues, MockBackend(replies=lambda q: plain.append(q) or reply(q)))
+    assert "Hints JSON:" not in plain[0]

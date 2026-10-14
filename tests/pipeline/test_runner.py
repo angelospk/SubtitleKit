@@ -197,3 +197,68 @@ def test_disabled_fidelity_check_means_human_review(tmp_path):
     rep = run_film(str(film), cfg(review={"translation_fidelity": "none"}), greek_backend(), str(tmp_path / "out"),
                    log=lambda m: None)
     assert rep.decision == HUMAN
+
+
+def test_hybrid_mode_uses_segmentation_track_timing_and_english_meaning(tmp_path):
+    film = make_film(tmp_path, meta="title: Test Film\nyear: 2025\nrelease: Test.Film.2025.1080p.WEB-DL\n"
+                                    "segmentation_reference: Test.Film.2025.1080p.WEB-DL.fre.srt\n")
+    en = pro_english()
+    fr = [Cue(i + 1, en[2 * i].start_ms, en[2 * i + 1].end_ms, f"Ligne {i + 1}, mon ami.") for i in range(30)]
+    (film / "Test.Film.2025.1080p.WEB-DL.fre.srt").write_text(format_srt(fr), encoding="utf-8")
+    out = tmp_path / "out"
+    backend = greek_backend()
+    rep = run_film(str(film), cfg(), backend, str(out), log=lambda m: None)
+    data = read_report(out)
+    assert data["source"]["path"].endswith(".eng.srt")
+    assert data["hybrid"]["segmentation"].endswith(".fre.srt")
+    assert data["hybrid"]["language"] == "fr"
+    assert data["source"]["cues"] == 30
+    assert any("Hints JSON:" in p for p in backend.prompts)
+    assert rep.decision in (AUTO, HUMAN)
+
+
+def _hybrid_film(tmp_path, seg_name="Test.Film.2025.1080p.WEB-DL.fre.srt", write_seg=True):
+    film = make_film(tmp_path, meta="title: Test Film\nyear: 2025\nrelease: Test.Film.2025.1080p.WEB-DL\n"
+                                    f"segmentation_reference: {seg_name}\n")
+    en = pro_english()
+    fr = [Cue(i + 1, en[2 * i].start_ms, en[2 * i + 1].end_ms, f"Bonjour, mon ami, ligne {i + 1}.") for i in range(30)]
+    if write_seg:
+        (film / "Test.Film.2025.1080p.WEB-DL.fre.srt").write_text(format_srt(fr), encoding="utf-8")
+    return film
+
+
+def test_hybrid_takes_english_meaning_even_when_another_track_ranks_first(tmp_path):
+    film = _hybrid_film(tmp_path)
+    out = tmp_path / "out"
+    run_film(str(film), cfg(source_languages=["fr"]), greek_backend(), str(out), log=lambda m: None)
+    data = read_report(out)
+    assert data["analysis"]["chosen"].endswith(".fre.srt")  # French ranks first here...
+    assert data["source"]["path"].endswith(".eng.srt")  # ...but English supplies the meaning
+    assert data["hybrid"]["language"] == "fr"
+
+
+def test_hybrid_with_missing_segmentation_file_is_skipped(tmp_path):
+    film = _hybrid_film(tmp_path, write_seg=False)
+    out = tmp_path / "out"
+    rep = run_film(str(film), cfg(), greek_backend(), str(out), log=lambda m: None)
+    assert rep.decision == SKIP
+    assert any("segmentation_reference" in r for r in rep.reasons)
+    assert "segmentation_reference" in (out / "Test.Film.2025" / "report.md").read_text(encoding="utf-8")
+
+
+def test_hybrid_without_english_track_is_skipped(tmp_path):
+    film = _hybrid_film(tmp_path)
+    (film / "Test.Film.2025.1080p.WEB-DL.eng.srt").unlink()
+    out = tmp_path / "out"
+    rep = run_film(str(film), cfg(), greek_backend(), str(out), log=lambda m: None)
+    assert rep.decision == SKIP
+    assert any("meaning" in r for r in rep.reasons)
+
+
+def test_hybrid_applies_the_worth_it_gate_to_the_meaning_track(tmp_path):
+    film = _hybrid_film(tmp_path)  # French scores ~80 (preferred here), English ~60
+    out = tmp_path / "out"
+    rep = run_film(str(film), cfg(source_languages=["fr"], worth_it={"min_source_score": 70}), greek_backend(),
+                   str(out), log=lambda m: None)
+    assert rep.decision == SKIP
+    assert any("< 70" in r for r in rep.reasons)

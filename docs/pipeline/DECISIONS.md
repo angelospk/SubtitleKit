@@ -389,3 +389,42 @@ CodeRabbit (`coderabbit --agent`, free CLI allowance; it ran this time):
   report. This closes the open point from Hamnet run 3.
 - `llm_judge` returns no judgement for a confidence value that is not a
   number, and clamps the value to 0..1.
+
+## D18: Six source languages and a hybrid mode (E2)
+
+Details and lessons: `EXPERIMENTS.md` E2. Scripts: `docs/pipeline/eval/`
+(`setup_eval.sh`, `run_sweep.sh`, `run_compare.sh`, `summary.py`).
+
+- New: credit filter for ~20 languages ("<label>: <Name>" lines, subtitle
+  vendors); Greek prompt rule "names in Greek script"; hybrid mode
+  (`segmentation_reference` + `meaning_language` in film.yaml: English text
+  on the European track's timing, European text as "Hints JSON"); the judge
+  samples moments anchored on reference cues and sees CPS per version.
+- Result on Euphoria S03E01 (56 common anchors): English source 40 / 6 / 10
+  against the professional track, but 6 % of cues over 20 CPS. European
+  sources 16–21 wins, meaning errors 12–23. Hybrid en+pt 24 / 24 / 8:
+  no gain in reading speed.
+- Decision: keep English as the meaning source for now and attack reading
+  speed with a per-cue budget (next experiment). This is the opposite of
+  Harold's prior ("English last"). The data supports it on this film only;
+  the judge favours English (EXPERIMENTS lesson 7). Revisit after a second
+  film.
+- Caveat: the six single-language runs started before `LANG_NAMES` had
+  fr/de/es/it/pt, so their prompts said "from fr" instead of "from French".
+  The English and hybrid prompts said "English".
+
+### Review log (D18)
+
+Codex `review` lane, 2 rounds (cap reached), then fixes without a round 3:
+- Round 1 REVISE, 5 findings, all fixed: credit labels need line start +
+  capitalised name, vendors need word boundaries; hybrid drops European
+  cues with no English line; hybrid meaning track chosen explicitly (not the
+  top-ranked track); judge moments defined by the reference alone; missing
+  segmentation file → skip with reason.
+- Round 2 REVISE: 3 confirmed fixed. 3 open, fixed after the round with
+  tests: `Translation: "go."` was still a credit (every token must now be a
+  capitalised word); missing vs oversized moments are counted separately;
+  the worth-it gate now judges the hybrid meaning track.
+- A worker changed the report's `analysis.chosen` from path to dict; reverted
+  (the test was wrong, not the schema).
+- CodeRabbit: 0 findings.

@@ -6,6 +6,7 @@ Writes per film: ``<out>/<film>/report.json``, ``report.md``, the Greek
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -14,13 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .analyzer import analyze_film, discover_candidates
+from .analyzer import analyze_film, detect_content_language, discover_candidates
 from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
 from .metrics import Limits, compute_metrics
-from .srt import load_srt, save_srt
+from .srt import Cue, load_srt, save_srt
 from .timing import TimingConfig
-from .translate import FilmMeta, prepare_source, translate_cues
+from .translate import FilmMeta, merge_for_hybrid, prepare_source, translate_cues
 from .upload import plan_upload
 from .fixes import Flag
 from .validators import validate_structure
@@ -163,11 +164,61 @@ def run_film(
 
     # 3. translate
     chosen = next(c for c in candidates if c.path == analysis.chosen.path)
+    src_class = analysis.chosen.classification.label
+    hints, hint_lang = None, None
+    if meta.get("segmentation_reference"):
+        # Hybrid: timing/segmentation from one track, meaning from the best track in the meaning language.
+        seg_name = meta["segmentation_reference"]
+        seg_path = os.path.join(film_dir, seg_name)
+        if not os.path.exists(seg_path):
+            err = f"segmentation_reference not found: {seg_name}"
+            report.data["hybrid"] = {"error": err}
+            report.decision, report.reasons = SKIP, [err]
+            return _write(report, film_out, out_dir)
+        meaning_lang = meta.get("meaning_language", "en")
+        seg_real = os.path.realpath(seg_path)
+        by_path = {c.path: c for c in candidates}
+        meaning, meaning_rep = None, None
+        for r in analysis.ranked:
+            c = by_path.get(r.path)
+            if (c is not None and r.language == meaning_lang and os.path.realpath(c.path) != seg_real
+                    and r.classification.label != "machine"):
+                meaning, meaning_rep = c, r
+                break
+        if meaning is None:
+            reason = f"hybrid: no {meaning_lang} meaning track found"
+            report.data["hybrid"] = {"error": reason}
+            report.decision, report.reasons = SKIP, [reason]
+            return _write(report, film_out, out_dir)
+        chosen, src_class = meaning, meaning_rep.classification.label
+        # The gate above judged the top-ranked track; judge the track that is actually translated.
+        nogo = worth_it(dataclasses.replace(analysis, chosen=meaning_rep), meta, cfg)
+        report.data["worth_it"] = {"go": not nogo, "reasons": nogo, "forced": force and bool(nogo),
+                                   "track": meaning.path}
+        if nogo and not force:
+            report.decision, report.reasons = SKIP, nogo
+            return _write(report, film_out, out_dir)
     source, prep_notes = prepare_source(chosen.cues)
     if not source:
         report.decision = SKIP
         report.reasons = [f"no dialogue left in {os.path.basename(chosen.path)} after removing ads/credits/HI"]
         return _write(report, film_out, out_dir)
+    if meta.get("segmentation_reference"):
+        match = next((c for c in candidates if os.path.realpath(c.path) == seg_real), None)
+        seg_raw = load_srt(seg_path)
+        hint_lang = match.language if match else detect_content_language(seg_raw)[0]
+        seg_cues, _ = prepare_source(seg_raw)
+        merged, merged_hints, notes = merge_for_hybrid(seg_cues, source)
+        # Later stages assume indices 1..n: renumber and remap the hints.
+        new_index = {c.index: i + 1 for i, c in enumerate(merged)}
+        source = [Cue(new_index[c.index], c.start_ms, c.end_ms, c.text) for c in merged]
+        hints = {new_index[k]: v for k, v in merged_hints.items() if k in new_index}
+        report.data["hybrid"] = {"segmentation": seg_path, "language": hint_lang, "notes": notes}
+        log(f"[{film}] hybrid: meaning from {chosen.language}, segmentation from {hint_lang} ({len(source)} cues)")
+        if not source:
+            report.decision = SKIP
+            report.reasons = ["hybrid: no meaning text could be mapped onto the segmentation track"]
+            return _write(report, film_out, out_dir)
     max_cues = cfg["translate"]["max_cues"]
     if max_cues:
         source = source[: int(max_cues)]
@@ -178,6 +229,7 @@ def run_film(
         source, backend, FilmMeta.from_dict(meta), chosen.language, cfg["target_language"],
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
+        hints=hints, hint_lang=hint_lang,
     ) if backend else _no_llm(source)
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
@@ -219,7 +271,7 @@ def run_film(
 
     report.data.update({
         "source": {"path": chosen.path, "language": chosen.language,
-                   "class": analysis.chosen.classification.label,
+                   "class": src_class,
                    "prepare_notes": prep_notes[:20], "cues": len(source)},
         "translation": {"backend": getattr(backend, "name", None), "calls": tr.calls,
                         "untranslated": tr.untranslated, "log": tr.log[-20:]},

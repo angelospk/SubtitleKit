@@ -21,7 +21,8 @@ from .srt import Cue, visible_text
 
 log = logging.getLogger(__name__)
 
-LANG_NAMES = {"el": "Greek (Modern)", "en": "English"}
+LANG_NAMES = {"el": "Greek (Modern)", "en": "English", "fr": "French", "de": "German", "es": "Spanish",
+              "it": "Italian", "pt": "Portuguese"}
 HI_ONLY_RE = re.compile(r"^\s*(\[[^\]]*\]|\([^)]*\)|♪+)\s*$")
 
 
@@ -70,6 +71,51 @@ def prepare_source(cues: Sequence[Cue]) -> (List[Cue], List[str]):
     return [Cue(i + 1, c.start_ms, c.end_ms, c.text) for i, c in enumerate(kept)], notes
 
 
+def merge_for_hybrid(
+    seg: Sequence[Cue], meaning: Sequence[Cue], max_gap_ms: int = 1000
+) -> (List[Cue], Dict[int, str], List[str]):
+    """Segmentation timing and cue boundaries of ``seg``, text from ``meaning``.
+
+    Each meaning cue goes to the segmentation cue it overlaps most (else the nearest one within
+    ``max_gap_ms``). Segmentation cues that receive no meaning cue are dropped (their text is in
+    another language and must never be sent as if it were the input language). Returns the merged
+    cues (keeping the segmentation index and timing, not renumbered), ``{index: segmentation text}``
+    hints for the kept cues, and notes.
+    """
+    assigned: List[List[Cue]] = [[] for _ in seg]
+    dropped = 0
+    for m in meaning:
+        best, best_overlap, best_gap = None, 0, None
+        for k, s in enumerate(seg):
+            overlap = min(m.end_ms, s.end_ms) - max(m.start_ms, s.start_ms)
+            if overlap > best_overlap:
+                best, best_overlap = k, overlap
+            elif best_overlap <= 0:
+                gap = max(s.start_ms - m.end_ms, m.start_ms - s.end_ms, 0)
+                if best_gap is None or gap < best_gap:
+                    best_gap = gap
+                    if gap <= max_gap_ms:
+                        best = k
+        if best is None or (best_overlap <= 0 and (best_gap is None or best_gap > max_gap_ms)):
+            dropped += 1
+            continue
+        assigned[best].append(m)
+    out, hints, no_meaning = [], {}, 0
+    for s, ms in zip(seg, assigned):
+        if ms:
+            ms = sorted(ms, key=lambda c: (c.start_ms, c.end_ms))
+            out.append(Cue(s.index, s.start_ms, s.end_ms, "\n".join(c.text for c in ms)))
+            hints[s.index] = s.text
+        else:
+            no_meaning += 1
+    notes = [f"merged {len(meaning) - dropped} meaning cues into {len(out)} segmentation cues"]
+    if no_meaning:
+        notes.append(f"{no_meaning} segmentation cue(s) had no meaning text and were dropped")
+    if dropped:
+        notes.append(f"dropped {dropped} meaning cue(s) with no segmentation cue within {max_gap_ms} ms")
+    return out, hints, notes
+
+
 def extract_names(cues: Sequence[Cue], min_count: int = 3, limit: int = 30) -> List[str]:
     """Capitalised words that recur mid-sentence: likely character/place names."""
     counts: Counter = Counter()
@@ -80,15 +126,21 @@ def extract_names(cues: Sequence[Cue], min_count: int = 3, limit: int = 30) -> L
     return [w for w, n in counts.most_common() if n >= min_count and w not in stop][:limit]
 
 
+NAME_RULES = {
+    "el": "Write character and place names in Greek script, by pronunciation (Jules → Τζουλς, Cassie → Κάσι), "
+          "with the same spelling every time.",
+}
+DEFAULT_NAME_RULE = "Do not translate character names; transliterate only if that is the {target} convention."
+
 PROMPT = """You are a professional subtitle translator. Translate the subtitle lines below from {source} into {target}.
 {movie}
 Rules:
 - Return ONLY a JSON object with EXACTLY the same keys as the input ({first}..{last}), one translation per key. No commentary.
 - Keep each subtitle short and natural, as a professional {target} subtitler would: condense where the meaning allows, never add information.
 - At most 2 lines per subtitle; mark a line break with "\\n". Keep a leading "-" for dialogue lines.
-- Keep names, numbers and units unchanged in meaning. Do not translate character names; transliterate only if that is the {target} convention.
+- Keep names, numbers and units unchanged in meaning. {names_rule}
 - Keep <i>...</i> tags where the source has them.
-{glossary}{context}
+{glossary}{context}{hints}
 Input JSON:
 {payload}"""
 
@@ -96,6 +148,7 @@ Input JSON:
 def build_prompt(
     chunk: Sequence[Cue], meta: FilmMeta, source_lang: str, target_lang: str,
     names: Sequence[str], context: Sequence[tuple],
+    hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
 ) -> str:
     movie = ""
     if meta.title:
@@ -113,10 +166,21 @@ def build_prompt(
     if context:
         ctx = "\nPrevious lines (already translated, for continuity; do not return them):\n"
         ctx += "\n".join(f"{src!r} -> {dst!r}" for src, dst in context) + "\n"
+    hint_block = ""
+    chunk_hints = {str(c.index): hints[c.index] for c in chunk if hints and c.index in hints}
+    if chunk_hints:
+        hint_block = (
+            f"\nProfessional {LANG_NAMES.get(hint_lang, hint_lang)} subtitle of the same moments, already condensed "
+            "for reading speed. Use it to decide what to keep or drop, and for gender, number and formal/informal "
+            "address. Translate the meaning of the input, not the hint word by word.\nHints JSON:\n"
+            + json.dumps(chunk_hints, ensure_ascii=False, indent=0) + "\n"
+        )
     payload = json.dumps({str(c.index): c.text for c in chunk}, ensure_ascii=False, indent=0)
+    target = LANG_NAMES.get(target_lang, target_lang)
     return PROMPT.format(
         source=LANG_NAMES.get(source_lang, source_lang), target=LANG_NAMES.get(target_lang, target_lang),
-        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, payload=payload,
+        movie=movie, first=chunk[0].index, last=chunk[-1].index, glossary=glossary, context=ctx, hints=hint_block, payload=payload,
+        names_rule=NAME_RULES.get(target_lang, DEFAULT_NAME_RULE.format(target=target)),
     )
 
 
@@ -181,6 +245,7 @@ def translate_cues(
     source_lang: str = "en", target_lang: str = "el", chunk_size: int = 40,
     context_lines: int = 4, max_attempts: int = 2, max_consecutive_errors: int = 4,
     progress: Optional[Callable[[int, int], None]] = None,
+    hints: Optional[Dict[int, str]] = None, hint_lang: Optional[str] = None,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
     names = extract_names(cues)
@@ -198,7 +263,7 @@ def translate_cues(
         for attempt in range(1, max_attempts + 1):
             prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
             prompt = build_prompt(pending, meta, source_lang, target_lang, names,
-                                  [(c.text, done[c.index]) for c in prev])
+                                  [(c.text, done[c.index]) for c in prev], hints, hint_lang)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += f"\n\nRetry {attempt}: your previous answer was rejected ({last_problem[:200]}). Follow the rules exactly."
