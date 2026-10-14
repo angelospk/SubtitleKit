@@ -59,3 +59,18 @@ where asked. Dead ends are logged too.
 - Dead end: the AI copy got "professional" points for frame-snapped timing
   it inherited. Fix: copied timing earns no timing-quality points.
 - Choice: additive points per class → softmax confidence; ties → amateur.
+
+## D7: Translation mechanics
+- Context: srt_translate_gemini rewrites the whole file per Gemini call.
+- Options: whole-file agentic rewrite; numbered-line text; JSON per chunk.
+- Choice: JSON `{"id": "text"}` per chunk of 40 cues, previous 4 translated
+  lines as context, movie block + recurring-name glossary. Validation per
+  chunk: exact key set, non-empty, not left in English. Partial answers are
+  kept; failed cues retried; a wholly failed chunk of ≥ 8 is split once per
+  level; 4 backend errors in a row abort (no runaway loop). Leftovers keep
+  the source text and are listed as `untranslated` → human review.
+- Source preparation drops ads/credits (YTS etc.) and HI-only cues.
+- Measured: opencode/big-pickle, 40 cues in 33 s, 1 call, Greek output
+  natural (names transliterated: Catherine → Κάθριν).
+- Why: timing never passes through the LLM, so it cannot be corrupted.
+- Not reused: the SvelteKit app's resume/continue loop (not needed with chunks).
