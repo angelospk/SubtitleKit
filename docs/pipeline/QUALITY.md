@@ -150,3 +150,35 @@ Sonnet-audit pair stays independent, and Harold checks the changed lines.
   bridge job stops at 240 s and 150 cues with sol took longer. Fix:
   `audit_cues` retries a failed batch once (as two halves), and
   `cfg-Lopus3.yaml` sets the review batch to 75. All 3 films restarted.
+
+## Q5 result: Lopus3 = Opus translate + gpt-6.1-sol review pass
+
+| Lopus3 (Sonnet audits, sol confirms) | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| serious / hour (noticeable / hour) | 0.0 (7.0) | 0.98 (6.4) | 0.0 (8.5) |
+| review pass: sol serious findings, retranslated, rejected by checks | 16, 8, 8 | 21, 10, 10 | 14, 9, 4 |
+
+All three serious errors from spot-check 2 are gone in Stranger Things
+("περήφανη", "λύθηκε επιτέλους", "κοτομπουκίτσες"). The two left: "Ναι,
+Πάπα." for "Yes, Papa." and "κατηγορείς στον εαυτό σου". Noticeable errors
+fell too (Kumail 10.6 to 8.5, ST 13.3 to 6.4). The sol audit of this output
+would be circular (sol reviewed it), so Harold's spot-check of the changed
+lines is the second check.
+
+## E12: free OpenCode translators
+
+Harold (2026-10-15): try muse-spark 1.3 (free), mimo flash (free) and big
+pickle as translators, with the best corrector we have. Configs
+`cfg-O{spark,mimo,pickle}.yaml` = Lopus3 with `translate.llm` on the OpenCode
+model: Opus 5.5 medium for the correction pass (`correction.llm`, new) and
+the sol review pass.
+
+OpenCode free tier, measured (opencode v2.0.25): a request without the usual
+tool list is refused (403 FreeTierError), and a permission "deny" removes the
+tool from the list. "ask" keeps it listed, and a non-interactive run rejects
+every ask. The "execute" tool (a script sandbox whose fetch reads local
+files) ran even under "ask", so it is the one tool denied. The backend runs a
+private server with `opencode_text.json`, a temp HOME and XDG_CONFIG_HOME, and
+no inherited config variables. `eval/opencode_guard_check.py` checks it live
+with hostile prompts: models tried shell, read, webfetch and write, and
+nothing ran.
