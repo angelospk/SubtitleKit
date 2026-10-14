@@ -580,3 +580,66 @@ Codex `review` lane, 2 rounds (cap reached):
   the English-word rule, both with tests.
 - CodeRabbit: 0 findings.
 
+
+## D23: on-screen captions from foreign tracks (E8)
+
+Details: `EXPERIMENTS.md` E8.
+
+- New `captions.py`, stage after the fixes in `run_film` (`captions.enabled`,
+  true; `min_languages` 3, `window_ms` 1500, `min_ms` 700).
+- A caption is an all-caps cue that at least 3 other-language tracks agree
+  on (start within 1.5 s and overlapping; one vote per language; second
+  tracks of a language are used up, never a duplicate) and no English caps
+  cue covers (chants are dialogue).
+- One LLM call for all captions, with the glossary names. Code: Greek caps
+  without accents, final-ν rule, no other scripts, Latin only for a token
+  of ≤ 5 letters that every language keeps (call signs), 2 lines of 42.
+- Inserted only into free time (≥ 700 ms); never over dialogue, never
+  `{\an8}` (pro tracks do not use it). Skips are reported. Flags are
+  remapped to the new cue numbers; each added caption gets an advisory flag.
+
+## D24: enrich mode for an existing Greek subtitle (E9)
+
+Details: `EXPERIMENTS.md` E9.
+
+- `subtitlekit pipeline enrich <film dir> --greek <file> [--out review]
+  [--light]`: time-aligned English → correction pass → captions → 
+  `review/<film>/` (`.el.enriched.srt`, `enrich.json`, `enrich.md`).
+- Never uploads (`upload: "not uploaded: a human checks and uploads this
+  file"`). Never writes the input, also not through a symlink or hard link
+  (checked before any LLM call). The film glossary (film.yaml) feeds the
+  name checks and the captions.
+- Notification: ntfy POST only when `SUBTITLEKIT_NTFY_TOPIC` is set; the
+  topic lives only in the environment, never in the repo. A failed POST
+  prints a warning and does not fail the run.
+- Default: the full correction pass. `--light` keeps only "γραμματική" and
+  "νόημα" edits and tells the model not to restyle; it was not better on
+  the A/B (E9), so it is an option, not the default.
+
+## D25: hard lines (E10)
+
+Details: `EXPERIMENTS.md` E10.
+
+- New `hardlines.py`, stage after the correction pass (`hard_lines`:
+  `enabled` false in the built-in defaults, `per_batch` 15, `max_langs` 6,
+  `batch` 40, `llm` override). The locked config turns it on with Sonnet
+  5.5 and `claude_tools: WebSearch`.
+- `ClaudeCliBackend.tools` accepts only "" or "WebSearch" (never shell or
+  file tools); the cache key includes the tools and the bridge effort.
+- Rules: the E6 code rules via `check_change`, no copy of the English,
+  capital first letter kept, final-ν rule, per-cue fidelity recheck on the
+  main backend. A retranslated cue clears its own fidelity verdict; rule
+  QA runs again on the new text.
+
+## D26: translation model and the locked pipeline (E7, Final)
+
+Details: `EXPERIMENTS.md` E7 and Final.
+
+- Translation stays on Haiku 5.5. Sonnet, Gemini Flash and luna were
+  within the ±5 judge noise on both films; Haiku is the fastest and
+  cheapest and keeps the best reading speed. Flash (45 / 9 on Euphoria) is
+  the candidate to test again on more films.
+- `translate.llm` overrides the backend for the translate stage only
+  (`agy`: Gemini 3.8 Flash / GPT-OSS through the Antigravity CLI;
+  `bridge`: Codex models through agent-bridge, for comparisons only).
+- Locked config: `docs/pipeline/locked.yaml`.

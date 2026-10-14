@@ -55,6 +55,14 @@ experiment; keep them short and concrete. Details and tables live in
     corrections were longer than the line they replaced, and most losing
     ones cut a line that already fit its budget down to a stub. Both are
     rules in code now, not requests in the prompt.
+17. **An agent CLI is not a plain model call.** agy (and Codex through the
+    bridge) can decide to run tools; a denied tool call ends the turn with
+    no text. Put a text-only line before the prompt and test with the real
+    prompt (budgets, glossary), not a short one (E7).
+18. **Judge a stage with two judges of different families** when the
+    translator and the judge are from the same family (Sonnet). In E9 and
+    E10 Flash and Sonnet agreed on the direction; Flash was a little
+    stricter.
 
 ## E1: French vs English source (2026-10-14, Euphoria S03E01)
 
@@ -295,3 +303,176 @@ experiment; keep them short and concrete. Details and tables live in
 - Decision: keep the correction pass on by default; watch the A/B on the
   next films (D22).
 
+
+## E7: translation model comparison (2026-10-14)
+
+- Question: does another model translate better than Haiku 5.5, and at
+  what cost?
+- Setup: only the translate stage changes model (`translate.llm`); the
+  glossary is loaded from the encg run, so all variants use the same terms;
+  fidelity check, correction and condensing stay on Haiku. Cache off.
+  Judge: Sonnet 5.5 against the pro Greek, 60 anchors, seed 0.
+- Models: Haiku 5.5 and Sonnet 5.5 (claude CLI), Gemini 3.8 Flash High
+  and GPT-OSS 120B (Antigravity CLI `agy`), gpt-5.6-luna (agent-bridge).
+  Not available: the Gemini CLI (account tier no longer supported) and
+  Gemini Pro (not offered by agy).
+
+  | Film | Model | Judge ours / pro / tie | CPS p95 | > 17 CPS | Glossary |
+  |---|---|---|---|---|---|
+  | Euphoria | Haiku 5.5 | 42 / 11 / 7 | 17.0 | 12 % | 97 % |
+  | Euphoria | Sonnet 5.5 | 41 / 12 / 7 | 18.5 | 18 % | 99 % |
+  | Euphoria | Gemini Flash | 45 / 9 / 6 | 17.0 | 14 % | 95 % |
+  | Euphoria | luna | 37 / 10 / 13 | 19.5 | 24 % | 98 % |
+  | Stranger Things | Haiku 5.5 | 26 / 12 / 11 (10 failed) | 17.0 | 11 % | 96 % |
+  | Stranger Things | Sonnet 5.5 | 27 / 13 / 19 | 17.0 | 11 % | 95 % |
+  | Stranger Things | luna | 33 / 11 / 15 | 18.7 | 17 % | 97 % |
+
+- All gaps are inside the ±5 judge noise (lesson 14). Sonnet does not win,
+  so its double role as translator and judge did not matter here.
+- Luna writes longer lines (most cues over 17 CPS) and the most elisions.
+- Gemini Flash through agy: two full runs failed. agy runs an agent; with
+  the per-cue character budget in the prompt, Flash tried to run a command
+  (to count characters), the call was denied and the turn broke ("The
+  stream was interrupted"). A text-only line before the prompt fixed it.
+  It is slow: 29 min for Euphoria (46 k thinking tokens for one chunk of
+  300 cues). Not run on Stranger Things.
+- GPT-OSS 120B through agy: 150 cues per hour, and it held agy capacity
+  (429 errors for Flash). Stopped; not measured.
+- Decision: translation stays on Haiku 5.5 (fast, cheapest, best reading
+  speed, same quality within noise). Flash is the one to test again on more
+  films (D26).
+
+## E8: on-screen captions from foreign tracks (2026-10-14)
+
+- Question: can we take the signs, title cards and chapter titles that the
+  foreign tracks subtitle (usually in capitals) and add them to our Greek
+  where it has none?
+- Data: the English dialogue track has 0 such captions. The other tracks of
+  the same release have 10–20 (Stranger Things). The pro Greek has 19
+  (Stranger Things) and 4 (Euphoria: 2 signs, 2 "ΗΠΑ!" chants). Pro tracks
+  never use `{\an8}`.
+- Method (`captions.py`): a cue is a caption candidate when its letters are
+  all capitals (at least 3 letters, no brackets, no ♪) and no English caps
+  cue overlaps it. Candidates from different tracks form one caption when
+  they start within 1.5 s and overlap the first one; each language votes
+  once; at least 3 languages must agree. One LLM call translates all
+  captions. Code then writes Greek capitals without accents (diaeresis
+  kept: ΧΕΛΦΑΪΡ), applies the final-ν rule, rejects letters of another
+  script and Latin words (a Latin token passes only if it has ≤ 5 letters
+  and every language keeps it as is: WSQK), and rejects text that does not
+  fit 2 lines of 42. A caption goes only into free time (≥ 700 ms, the
+  longest gap between our cues), never over dialogue.
+- Measure (`docs/pipeline/eval/captions_eval.py`, Haiku 5.5, on encgc):
+
+  | Film | Found | Added | Pro captions matched | Skipped |
+  |---|---|---|---|---|
+  | Euphoria | 16 | 11 | 2 / 4 | 4 (3 already there, 1 no room) |
+  | Stranger Things | 20 | 17 | 15 / 19 | 3 (no room) |
+
+- The Euphoria misses are the two "ΗΠΑ!" chants: dialogue, not signs. The
+  Stranger Things misses are two captions under dialogue (no free time)
+  and the cast-name card.
+- First run problems, fixed: names in Latin letters (HAWKINS, CHIHUAHUA)
+  and a 3-line caption. The prompt now asks for Greek letters by
+  pronunciation and gets the glossary names (ΧΟΚΙΝΣ, ΤΣΙΟΥΑΟΥΑ); code
+  rejects the rest.
+- Left: Haiku grammar slips in caps ("ΤΟ ΚΑΝΟΝΙΚΟ ΚΟΣΜΟΣ"), and a sign that
+  two tracks split into two cues can get two renderings.
+- Decision: captions on by default (D23).
+
+## E9: enrich an existing Greek subtitle (2026-10-14)
+
+- Question: given a Greek subtitle that already exists (usually a
+  professional one), can the pipeline add the missing captions, fix clear
+  errors, and hand the result to a human?
+- Method: `subtitlekit pipeline enrich <film dir> --greek <file>`. The
+  English track is aligned to the Greek cues by time (≥ 200 ms overlap),
+  the correction pass (E6) runs on the Greek with that English, then the
+  captions (E8). Output: `review/<film>/<film>.el.enriched.srt`,
+  `enrich.json`, `enrich.md` (every added caption and every applied
+  correction, before and after). A push goes to ntfy only when
+  `SUBTITLEKIT_NTFY_TOPIC` is set. Nothing is uploaded; the input file is
+  never written (also not through a symlink).
+- Runs on the pro Greek of both films (ETHEL release, Haiku 5.5). The A/B
+  judges each changed cue blind against the pro original
+  (`docs/pipeline/eval/ab_enrich.py`):
+
+  | Film | Mode | Changed cues | A/B Sonnet after / before / tie | A/B Flash |
+  |---|---|---|---|---|
+  | Euphoria | full | 19 | 18 / 1 / 0 | 16 / 3 / 0 |
+  | Stranger Things | full | 31 | 26 / 5 / 0 | 24 / 6 / 1 |
+  | Euphoria | light | 7 | 7 / 0 / 0 | not run |
+  | Stranger Things | light | 13 | 10 / 3 / 0 | not run |
+
+- Captions: Euphoria 14 found, 9 added; Stranger Things 19 found, 2 added
+  (the pro track already has 17 of them: "already there").
+- Applied corrections are mostly real fixes: typos (ευχαριαστώ, κύρηγμα,
+  μαγαιρεύει), wrong person ("Το πήραν χαμπάρι" for "I done peeped it"),
+  drug slang ("runs" → δρομολόγια). Some lose tone ("No shit. My man!":
+  "Και γαμώ, δικέ μου." → "Σοβαρά! Φίλε μου!").
+- Light mode (`--light`: only "γραμματική" and "νόημα" edits, the
+  translator's style kept) changes fewer cues with about the same win
+  rate, so it fixes fewer real errors. Both judges agree that the full
+  pass improves a professional file (40 / 9 with Flash, 44 / 6 with
+  Sonnet). Full is the default; a human still reads `enrich.md`.
+- Decision: D24.
+
+## E10: hard lines with the same moment in other languages (2026-10-14)
+
+- Question: do idioms, slang, references and wordplay get a better Greek
+  line when the model sees how the professional subtitles of other
+  languages rendered the same moment, and may look the meaning up?
+- Method (`hardlines.py`): Haiku picks up to 15 hard lines per 300 cues
+  (idiom, slang, reference, wordplay, ambiguous, mistranslation); cues
+  with an LLM fidelity flag always count. For each line the retranslation
+  call gets the English, our Greek, why it is hard, 2 lines of context on
+  each side, and the same moment (≥ 200 ms overlap) in up to 6 other
+  languages (es, fr, it, de, pt first). It may use web search only for a
+  slang term, reference or name it does not know. Code keeps the E6 rules
+  (length, layout, pronouns, names, numbers, negation, questions, dashes),
+  rejects a line equal to the English, keeps the capital first letter,
+  applies the final-ν rule, and a per-cue fidelity recheck (Haiku) reverts
+  anything without an explicit "faithful" verdict.
+- Eval: `docs/pipeline/eval/hard_only.py` on encgc (only this stage
+  differs; retranslation Sonnet 5.5 with WebSearch), then
+  `ab_changed.py --suffix h` with two judges:
+
+  | Film | Selected | Changed | Rejected / reverted | A/B Sonnet after / before | A/B Flash |
+  |---|---|---|---|---|---|
+  | Euphoria | 45 | 19 | 15 / 2 | 14 / 5 | 13 / 6 |
+  | Stranger Things | 73 | 32 | 18 / 2 | 21 / 11 | 19 / 13 |
+  | Kumail (Final, Sonnet judge only) | 60 | 18 | 21 / 1 | 12 / 6 | not run |
+
+- Total 47 / 22 (Sonnet) and 32 / 19 (Flash): the stage wins about two of
+  every three lines it changes, with two judges of different families.
+
+- Wins are real meaning fixes: "toast" (τοστ → τελείωσε), "gag me with a
+  spoon" (literal nonsense → Αηδία, θα ξεράσω), "hive mind" (Νου κυψέλης →
+  Συλλογικός νους), "four of a kind" (→ καρέ), "walking down that aisle"
+  (→ προς τον βωμό), "something that's gonna die in two days" for flowers
+  (→ θα μαραθεί). Losses: swearing made literal ("That bitch" → "Η
+  σκύλα"), a negation moved into the wrong place ("Δεν αυτό κάνεις
+  ακριβώς;"), a garbled "Ρε γαμώτο το!".
+- Rejected by the code: 15 (Euphoria) and 18 (Stranger Things), mostly
+  "longer than allowed" and an added pronoun.
+- Web search: allowed in every run, used 0 times. The other-language
+  lines were enough context, so the search costs nothing when unused.
+- Decision: on in the locked config with Sonnet for the retranslation;
+  off in the built-in defaults (D25).
+
+## Final: the locked pipeline on a third film (2026-10-14)
+
+- Film: a Kumail Nanjiani stand-up special (970 English cues, 19 other
+  tracks, pro Greek 943 cues); stand-up is dense with jokes, slang and
+  references, so a hard case for the translation.
+- Config: `docs/pipeline/locked.yaml` (Haiku 5.5 for every stage, chunks of
+  300, film glossary, style rules, correction pass, captions, hard lines
+  with Sonnet 5.5 + web search).
+- Result: 30 min for the whole film. Glossary 61 terms. Correction 35
+  applied, 25 rejected, 2 reverted. Hard lines 60 selected, 18 changed, 21
+  rejected, 1 reverted, 0 web lookups; blind A/B of the 18 changes 12 / 6
+  (Sonnet judge). Captions: 4 found, 2 added, 2 skipped (a memorial card
+  under dialogue: no room).
+- Judge against the pro Greek (60 anchors, seed 0): **ours 38, pro 16,
+  ties 6**. Decision: `human_review` (17 integrity flags, 2.9 % advisory
+  flags), as every film without a human pass should be.
