@@ -182,3 +182,24 @@ private server with `opencode_text.json`, a temp HOME and XDG_CONFIG_HOME, and
 no inherited config variables. `eval/opencode_guard_check.py` checks it live
 with hostile prompts: models tried shell, read, webfetch and write, and
 nothing ran.
+
+## E13 screen: all free OpenCode models, 14 known-hard lines
+
+`eval/screen_free.py`: each free model translates 14 lines where a model
+once made a serious error (addressee gender, "lifted" curse, nuggets,
+"Yes, Papa", idioms, English left in, "tweaker" for a woman), with a speaker
+note. Judged by Claude (Opus), rough serious-error counts:
+
+| Model | Serious | Notes |
+|---|---|---|
+| muse-spark-1.3-contributor-free | ~0 | most natural ("Δώσε συχαρίκια στον εαυτό σου", "Εμένα μ' έχεις πείσει") |
+| big-pickle | ~0 | correct grammar and gender; transliterates "monetization" |
+| step-5-preview-free | ~1 | calque "Βάλε στον εαυτό σου ένα μπισκότο"; slow (101 s) |
+| cat-jam-free, space-bunny-free | 2-3 | English left in, wrong gender, garbled words |
+| longcat-2.5-preview-free, nemotron-3-ultra-free | 3-4 | garbled verbs, wrong sense, English |
+| mimo-v2.6-flash-free | ~5 | invented words ("περήχεσαι", "κοκορένια", "άβογγα") |
+| nemotron-3.5-lightning-free | many | not usable |
+
+E13 run (`cfg-Ffree.yaml`): an all-free pipeline. muse-spark translates;
+big-pickle is the main model (glossary, fidelity check), the corrector, the
+hard-lines model and the reviewer, so another model checks the translator.
