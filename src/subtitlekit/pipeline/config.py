@@ -64,8 +64,10 @@ DEFAULTS: Dict[str, Any] = {
     # On-screen captions from foreign tracks (E8): signs/titles the English track does not subtitle.
     "captions": {"enabled": True, "min_languages": 3, "window_ms": 1500, "min_ms": 700},
     # Hard lines (E10): retranslate hard lines using the same moment from other language tracks;
-    # `llm` overrides the backend for the retranslation (e.g. Sonnet with claude_tools: WebSearch).
-    "hard_lines": {"enabled": False, "per_batch": 15, "max_langs": 6, "batch": 40, "llm": None},
+    # `llm` overrides the backend for the retranslation (e.g. Sonnet with claude_tools: WebSearch);
+    # `select_also_hard` lets that backend pick hard lines too, merged with the main model's picks.
+    "hard_lines": {"enabled": False, "per_batch": 15, "max_langs": 6, "batch": 40, "llm": None,
+                   "select_also_hard": False},
     # Review pass (quality loop): a reviewer audits every cue (audit.py); cues at min_sev or worse are
     # retranslated with the hard-lines rules. `llm` overrides the reviewer backend; `escalate` sends the serious
     # ones to the hard-lines backend instead.

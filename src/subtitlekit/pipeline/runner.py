@@ -324,6 +324,9 @@ def run_film(
                    if f.cue and f.reason.startswith(("LLM translation check:", "English word left",
                                                      "placeholder or markup left"))}
         hard = select_hard_lines(source, tr.cues, backend, flagged=flagged, per_batch=hcfg["per_batch"])
+        if hcfg.get("select_also_hard") and hard_backend:
+            # A cheap main model misses puns now and then (E18); the hard-lines model picks too.
+            hard = {**select_hard_lines(source, tr.cues, hard_backend, per_batch=hcfg["per_batch"]), **hard}
         hrep = retranslate_hard(source, tr.cues, hard, tracks, hard_backend or backend, checker=backend,
                                 budgets=budgets, known_names=known_names, max_langs=hcfg["max_langs"],
                                 batch=hcfg["batch"], source_lang=src_name, target_lang=tgt_name)

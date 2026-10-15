@@ -283,3 +283,19 @@ only for the hard lines (`cfg-Fhyb.yaml`), Kumail then Euphoria.
 - Change: every retranslation item carries `max_chars`, and a fix rejected
   only for length is asked once more with the rejected text and the limit.
 - E18 (`cfg-Fhyb3.yaml`, same as E17 on the new code): Kumail first.
+
+## E17 Euphoria, E18 Kumail, select_also_hard
+
+| Run | Euphoria | Kumail | Stranger Things |
+|---|---|---|---|
+| E17 Fhyb2 | **0.0 (10.1)** | 1.06 (16.0) | running |
+| E18 Fhyb3 (length retry) | | 2.13 (20.2), 2 puns | |
+
+- E18 Kumail: pickle did not pick the "high" line as hard and its review
+  did not call it serious, so Opus never saw it. The "chalant" fix was
+  escalated, but Opus's line lost the negation and was rejected (a probe on
+  the same input got "Ούτε ίχνος άγχους", which passes). Free models catch
+  puns only now and then, and Opus's fixes vary between runs.
+- Change: `hard_lines.select_also_hard`: the hard-lines model also picks hard
+  lines, merged with the main model's picks.
+- E19 (`cfg-Fhyb4.yaml` = E18 + select_also_hard): Kumail.

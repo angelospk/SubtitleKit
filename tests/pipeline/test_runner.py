@@ -490,6 +490,35 @@ def test_hard_lines_fix_clears_the_rule_flags_it_fixed(tmp_path):
     assert 3 not in numbers and 4 in numbers
 
 
+def test_hard_lines_select_also_hard_merges_the_hard_models_picks(tmp_path):
+    # E18: the free main model missed the "high" pun when picking hard lines; Opus also picks.
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def main_reply(prompt):
+        if prompt.startswith("You find hard subtitle lines"):
+            return json.dumps({"3": "idiom: x"})
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            raise AssertionError("the main model does not retranslate here")
+        return base.replies(prompt)
+
+    def hard_reply(prompt):
+        if prompt.startswith("You find hard subtitle lines"):
+            return json.dumps({"4": "wordplay: same word, two meanings"})
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            assert "wordplay: same word" in prompt and "idiom: x" in prompt
+            return json.dumps({"4": {"meaning": "m", "el": "Γραμμή 4, φίλε.", "web": False}}, ensure_ascii=False)
+        raise AssertionError(prompt[:40])
+
+    hard = MockBackend(replies=hard_reply, name="test-hard")
+    run_film(str(film), cfg(hard_lines={"enabled": True, "select_also_hard": True}),
+             MockBackend(replies=main_reply, name="test-llm"), str(tmp_path / "out"), log=lambda m: None,
+             hard_backend=hard)
+    assert sum(p.startswith("You find hard subtitle lines") for p in hard.prompts) == 1
+    assert read_report(tmp_path / "out")["hard_lines"]["selected"] == 2
+    assert DEFAULTS["hard_lines"]["select_also_hard"] is False
+
+
 def test_hard_lines_also_retranslate_cues_with_english_left_in(tmp_path):
     film = make_film(tmp_path)
     base = greek_backend(text="Γραμμή {k}, friend.")
