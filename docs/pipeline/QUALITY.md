@@ -227,3 +227,20 @@ Findings:
   and the run was stopped; with the screen result it is not worth more runs.
 - E14 (Kumail only, all free, new code): Ffree2 (min_sev 3) and Ffree2b
   (review also fixes noticeable errors, min_sev 2).
+
+## E14 result (Kumail, all free)
+
+| Run | Kumail |
+|---|---|
+| Ffree (old code: no FIX_SLACK, no κι rule) | 21.28 (20.2): 20 confirmed, mostly meaning errors the fixes could not land |
+| Ffree2 (new code, review min_sev 3) | 2.13 (22.4) |
+| Ffree2b (new code, review min_sev 2) | 2.13 (16.0) |
+| Lopus3 (Opus + sol review), for comparison | 0.0 (8.5) |
+
+FIX_SLACK took the all-free Kumail run from 21 to 2 serious/hour. The 2 left
+in Ffree2b are lost puns ("high", "chalant"). min_sev 2 cuts the noticeable
+rate by a quarter.
+
+Next (running): E15 = Kumail with 100-cue translate chunks (big-pickle
+truncated 300-cue chunks); E16 = Ffree2b plus Opus 5.5 medium (WebSearch)
+only for the hard lines (`cfg-Fhyb.yaml`), Kumail then Euphoria.
