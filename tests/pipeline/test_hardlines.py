@@ -177,3 +177,74 @@ def test_retranslate_hard_allows_a_fix_up_to_a_quarter_over_the_budget():
     long = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός."  # 38 > 26
     rej = retranslate_hard(source, ours, {2: "wrong meaning"}, [], backend(long), budgets={2: 21})
     assert rej.cues[1].text == "Κλότσησε." and "longer than allowed" in rej.rejected[0][1]
+
+
+def test_retranslate_hard_tells_the_model_the_length_limit_and_retries_a_fix_that_is_only_too_long():
+    # E17: "made me wanna get therapy" stayed wrong because the right fix was 40 chars for a limit of 38.
+    source, ours = films()
+    ours[1] = ours[1].with_text("Κλότσησε.")  # wrong
+    long, short = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός.", "Πέθανε ο γέρος, τα τίναξε."
+    prompts = []
+
+    def reply(p):
+        if p.startswith("You retranslate"):
+            prompts.append(p)
+            return json.dumps({"2": {"meaning": "m", "el": long if len(prompts) == 1 else short, "web": False}},
+                              ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(p.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "wrong meaning"}, [], MockBackend(replies=reply), budgets={2: 21})
+    assert '"max_chars": 26' in prompts[0]  # int(21 * 1.25)
+    assert len(prompts) == 2 and "too long" in prompts[1] and long in prompts[1]
+    assert rep.cues[1].text == short and rep.rejected == []
+
+
+def test_retranslate_hard_length_retry_happens_once():
+    source, ours = films()
+    ours[1] = ours[1].with_text("Κλότσησε.")
+    long = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός."
+    calls = []
+
+    def reply(p):
+        if p.startswith("You retranslate"):
+            calls.append(p)
+            return json.dumps({"2": {"meaning": "m", "el": long, "web": False}}, ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(p.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "wrong meaning"}, [], MockBackend(replies=reply), budgets={2: 21})
+    assert len(calls) == 2 and rep.cues[1].text == "Κλότσησε."
+    assert len(rep.rejected) == 1 and "longer than allowed" in rep.rejected[0][1]
+
+
+def test_retranslate_hard_a_length_retry_without_an_answer_stays_a_length_rejection():
+    source, ours = films()
+    ours[1] = ours[1].with_text("Κλότσησε.")
+    long = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός."
+    calls = []
+
+    def reply(p):
+        if p.startswith("You retranslate"):
+            calls.append(p)
+            return json.dumps({"2": {"meaning": "m", "el": long if len(calls) == 1 else None, "web": False}},
+                              ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(p.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "wrong meaning"}, [], MockBackend(replies=reply), budgets={2: 21})
+    assert rep.rejected == [(2, "longer than allowed (38 > 26)")]
+
+
+def test_retranslate_hard_counts_a_web_lookup_once_per_line_and_always_sends_max_chars():
+    source, ours = films()
+    ours[1] = ours[1].with_text("Κλότσησε.")
+    long = "Πέθανε ο γέρος, τα τίναξε, πάει αυτός."
+    calls = []
+
+    def reply(p):
+        if p.startswith("You retranslate"):
+            calls.append(p)
+            return json.dumps({"2": {"meaning": "m", "el": long, "web": True}}, ensure_ascii=False)
+        return json.dumps({k: True for k in json.loads(p.rsplit("\n\n", 1)[1])})
+
+    rep = retranslate_hard(source, ours, {2: "wrong meaning"}, [], MockBackend(replies=reply))  # no budgets
+    assert '"max_chars": 9' in calls[0]  # the current length is the cap
+    assert len(calls) == 2 and rep.web_lookups == 1

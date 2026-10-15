@@ -265,3 +265,21 @@ only for the hard lines (`cfg-Fhyb.yaml`), Kumail then Euphoria.
   and `review_pass.escalate` (serious review findings are fixed by the
   hard-lines model, noticeable ones by the reviewer).
 - E17 (running): `cfg-Fhyb2.yaml` = Fhyb + escalate, Kumail then Euphoria.
+
+## E17 result and the length retry (2026-10-15)
+
+| Run | Euphoria | Kumail | Stranger Things |
+|---|---|---|---|
+| Ffree (all free, old code) | 2.01 (15.1) | | 0.49 (16.7) |
+| E17 Fhyb2: all free + Opus hard lines + review escalate | running | 1.06 (16.0) | running |
+
+- Escalate works: Opus fixed both puns in the review pass ("Εσύ στα ύψη. Κι
+  εγώ στα ύψη.", "Ούτε ίχνος άγχους"). No joke errors are left.
+- The one error left ("Watching your movie made me wanna get therapy" ->
+  "Η ταινία σου με τρέλανε") had a right fix twice (hard lines and review),
+  both rejected as too long (40 > 38, 50 > 38).
+- Rejections in 4 runs: 80 too long, 50 pronoun added (Harold's rule, kept),
+  32 names added, 8 Latin letters, few others.
+- Change: every retranslation item carries `max_chars`, and a fix rejected
+  only for length is asked once more with the rejected text and the limit.
+- E18 (`cfg-Fhyb3.yaml`, same as E17 on the new code): Kumail first.
