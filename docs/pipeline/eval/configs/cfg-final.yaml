@@ -1,0 +1,14 @@
+# Final locked pipeline (E1-E10): Haiku 5.5 for every stage except the hard-lines retranslation (Sonnet 5.5 + web search).
+llm:
+  backend: claude
+  claude_model: claude-haiku-5-5
+  timeout_s: 900
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 300
+glossary:
+  enabled: true
+hard_lines:
+  enabled: true
+  llm: {backend: claude, claude_model: claude-sonnet-5-5, claude_tools: WebSearch, timeout_s: 1800}

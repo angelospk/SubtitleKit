@@ -1,0 +1,9 @@
+llm:
+  backend: claude
+  claude_model: claude-haiku-5-5
+  timeout_s: 900
+style_rules: true
+translate:
+  chunk_size: 300
+glossary:
+  enabled: false

@@ -1,0 +1,23 @@
+# E17: E16 + review_pass.escalate (serious review fixes go to Opus) + names-check fix.
+# hard lines and review pass on big-pickle, so another model checks the translator. Rest as Lopus3.
+llm:
+  backend: opencode
+  opencode_model: opencode/big-pickle
+  timeout_s: 1200
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 300
+  llm: {backend: opencode, opencode_model: opencode/muse-spark-1.3-contributor-free, timeout_s: 1200}
+glossary:
+  enabled: true
+hard_lines:
+  enabled: true
+  llm: {backend: claude, claude_model: claude-opus-5-5, claude_effort: medium, claude_tools: WebSearch, timeout_s: 1800}
+correction:
+  llm: null
+review_pass:
+  enabled: true
+  min_sev: 2
+  batch: 75
+  escalate: true

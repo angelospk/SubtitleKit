@@ -44,16 +44,23 @@ is the test that decides it.
 
 ## Left half-done
 
-1. **E20** was running on the MacBook (started 13:26, rate limited by the
-   OpenCode free tier: waits 30/90/240 s). Not finished. Do not run it on two
-   machines at once: the free-tier quota is shared.
+1. **E20** (all 3 films, `cfg-Fhyb5`) never finished. It ran on the MacBook
+   from 13:26 on 2026-10-15, stuck in OpenCode free-tier rate limits (waits
+   30/90/240 s), and Harold stopped it at about 15:25. **The mini PC is now the
+   only machine that continues the experiments**; nothing runs on the MacBook.
+   Start E20 from scratch there (see below).
 2. Q4 (which auditor defines "serious") is open; decided only by Harold's
    spot-checks.
 3. Decide the default: paid (Lopus3) or free hybrid (Fhyb5), then rewrite
    `locked.yaml` (still the Haiku config from E1-E10).
 4. Merge `feat/subtitle-pipeline` into `main` (needs Harold's go).
-5. Not in the repo: `~/pipeline-demo/eval/scripts/wait_quota_then_e20.sh`
-   (probes the free tier every 30 min, then runs E20 serially).
+5. `eval/wait_quota_then_e20.sh` probes the free tier every 30 min, then runs
+   E20 serially. It is now in the repo; copy it to
+   `~/pipeline-demo/eval/scripts/` or run it from `docs/pipeline/eval/`.
+6. Where the state lives: configs of every run in `eval/configs/` (copy them
+   to `~/pipeline-demo/eval/` before a run: `run_e11.sh` reads them there),
+   results tables in `QUALITY.md`, raw run outputs and audits only on disk in
+   `~/pipeline-demo/eval/out` (not in git; copied to the mini PC).
 
 ## Resume on the mini PC
 
@@ -75,6 +82,7 @@ Layout matches the MacBook, so scripts work unchanged:
 
 ## Next step
 
-Check the MacBook E20 logs (`~/pipeline-demo/eval/logs/chain-Fhyb5-serial.log`).
-If E20 finished, read its audits and decide the default. If not, rerun it on
-one machine only.
+On the mini PC: `cp docs/pipeline/eval/configs/*.yaml ~/pipeline-demo/eval/`,
+probe the OpenCode free tier with a small request, then run E20 (at most 2
+chains). If the free tier stays limited, decide the default from Lopus3 and
+the best free hybrid so far, and lock it.

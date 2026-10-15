@@ -1,0 +1,12 @@
+# E7 model comparison: only the translate stage changes model; all other LLM stages stay on Haiku.
+llm:
+  backend: claude
+  claude_model: claude-haiku-5-5
+  timeout_s: 900
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 300
+  llm: {backend: agy, agy_model: gpt-oss-120b-medium}
+glossary:
+  enabled: true

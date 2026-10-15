@@ -1,0 +1,15 @@
+# E11: locked pipeline, only the translate stage changes model.
+llm:
+  backend: claude
+  claude_model: claude-haiku-5-5
+  timeout_s: 900
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 300
+  llm: {backend: bridge, bridge_model: gpt-6.1-sol, bridge_effort: medium, timeout_s: 2400}
+glossary:
+  enabled: true
+hard_lines:
+  enabled: true
+  llm: {backend: claude, claude_model: claude-sonnet-5-5, claude_tools: WebSearch, timeout_s: 1800}
