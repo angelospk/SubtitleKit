@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
@@ -52,6 +53,13 @@ OPENCODE_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open
 OPENCODE_TEXT_ONLY = "Do not use any tools: answer directly in text.\n\n"
 
 
+_RATE_LIMIT_RE = re.compile(r"\brate[ _-]?limit|\btoo many requests", re.IGNORECASE)
+
+
+class RateLimitError(LLMError):
+    """The provider asked to slow down (a structured error event says so); worth a wait and a retry."""
+
+
 @dataclass
 class OpenCodeBackend(LLMBackend):
     """`opencode run` on a private server with the text-only config (OPENCODE_CONFIG), in an empty temp dir.
@@ -65,8 +73,22 @@ class OpenCodeBackend(LLMBackend):
     timeout: float = 300.0
     runner: Runner = field(default=_run, repr=False)
     name: str = "opencode"
+    # The free tier answers parallel runs with a rate limit (E20); wait and try again before failing.
+    rate_limit_waits: Sequence[float] = (30, 90, 240)
+    sleep: Callable[[float], None] = field(default=time.sleep, repr=False)
 
     def complete(self, prompt: str) -> str:
+        for wait in (*self.rate_limit_waits, None):
+            try:
+                return self._complete_once(prompt)
+            except RateLimitError:
+                if wait is None:
+                    raise
+                log.warning("opencode rate limit; waiting %.0f s", wait)
+                self.sleep(wait)
+        raise AssertionError("unreachable")
+
+    def _complete_once(self, prompt: str) -> str:
         # Empty working dir: the OpenCode agent must not see project files. Empty HOME and XDG_CONFIG_HOME: the
         # user's global config and ~/.opencode (agents, plugins, skills, MCP servers, allow rules) must not merge
         # into the text-only one. Data, cache and state stay the user's own (login, downloaded binaries).
@@ -104,7 +126,9 @@ def parse_opencode_json(stdout: str) -> str:
         except json.JSONDecodeError:
             continue
         if event.get("type") == "error":
-            raise LLMError(f"opencode error event: {str(event)[:300]}")
+            err = event.get("error") if isinstance(event.get("error"), dict) else {}
+            limited = err.get("status") == 429 or _RATE_LIMIT_RE.search(str(err.get("message", "")))
+            raise (RateLimitError if limited else LLMError)(f"opencode error event: {str(event)[:300]}")
         part = event.get("part") or {}
         if event.get("type") == "text" and isinstance(part.get("text"), str):
             parts.append(part["text"])

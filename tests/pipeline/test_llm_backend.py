@@ -348,3 +348,43 @@ def test_claude_cli_backend_passes_effort_when_set():
     assert "--effort" not in plain and opus[opus.index("--effort") + 1] == "medium"
     b = make_backend({"backend": "claude", "claude_model": "claude-opus-5-5", "claude_effort": "medium"})
     assert b.effort == "medium" and make_backend({"backend": "claude"}).effort == ""
+
+
+QUOTA_STDOUT = ('{"type":"error","error":{"type":"provider.quota","message":"Rate limit exceeded. Please try again"}}')
+
+
+def test_opencode_backend_waits_and_retries_on_a_rate_limit():
+    # E20: parallel runs hit the free tier's rate limit; every failed check reverted a right fix.
+    outs = [QUOTA_STDOUT, QUOTA_STDOUT, OPENCODE_STDOUT]
+    waits = []
+
+    def run(argv, cwd, timeout):
+        return subprocess.CompletedProcess(argv, 0, stdout=outs.pop(0), stderr="")
+
+    backend = OpenCodeBackend(runner=run, sleep=waits.append)
+    assert backend.complete("hi") == '{"1": "Γεια"}'
+    assert waits == [30, 90]
+
+
+def test_opencode_backend_gives_up_after_the_last_wait_and_does_not_retry_other_errors():
+    waits = []
+    backend = OpenCodeBackend(runner=fake_runner(QUOTA_STDOUT), sleep=waits.append)
+    with pytest.raises(LLMError, match="provider.quota"):
+        backend.complete("hi")
+    assert waits == [30, 90, 240]
+    waits.clear()
+    with pytest.raises(LLMError):
+        OpenCodeBackend(runner=fake_runner("", returncode=1), sleep=waits.append).complete("hi")
+    assert waits == []
+
+
+def test_opencode_backend_retries_only_a_structured_rate_limit():
+    long_meta = '{"type":"error","sessionID":"' + "x" * 400 + '","error":{"type":"provider","status":429,"message":"slow"}}'
+    other_quota = '{"type":"error","error":{"type":"provider.quota","message":"Monthly quota used up"}}'
+    meta_only = '{"type":"error","note":"rate limit docs","error":{"type":"provider","message":"bad request"}}'
+    param = '{"type":"error","error":{"type":"provider","message":"Unknown parameter: generate_limit"}}'
+    for stdout, waited in ((long_meta, [30, 90, 240]), (other_quota, []), (meta_only, []), (param, [])):
+        waits = []
+        with pytest.raises(LLMError):
+            OpenCodeBackend(runner=fake_runner(stdout), sleep=waits.append).complete("hi")
+        assert waits == waited, stdout[:60]

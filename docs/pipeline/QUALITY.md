@@ -319,3 +319,18 @@ Also seen: "Purple rain" (song) and "Dungeon Master" kept in English count
 as untranslated (blocks auto-approval only).
 
 E20 (`cfg-Fhyb5.yaml` = E19 config on this code): all 3 films.
+
+## E19 and the rate limit (2026-10-15 07:30)
+
+- E19 Kumail (select_also_hard): 1.06 (8.5). Noticeable errors at the Lopus3
+  level for the first time with free models. Opus changed 52 hard lines.
+- 4 chains in parallel hit the OpenCode free tier's rate limit
+  ("provider.quota: Rate limit exceeded"). Every failed fidelity check
+  reverted a fix: E20 Euphoria hard lines changed 0 and reverted 41, and its
+  review lost 15 audit batches (2.01 (24.2), invalid). E19's review lost 4
+  batches and changed nothing.
+- The pipeline handled it safely (blockers, no auto-approval).
+- Change: OpenCodeBackend waits 30/90/240 s and retries a structured rate
+  limit (error.status 429 or a "rate limit" message). Other errors fail at
+  once. Eval runs now use at most 2 chains.
+- E20 restarted: Kumail then Euphoria in one chain, ST in another.
