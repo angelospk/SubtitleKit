@@ -363,6 +363,7 @@ def run_film(
             rrep.reverted += part.reverted
             rrep.failed_batches += part.failed_batches
             rrep.web_lookups += part.web_lookups
+            rrep.errors += part.errors
         counts = audit.counts()
         report.data["review_pass"] = {"serious": counts[3], "noticeable": counts[2],
                                       "audit_failed_batches": audit.failed_batches,

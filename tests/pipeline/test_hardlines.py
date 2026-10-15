@@ -99,6 +99,10 @@ def test_retranslate_hard_final_n_and_failure():
 
     rep = retranslate_hard(source, ours, {3: "slang"}, [], MockBackend(replies=boom))
     assert [c.text for c in rep.cues] == [c.text for c in ours] and rep.failed_batches == 1
+    assert rep.to_dict()["errors"] == ["down", "down"]  # the reason reaches the report (E20 lost it)
+    long = retranslate_hard(source, ours, {3: "slang"}, [], MockBackend(replies=lambda p: (_ for _ in ()).throw(
+        LLMError("x" * 1000))))
+    assert [len(e) for e in long.errors] == [300, 300]
 
 
 def test_retranslate_hard_keeps_the_capital_first_letter():
@@ -135,6 +139,7 @@ def test_retranslate_hard_retries_a_failed_batch_as_two_halves():
     rep = retranslate_hard(source, ours, {2: "idiom", 3: "slang"}, [], MockBackend(replies=reply), batch=40)
     assert len(calls) == 3  # full batch, then one half each
     assert [c["cue"] for c in rep.changed] == [2, 3] and rep.failed_batches == 0
+    assert rep.errors == ["stream interrupted"]  # kept even though the halves then succeeded
 
     def boom(prompt):
         raise LLMError("down")

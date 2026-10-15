@@ -616,6 +616,23 @@ def test_review_pass_escalate_without_a_hard_lines_model_uses_the_main_model(tmp
     assert len(fixes(main)) == 1 and not fixes(reviewer)
 
 
+def test_review_pass_report_keeps_the_fixers_error_text(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You audit Greek subtitles"):
+            return json.dumps({"4": {"sev": 3, "kind": "joke", "why": "pun lost"}}, ensure_ascii=False)
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            raise LLMError("quota reached")
+        return base.replies(prompt)
+
+    main = MockBackend(replies=reply, name="test-llm")
+    run_film(str(film), cfg(review_pass={"enabled": True}), main, str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert rep["review_pass"]["failed_batches"] == 1 and rep["review_pass"]["errors"] == ["quota reached"] * 2
+
+
 def test_review_pass_failures_and_unfixed_serious_errors_block_auto_approval(tmp_path):
     film = make_film(tmp_path)
     base = greek_backend()

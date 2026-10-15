@@ -48,11 +48,12 @@ class HardReport:
     reverted: List[Tuple[int, str]] = field(default_factory=list)
     failed_batches: int = 0
     web_lookups: int = 0  # lines the model says it searched the web for, kept or not
+    errors: List[str] = field(default_factory=list)  # why retranslation calls failed (timeout, quota, bad JSON)
 
     def to_dict(self) -> Dict[str, Any]:
         return {"selected": len(self.selected), "changed": len(self.changed), "rejected": len(self.rejected),
                 "reverted": len(self.reverted), "failed_batches": self.failed_batches,
-                "web_lookups": self.web_lookups,
+                "web_lookups": self.web_lookups, "errors": self.errors,
                 "items": self.changed, "rejected_items": [list(x) for x in self.rejected],
                 "reverted_items": [list(x) for x in self.reverted]}
 
@@ -171,7 +172,8 @@ def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int,
                                                payload=json.dumps(items, ensure_ascii=False, indent=0))
             try:
                 data = extract_json(backend.complete(prompt))
-            except LLMError:
+            except LLMError as exc:
+                rep.errors.append(str(exc)[:300])
                 data = None
             if not isinstance(data, dict):
                 forget(backend, prompt)
