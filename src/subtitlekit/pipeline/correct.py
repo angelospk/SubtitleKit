@@ -140,7 +140,7 @@ def check_correction(before: str, after: str, allowed_chars: int, known_names: S
     for p in PRONOUNS:
         if _count(p, a) > _count(p, b):
             problems.append(f"pronoun added: {p}")
-    added = (validators._names(after) - validators._names(before)) | {
+    added = (validators._names(after, validators.NAME_ADDED_RE) - validators._names(before)) | {
         n for n in known_names if _name_count(n, a) > _name_count(n, b)}
     if added:
         problems.append("names added: " + ", ".join(sorted(added)))

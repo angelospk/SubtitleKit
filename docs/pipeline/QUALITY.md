@@ -244,3 +244,24 @@ rate by a quarter.
 Next (running): E15 = Kumail with 100-cue translate chunks (big-pickle
 truncated 300-cue chunks); E16 = Ffree2b plus Opus 5.5 medium (WebSearch)
 only for the hard lines (`cfg-Fhyb.yaml`), Kumail then Euphoria.
+
+## E15 / E16 results (Kumail)
+
+| Run | Kumail |
+|---|---|
+| E15 Fspark100: spark translates, 100-cue chunks | 3.19 (20.2) |
+| E15 Fpickle100: pickle translates, 100-cue chunks | 4.26 (25.5) |
+| E16 Fhyb: Ffree2b + Opus hard lines | 3.19 (16.0), all 3 are puns |
+| Ffree2b (300-cue chunks), for comparison | 2.13 (16.0) |
+
+- Smaller chunks do not help: the translator sees less context and both
+  free models got worse. 300-cue chunks stay.
+- E16 showed why the hybrid did not help. Opus fixed the "high" pun in the
+  hard lines ("Εσύ πετάς ψηλά"), but check_correction rejected it as
+  "names added: Εσύ", a capitalised word after an opening quote. The pickle
+  review pass found the "chalant" pun but pickle's own fix lost it again.
+- Fixes: `NAME_ADDED_RE` (the added-names check skips sentence starts after
+  ; … : and an opening quote; the lost-names check keeps the wider regex),
+  and `review_pass.escalate` (serious review findings are fixed by the
+  hard-lines model, noticeable ones by the reviewer).
+- E17 (running): `cfg-Fhyb2.yaml` = Fhyb + escalate, Kumail then Euphoria.

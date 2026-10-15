@@ -534,6 +534,59 @@ def test_review_pass_audits_every_cue_and_retranslates_the_serious_ones(tmp_path
     assert DEFAULTS["review_pass"]["enabled"] is False
 
 
+def test_review_pass_escalate_sends_serious_fixes_to_the_hard_lines_model(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You audit Greek subtitles"):
+            return json.dumps({"4": {"sev": 3, "kind": "joke", "why": "pun lost"},
+                               "5": {"sev": 2, "kind": "unnatural", "why": "calque"}}, ensure_ascii=False)
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            if "pun lost" in prompt:
+                assert "calque" not in prompt
+                return json.dumps({"4": {"meaning": "m", "el": "Γραμμή 4, φίλε.", "web": False}}, ensure_ascii=False)
+            assert "calque" in prompt
+            return json.dumps({"5": {"meaning": "m", "el": "Γραμμή 5, φίλε.", "web": False}}, ensure_ascii=False)
+        if prompt.startswith("You find hard subtitle lines"):
+            return "{}"
+        return base.replies(prompt)
+
+    reviewer = MockBackend(replies=reply, name="test-review")
+    hard = MockBackend(replies=reply, name="test-hard")
+    main = MockBackend(replies=reply, name="test-llm")
+    run_film(str(film), cfg(review_pass={"enabled": True, "min_sev": 2, "escalate": True}, hard_lines={"enabled": True}),
+             main, str(tmp_path / "out"), log=lambda m: None, review_backend=reviewer, hard_backend=hard)
+    fixes = lambda b: [p for p in b.prompts if p.startswith("You retranslate hard subtitle lines") and
+                       ("pun lost" in p or "calque" in p)]
+    assert len(fixes(hard)) == 1 and "pun lost" in fixes(hard)[0]
+    assert len(fixes(reviewer)) == 1 and "calque" in fixes(reviewer)[0]
+    rep = read_report(tmp_path / "out")
+    assert rep["review_pass"]["changed"] == 2
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Γραμμή 4, φίλε." in srt and "Γραμμή 5, φίλε." in srt
+    assert DEFAULTS["review_pass"]["escalate"] is False
+
+
+def test_review_pass_escalate_without_a_hard_lines_model_uses_the_main_model(tmp_path):
+    film = make_film(tmp_path)
+    base = greek_backend()
+
+    def reply(prompt):
+        if prompt.startswith("You audit Greek subtitles"):
+            return json.dumps({"4": {"sev": 3, "kind": "joke", "why": "pun lost"}}, ensure_ascii=False)
+        if prompt.startswith("You retranslate hard subtitle lines"):
+            return json.dumps({"4": {"meaning": "m", "el": "Γραμμή 4, φίλε.", "web": False}}, ensure_ascii=False)
+        return base.replies(prompt)
+
+    reviewer = MockBackend(replies=reply, name="test-review")
+    main = MockBackend(replies=reply, name="test-llm")
+    run_film(str(film), cfg(review_pass={"enabled": True, "escalate": True}), main, str(tmp_path / "out"),
+             log=lambda m: None, review_backend=reviewer)
+    fixes = lambda b: [p for p in b.prompts if p.startswith("You retranslate hard subtitle lines")]
+    assert len(fixes(main)) == 1 and not fixes(reviewer)
+
+
 def test_review_pass_failures_and_unfixed_serious_errors_block_auto_approval(tmp_path):
     film = make_film(tmp_path)
     base = greek_backend()

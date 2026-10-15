@@ -78,3 +78,7 @@ def test_check_line_rejects_meaning_changes():
     assert "question mark lost" in check_line("Πού πας τόσο αργά το βράδυ;?", "Πού πας.")
     assert "empty" in check_line("Γεια.", "  ")
     assert "dialogue dash lost" in check_line("- Ναι, αμέσως.\n- Ωραία, πάμε.", "Ναι.\nΠάμε.")
+
+
+def test_check_line_still_sees_a_name_lost_after_an_opening_quote():
+    assert any(p.startswith("names lost") for p in check_line("«Νέιτ, έλα εδώ αμέσως τώρα.", "«Έλα εδώ τώρα."))

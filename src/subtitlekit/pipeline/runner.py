@@ -22,7 +22,7 @@ from .glossary import build_glossary, check_glossary, load_glossary
 from .captions import find_captions, insert_captions, translate_captions
 from .correct import correct_translation
 from .audit import audit_cues
-from .hardlines import retranslate_hard, select_hard_lines
+from .hardlines import HardReport, retranslate_hard, select_hard_lines
 from .fixes import FixConfig, check_translation, qa_translation, run_fixes
 from .llm import LLMBackend
 from .metrics import Limits, compute_metrics
@@ -340,9 +340,26 @@ def run_film(
         audit = audit_cues(source, tr.cues, reviewer, batch=rcfg["batch"], source_lang=src_name)
         bad = {i: f"{it.kind}: {it.why}" + (f" (a reviewer suggests: {it.better})" if it.better else "")
                for i, it in audit.items.items() if it.sev >= rcfg["min_sev"]}
-        rrep = retranslate_hard(source, tr.cues, bad, tracks, reviewer, checker=backend, budgets=budgets,
-                                known_names=known_names, max_langs=hcfg.get("max_langs", 6),
-                                batch=hcfg.get("batch", 40), source_lang=src_name, target_lang=tgt_name)
+        # escalate: the serious findings go to the hard-lines model (a cheap reviewer finds a lost pun but
+        # cannot fix it); the noticeable ones stay with the reviewer.
+        groups = [(bad, reviewer)]
+        if rcfg.get("escalate"):
+            groups = [({i: r for i, r in bad.items() if audit.items[i].sev == 3}, hard_backend or backend),
+                      ({i: r for i, r in bad.items() if audit.items[i].sev < 3}, reviewer)]
+        rrep = HardReport(cues=tr.cues)
+        for chosen_bad, fixer in groups:
+            if not chosen_bad:
+                continue
+            part = retranslate_hard(source, rrep.cues, chosen_bad, tracks, fixer, checker=backend, budgets=budgets,
+                                    known_names=known_names, max_langs=hcfg.get("max_langs", 6),
+                                    batch=hcfg.get("batch", 40), source_lang=src_name, target_lang=tgt_name)
+            rrep.cues = part.cues
+            rrep.selected.update(part.selected)
+            rrep.changed += part.changed
+            rrep.rejected += part.rejected
+            rrep.reverted += part.reverted
+            rrep.failed_batches += part.failed_batches
+            rrep.web_lookups += part.web_lookups
         counts = audit.counts()
         report.data["review_pass"] = {"serious": counts[3], "noticeable": counts[2],
                                       "audit_failed_batches": audit.failed_batches,

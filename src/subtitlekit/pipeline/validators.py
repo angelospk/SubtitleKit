@@ -89,11 +89,14 @@ NEGATIONS = re.compile(
     re.IGNORECASE,
 )
 NAME_RE = re.compile(r"(?<![.!?]\s)(?<!^)(?<!-\s)\b([A-ZΑ-ΩΆΈΉΊΌΎΏ][a-zα-ωάέήίόύώϊϋΐΰς]{2,})")
+# For "a name was added" also skip sentence starts after ; (Greek question mark) … : and an opening quote, so
+# «Εσύ ...» is not a new name; NAME_RE stays wider so "a name was lost" still sees «Νέιτ».
+NAME_ADDED_RE = re.compile(r"(?<![.!?;\u037e…:]\s)(?<!^)(?<!-\s)(?<![«“\"'(])\b([A-ZΑ-ΩΆΈΉΊΌΎΏ][a-zα-ωάέήίόύώϊϋΐΰς]{2,})")
 
 
-def _names(text: str) -> set:
+def _names(text: str, regex: "re.Pattern[str]" = NAME_RE) -> set:
     flat = " ".join(line.lstrip("- ").strip() for line in visible_text(text).split("\n"))
-    return set(NAME_RE.findall(flat))
+    return set(regex.findall(flat))
 
 
 def check_line(original: str, changed: str, min_ratio: float = 0.45) -> List[str]:

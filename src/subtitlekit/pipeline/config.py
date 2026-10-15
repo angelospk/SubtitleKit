@@ -67,8 +67,9 @@ DEFAULTS: Dict[str, Any] = {
     # `llm` overrides the backend for the retranslation (e.g. Sonnet with claude_tools: WebSearch).
     "hard_lines": {"enabled": False, "per_batch": 15, "max_langs": 6, "batch": 40, "llm": None},
     # Review pass (quality loop): a reviewer audits every cue (audit.py); cues at min_sev or worse are
-    # retranslated with the hard-lines rules. `llm` overrides the reviewer backend.
-    "review_pass": {"enabled": False, "min_sev": 3, "batch": 150, "llm": None},
+    # retranslated with the hard-lines rules. `llm` overrides the reviewer backend; `escalate` sends the serious
+    # ones to the hard-lines backend instead.
+    "review_pass": {"enabled": False, "min_sev": 3, "batch": 150, "llm": None, "escalate": False},
     "fixes": {
         "min_gap_ms": 84,
         "min_duration_ms": 833,

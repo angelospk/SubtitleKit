@@ -183,3 +183,14 @@ def test_human_mode_fixes_only_clear_errors_of_a_professional_translation():
     assert [i for i, r in rep.rejected if "style change" in r] == [1]
     assert "επαγγελματική" in backend.prompts[0]
     assert "επαγγελματική" not in router([]).prompts and "επαγγελματική" not in correction_prompt("{}")
+
+
+def test_check_correction_sentence_start_after_quote_or_greek_question_mark_is_not_a_name():
+    # Kumail E16: Opus's pun fix was rejected as "names added: Εσύ".
+    before = "Τόσο φτιαγμένος, λέω\n«Ψηλά εσύ. Ψηλά εγώ."
+    after = "Τόσο φτιαγμένος, λέω\n«Εσύ πετάς ψηλά. Κι εγώ."
+    assert check_correction(before, after, 60) == []
+    assert check_correction("Τι; Όχι.", "Τι; Δηλαδή όχι.", 30) == []
+    assert check_correction("Είπε: όχι.", "Είπε: Ποτέ όχι.", 30) == []
+    # A real new name inside a sentence is still caught.
+    assert check_correction("«Έλα εδώ τώρα.", "«Έλα εδώ, Νέιτ.", 30) == ["names added: Νέιτ"]
