@@ -350,3 +350,37 @@ Status of the goal (confirmed serious/hour, two judges):
 - Best free hybrid so far: Euphoria 0.0 (E17), Kumail 1.06 (E17, E19),
   ST 0.49 (all free) / 3.92 (E17, before check_retranslation). Not yet one
   config under 1/h on all 3; E20 is that test.
+
+## E20 result (mini PC, 2026-10-15 15:59-22:00)
+
+`cfg-Fhyb5.yaml` on all 3 films, 2 chains, OpenCode free tier open (no rate
+limits this time). Confirmed serious/hour, Sonnet audits, gpt-6.1-sol confirms:
+
+| Run | Euphoria | Kumail | Stranger Things |
+|---|---|---|---|
+| E20 Fhyb5 | 1.01 (13.1) | 1.06 (13.8), run 1: Opus hard lines failed, see below | **1.96** (7.4) |
+| E20 Fhyb5, Kumail run 2 | | 1.06 (19.2): the "high" pun again | |
+| Lopus3 (Q5), for comparison | 0.0 (7.0) | 0.0 (8.5) | 0.98 (6.4) |
+
+- Euphoria: one error in 0.99 h, a grammar slip in cue 585 («Στοιχηματίζω δε
+  τις τρέχεις»). E17 had 0.0 on the same film: run-to-run noise is about one
+  error per film.
+- Stranger Things: 4 confirmed. Two are again lines shifted by one cue from the
+  free translator (1373, 1377), as in E17; two are word choices («καθησυχαστής»
+  for "square", «ζούμερ» left as slang).
+- Kumail run 1: the Opus hard-lines stage failed all 4 batches (0 of 64 lines
+  changed); the same call worked on ST and Euphoria and in a probe after. The
+  error text was swallowed, so `HardReport.errors` now records it. Run 2 (same
+  config, new code): Opus changed 64 of 98 hard lines, 0 failed batches, and
+  the one error left is the "high" pun (cue 97), as in E18. Noticeable errors
+  went up (13.8 to 19.2); the free models vary between runs.
+
+Verdict: the free hybrid does not meet ≤ 1/h on all 3 films. ST misses it by
+2x, from the shifted-block failure that only the free translator shows.
+Lopus3 stays the only config that meets the goal.
+
+Setup note (mini PC): `opencode run --standalone` needs OpenCode v2; the
+GitHub/npm builds stop at 1.19.0. v2 comes from Homebrew (`brew install
+opencode`, 2.0.29 here), and `/home/linuxbrew/.linuxbrew/bin` must come before
+`~/.local/bin` and `~/.opencode/bin` in the run's PATH. With 1.19 every call
+fails at once and translation keeps the English (`0/968 translated`).

@@ -1,4 +1,4 @@
-# Handoff: where the pipeline stands (2026-10-15 15:00)
+# Handoff: where the pipeline stands (2026-10-15 23:00)
 
 Read this first when you resume. Source-of-truth docs: `QUALITY.md` (quality
 loop, E11–E20), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D26),
@@ -34,25 +34,22 @@ fixes an existing Greek file. Upload is dry-run only.
 - `Lopus3` (Opus translate + sol review pass) meets the goal: 0.0 / 0.98 / 0.0
   serious/h on Euphoria / Stranger Things / Kumail.
 
-## Goal still open
+## Goal status
 
-`QUALITY.md` Full Stop: ≤ 1 serious/h on all 3 films, two judges. Met by
-Lopus3 (paid models). The free-model config is not yet under 1/h on all 3:
-best so far Euphoria 0.0, Kumail 1.06, Stranger Things 0.49 (all free) or
-3.92 (before `check_retranslation`). **E20** (`cfg-Fhyb5.yaml`, all 3 films)
-is the test that decides it.
+`QUALITY.md` Full Stop: ≤ 1 serious/h on all 3 films, two judges. Met only
+by Lopus3 (paid models). **E20** (`cfg-Fhyb5.yaml`, best free hybrid) ran on
+the mini PC on 2026-10-15: Euphoria 1.01, Kumail 1.06, Stranger Things 1.96.
+It misses the goal; ST fails on lines shifted by one cue from the free
+translator. Proposed default: **Lopus3** (Harold to confirm, then lock it).
 
 ## Left half-done
 
-1. **E20** (all 3 films, `cfg-Fhyb5`) never finished. It ran on the MacBook
-   from 13:26 on 2026-10-15, stuck in OpenCode free-tier rate limits (waits
-   30/90/240 s), and Harold stopped it at about 15:25. **The mini PC is now the
-   only machine that continues the experiments**; nothing runs on the MacBook.
-   Start E20 from scratch there (see below).
+1. E20 is done (see `QUALITY.md`, "E20 result"). **The mini PC is the only
+   machine that continues the experiments**; nothing runs on the MacBook.
 2. Q4 (which auditor defines "serious") is open; decided only by Harold's
    spot-checks.
-3. Decide the default: paid (Lopus3) or free hybrid (Fhyb5), then rewrite
-   `locked.yaml` (still the Haiku config from E1-E10).
+3. Lock the default: proposed Lopus3 (E20 ruled out Fhyb5). After Harold's
+   go, rewrite `locked.yaml` (still the Haiku config from E1-E10).
 4. Merge `feat/subtitle-pipeline` into `main` (needs Harold's go).
 5. `eval/wait_quota_then_e20.sh` probes the free tier every 30 min, then runs
    E20 serially. It is now in the repo; copy it to
@@ -75,6 +72,9 @@ Layout matches the MacBook, so scripts work unchanged:
 - Check: `.venv/bin/python -m pytest -q` (expect 287 passed).
 - Run E20: `bash docs/pipeline/eval/run_e11.sh Kumail.Nanjiani.2025.Fhyb5 Euphoria.S03E01.Fhyb5 Stranger.Things.S05E08.Fhyb5`
   after `setup_eval.sh`/copy of `*.Lopus` dirs to `*.Fhyb5`, at most 2 chains.
+- OpenCode must be v2 (`--standalone`): `brew install opencode`, and put
+  `/home/linuxbrew/.linuxbrew/bin` first in the run's PATH (inside the
+  `bash -c` of a background chain; `~/.local/bin/opencode` is 1.19.0).
 - LLM access: `claude` CLI, `opencode` (free tier), `agy`, and the agent
   bridge (`~/agent-bridge`) for gpt-6.1-sol. Tokens stay out of the repo.
 - Rules: never upload to OpenSubtitles; tests never call a real LLM; Codex only
@@ -82,7 +82,7 @@ Layout matches the MacBook, so scripts work unchanged:
 
 ## Next step
 
-On the mini PC: `cp docs/pipeline/eval/configs/*.yaml ~/pipeline-demo/eval/`,
-probe the OpenCode free tier with a small request, then run E20 (at most 2
-chains). If the free tier stays limited, decide the default from Lopus3 and
-the best free hybrid so far, and lock it.
+Harold decides the default (proposed: Lopus3, the only config at ≤ 1/h on all
+3 films). Then rewrite `locked.yaml` to it, and merge the branch when he says
+so. A free config would need a fix for the shifted-block failure in the free
+translator first (E17, E20 ST).
