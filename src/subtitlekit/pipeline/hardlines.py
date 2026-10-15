@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .correct import _length, check_change
+from .correct import _length, check_retranslation
 from .fixes import check_translation, reflow_text
 from .greek_style import fix_final_n
 from .llm import LLMBackend, LLMError, extract_json, forget
@@ -196,7 +196,7 @@ def retranslate_hard(source: Sequence[Cue], ours: Sequence[Cue], hard: Dict[int,
                     # The fidelity check skips text equal to its source, so this would pass unchecked.
                     rep.rejected.append((i, "same as the source text"))
                     continue
-                bad = check_change(current[i], new, src[i].text, allowed_for(i), known_names, source_lang)
+                bad = check_retranslation(current[i], new, src[i].text, allowed_for(i), known_names, source_lang)
                 if bad and not length_retry and all(b.startswith("longer than allowed") for b in bad):
                     too_long[i] = new
                     continue

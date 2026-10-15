@@ -168,6 +168,35 @@ def check_change(before: str, after: str, source: str, allowed_chars: int, known
     return bad
 
 
+# Greek clitic -> the English words of the same person that justify it in a retranslation.
+_EN_PERSON = {"μου": "me|my|mine|myself", "σου": "you|your|yours|yourself", "σας": "you|your|yours|yourselves",
+              "του": "him|his|himself|it|its|itself", "της": "her|hers|herself", "μας": "us|our|ours|ourselves",
+              "τους": "them|their|theirs|themselves"}
+
+
+def check_retranslation(before: str, after: str, source: str, allowed_chars: int, known_names: Sequence[str] = (),
+                        source_lang: str = "English") -> List[str]:
+    """check_change for a whole new line (hard lines, review fixes), not a small correction: a question, names
+    and pronouns that the source has are a fix, not an addition (E17: a shifted block was retranslated right
+    and rejected against the wrong Greek it replaced). The correction pass keeps Harold's strict rules."""
+    bad = check_change(before, after, source, allowed_chars, known_names, source_lang)
+    src_text, a = visible_text(source), visible_text(after)
+    if _questions(a) >= src_text.count("?"):
+        bad = [b for b in bad if b != "question mark lost"]
+    # The English regexes only: other sources keep the strict rules.
+    if source_lang == "English":
+        # Counts, not identities: the fidelity recheck that follows every retranslation checks which names.
+        # A declined known name (Νίκο / Νίκος) counts once: a known name adds to the count only if no name
+        # found by the regex is a form of it.
+        found = validators._names(after, validators.NAME_ADDED_RE)
+        extra = [n for n in known_names if _name_count(n, a) and not any(_name_count(n, f) for f in found)]
+        if len(found) + len(extra) <= len(validators._names(src_text)):
+            bad = [b for b in bad if not b.startswith("names added")]
+        bad = [b for b in bad if not (b.startswith("pronoun added: ") and _count(b[15:], a) <= len(
+            re.findall(rf"\b(?:{_EN_PERSON.get(b[15:], '(?!)')})\b", src_text, re.I)))]
+    return bad
+
+
 @dataclass
 class Applied:
     cue: int

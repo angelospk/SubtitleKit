@@ -299,3 +299,23 @@ only for the hard lines (`cfg-Fhyb.yaml`), Kumail then Euphoria.
 - Change: `hard_lines.select_also_hard`: the hard-lines model also picks hard
   lines, merged with the main model's picks.
 - E19 (`cfg-Fhyb4.yaml` = E18 + select_also_hard): Kumail.
+
+## E17 Stranger Things and check_retranslation
+
+E17 ST: 3.92 (7.85). 5 of the 8 confirmed errors were one shifted block
+from the translator (cues 575-598, each Greek line one cue off). The
+fidelity check found it and Opus retranslated it right, but 5 fixes were
+rejected against the wrong Greek they replaced ("pronoun added: σου" for
+"You took me in", "names added: Σάρα" for "And I'm not Sara", "question mark
+lost" where the source has none).
+
+Change: `check_retranslation` (hard lines and review fixes only) judges a
+question, names (by count) and pronouns (by person) against the source. The
+correction pass keeps Harold's strict rules (never add pronouns or names).
+Name identity is left to the per-cue fidelity recheck that follows every
+retranslation.
+
+Also seen: "Purple rain" (song) and "Dungeon Master" kept in English count
+as untranslated (blocks auto-approval only).
+
+E20 (`cfg-Fhyb5.yaml` = E19 config on this code): all 3 films.

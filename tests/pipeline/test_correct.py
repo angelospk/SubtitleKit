@@ -1,6 +1,7 @@
 import json
 
-from subtitlekit.pipeline.correct import apply_correction, check_correction, correct_translation, correction_prompt
+from subtitlekit.pipeline.correct import (apply_correction, check_change, check_correction, check_retranslation,
+                                          correct_translation, correction_prompt)
 from subtitlekit.pipeline.fixes import Flag
 from subtitlekit.pipeline.llm import LLMError, MockBackend
 from subtitlekit.pipeline.srt import Cue
@@ -194,3 +195,23 @@ def test_check_correction_sentence_start_after_quote_or_greek_question_mark_is_n
     assert check_correction("Είπε: όχι.", "Είπε: Ποτέ όχι.", 30) == []
     # A real new name inside a sentence is still caught.
     assert check_correction("«Έλα εδώ τώρα.", "«Έλα εδώ, Νέιτ.", 30) == ["names added: Νέιτ"]
+
+
+def test_check_retranslation_judges_names_pronouns_and_questions_by_the_source():
+    # E17 ST: a shifted block was retranslated right, but rejected against the wrong Greek it replaced.
+    assert check_retranslation("Με προστάτεψες.", "Με πήρες κοντά σου.", "You took me in.", 40) == []
+    assert check_retranslation("Έγινες πατέρας μου.", "Και δεν είμαι η Σάρα.", "And I'm not Sara.", 40) == []
+    assert check_retranslation("Και μετά τι;", "Φοβόμουν.", "I was scared.", 40) == []
+    # Not in the source: still rejected.
+    assert check_retranslation("Έλα εδώ.", "Έλα εδώ, Νέιτ.", "Come here.", 40) == ["names added: Νέιτ"]
+    assert check_retranslation("Πάρε το.", "Πάρε το δικό σου.", "Take it.", 40) == ["pronoun added: σου"]
+    assert check_retranslation("Ήρθες;", "Ήρθες.", "You came?", 40) == ["question mark lost"]
+    # Pronouns by person; a declined known name counts once; possessives and reflexives.
+    assert check_retranslation("Ήρθες.", "Ήρθες σπίτι μου.", "You came home.", 40) == ["pronoun added: μου"]
+    assert check_retranslation("Είναι.", "Είναι δικό της.", "It is hers.", 40) == []
+    assert check_retranslation("Ρώτα τον.", "Ρώτα τον Νίκο.", "Ask Nick.", 40, known_names=["Νίκος"]) == []
+    assert check_retranslation("Ναι.", "Νίκο, ήρθε η Σάρα.", "Yes, Sara came.", 40, known_names=["Νίκος"]) != []
+    assert check_retranslation("Τον είδε.", "Είδε τον εαυτό του.", "He saw himself.", 40) == []
+    # The correction pass (small edits) keeps Harold's strict rules.
+    assert check_change("Με προστάτεψες.", "Με πήρες κοντά σου.", "You took me in.", 40) == ["pronoun added: σου"]
+    assert check_change("Έγινες πατέρας μου.", "Και δεν είμαι η Σάρα.", "And I'm not Sara.", 40) == ["names added: Σάρα"]
