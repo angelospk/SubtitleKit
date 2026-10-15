@@ -334,3 +334,19 @@ E20 (`cfg-Fhyb5.yaml` = E19 config on this code): all 3 films.
   limit (error.status 429 or a "rate limit" message). Other errors fail at
   once. Eval runs now use at most 2 chains.
 - E20 restarted: Kumail then Euphoria in one chain, ST in another.
+
+## Free-tier quota (2026-10-15 07:30-09:30)
+
+After a night of runs, the OpenCode free tier rate-limited both free models
+for the whole account. A tiny probe passed at 08:52, but 300-cue
+translation chunks stayed limited even after the 30/90/240 s waits, so E20
+was stopped before it could finish. A waiter (`eval/scripts/wait_quota_then_e20.sh`,
+not in the repo) probes every 30 min with a chunk-sized request and then runs
+E20 serially (Kumail, Euphoria, ST).
+
+Status of the goal (confirmed serious/hour, two judges):
+- Lopus3 (Opus translate + sol review): 0.0 / 0.98 / 0.0. Meets <= 1/h on
+  all 3 films.
+- Best free hybrid so far: Euphoria 0.0 (E17), Kumail 1.06 (E17, E19),
+  ST 0.49 (all free) / 3.92 (E17, before check_retranslation). Not yet one
+  config under 1/h on all 3; E20 is that test.
