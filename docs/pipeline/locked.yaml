@@ -1,4 +1,6 @@
-# Final locked pipeline (E1-E10): Haiku 5.5 for every stage except the hard-lines retranslation (Sonnet 5.5 + web search).
+# Locked pipeline (D27, 2026-10-16): Lopus3. Opus 5.5 translates, gpt-6.1-sol reviews every cue.
+# Only config at <= 1 serious error/hour on all 3 eval films (0.0 / 0.98 / 0.0, QUALITY.md Q5, E20).
+# The review pass needs the agent bridge (~/agent-bridge) for gpt-6.1-sol.
 llm:
   backend: claude
   claude_model: claude-haiku-5-5
@@ -7,8 +9,14 @@ llm:
 style_rules: true
 translate:
   chunk_size: 300
+  llm: {backend: claude, claude_model: claude-opus-5-5, claude_effort: medium, timeout_s: 1800}
 glossary:
   enabled: true
 hard_lines:
   enabled: true
   llm: {backend: claude, claude_model: claude-sonnet-5-5, claude_tools: WebSearch, timeout_s: 1800}
+review_pass:
+  enabled: true
+  min_sev: 3
+  batch: 75
+  llm: {backend: bridge, bridge_model: gpt-6.1-sol, bridge_effort: medium, timeout_s: 2400}

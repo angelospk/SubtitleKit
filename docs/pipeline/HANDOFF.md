@@ -40,7 +40,7 @@ fixes an existing Greek file. Upload is dry-run only.
 by Lopus3 (paid models). **E20** (`cfg-Fhyb5.yaml`, best free hybrid) ran on
 the mini PC on 2026-10-15: Euphoria 1.01, Kumail 1.06, Stranger Things 1.96.
 It misses the goal; ST fails on lines shifted by one cue from the free
-translator. Proposed default: **Lopus3** (Harold to confirm, then lock it).
+translator. Locked default: **Lopus3** (D27, 2026-10-16).
 
 ## Left half-done
 
@@ -48,8 +48,7 @@ translator. Proposed default: **Lopus3** (Harold to confirm, then lock it).
    machine that continues the experiments**; nothing runs on the MacBook.
 2. Q4 (which auditor defines "serious") is open; decided only by Harold's
    spot-checks.
-3. Lock the default: proposed Lopus3 (E20 ruled out Fhyb5). After Harold's
-   go, rewrite `locked.yaml` (still the Haiku config from E1-E10).
+3. Done 2026-10-16: `locked.yaml` is Lopus3 (D27, Harold's go).
 4. Merge `feat/subtitle-pipeline` into `main` (needs Harold's go).
 5. `eval/wait_quota_then_e20.sh` probes the free tier every 30 min, then runs
    E20 serially. It is now in the repo; copy it to

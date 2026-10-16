@@ -645,3 +645,17 @@ Details: `EXPERIMENTS.md` E7 and Final.
   (`agy`: Gemini 3.8 Flash / GPT-OSS through the Antigravity CLI;
   `bridge`: Codex models through agent-bridge, for comparisons only).
 - Locked config: `docs/pipeline/locked.yaml`.
+
+## D27: Lopus3 is the locked pipeline (2026-10-16)
+
+Details: `QUALITY.md` Q5 and "E20 result".
+
+- `locked.yaml` is now Lopus3: Opus 5.5 (effort medium) translates, Haiku
+  5.5 runs the other stages, Sonnet 5.5 + web search retranslates hard
+  lines, gpt-6.1-sol (agent bridge) reviews every cue and serious findings
+  are retranslated.
+- Why: the only config at ≤ 1 confirmed serious error/hour on all 3 eval
+  films (0.0 / 0.98 / 0.0, two judges). The best free hybrid (E20, Fhyb5)
+  scored 1.01 / 1.06 / 1.96.
+- Harold confirmed the choice on 2026-10-16. It replaces the D26 Haiku
+  config; the built-in defaults (`init-config`) do not change.
