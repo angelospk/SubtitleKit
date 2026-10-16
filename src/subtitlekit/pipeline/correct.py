@@ -172,6 +172,8 @@ def check_change(before: str, after: str, source: str, allowed_chars: int, known
 _EN_PERSON = {"μου": "me|my|mine|myself", "σου": "you|your|yours|yourself", "σας": "you|your|yours|yourselves",
               "του": "him|his|himself|it|its|itself", "της": "her|hers|herself", "μας": "us|our|ours|ourselves",
               "τους": "them|their|theirs|themselves"}
+_EN_EXCLAIM = r"\b(?:jesus|christ|god|lord|gosh)\b"
+_EL_EXCLAIM = re.compile(r"(?<!\w)(?:Θεέ|Χριστέ|Κύριε|Παναγία)\s+μου(?!\w)", re.I)
 
 
 def check_retranslation(before: str, after: str, source: str, allowed_chars: int, known_names: Sequence[str] = (),
@@ -183,6 +185,10 @@ def check_retranslation(before: str, after: str, source: str, allowed_chars: int
     src_text, a = visible_text(source), visible_text(after)
     if _questions(a) >= src_text.count("?"):
         bad = [b for b in bad if b != "question mark lost"]
+    # Latin words copied from the source (a title, "Dungeon Master") inside a Greek line (E20 ST).
+    latin = set(re.findall(r"[A-Za-z]+", a))
+    if any(ch.isalpha() for ch in re.findall(r"[\u0370-\u03ff\u1f00-\u1fff]", a)) and all(_count(w, a) <= _count(w, src_text) for w in latin):
+        bad = [b for b in bad if b != "latin letters added"]
     # The English regexes only: other sources keep the strict rules.
     if source_lang == "English":
         # Counts, not identities: the fidelity recheck that follows every retranslation checks which names.
@@ -192,8 +198,12 @@ def check_retranslation(before: str, after: str, source: str, allowed_chars: int
         extra = [n for n in known_names if _name_count(n, a) and not any(_name_count(n, f) for f in found)]
         if len(found) + len(extra) <= len(validators._names(src_text)):
             bad = [b for b in bad if not b.startswith("names added")]
-        bad = [b for b in bad if not (b.startswith("pronoun added: ") and _count(b[15:], a) <= len(
-            re.findall(rf"\b(?:{_EN_PERSON.get(b[15:], '(?!)')})\b", src_text, re.I)))]
+        # The μου of «Θεέ μου» / «Χριστέ μου» translates an exclamation the source has (E20 ST: "Jesus");
+        # in "my God" the "my" already counts.
+        exclaims = len(re.findall(_EN_EXCLAIM, src_text, re.I)) - len(re.findall(rf"\bmy\s+{_EN_EXCLAIM}", src_text, re.I))
+        a_mou = _EL_EXCLAIM.sub("", a, count=exclaims) if exclaims > 0 else a  # count=0 would mean all
+        bad = [b for b in bad if not (b.startswith("pronoun added: ") and _count(b[15:], a_mou if b[15:] == "μου" else a)
+                                      <= len(re.findall(rf"\b(?:{_EN_PERSON.get(b[15:], '(?!)')})\b", src_text, re.I)))]
     return bad
 
 

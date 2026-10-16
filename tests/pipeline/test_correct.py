@@ -212,6 +212,24 @@ def test_check_retranslation_judges_names_pronouns_and_questions_by_the_source()
     assert check_retranslation("Ρώτα τον.", "Ρώτα τον Νίκο.", "Ask Nick.", 40, known_names=["Νίκος"]) == []
     assert check_retranslation("Ναι.", "Νίκο, ήρθε η Σάρα.", "Yes, Sara came.", 40, known_names=["Νίκος"]) != []
     assert check_retranslation("Τον είδε.", "Είδε τον εαυτό του.", "He saw himself.", 40) == []
+    # E20 ST: two right fixes of a shifted block were rejected. Latin words the source has, and the
+    # μου of an exclamation the source has (Jesus / God), are a fix, not an addition.
+    dm = "Why do you get to be Dungeon Master?"
+    assert check_retranslation("Θα βρω το εγχειρίδιο.", "Γιατί είσαι εσύ ο Dungeon Master;", dm, 40) == []
+    assert check_retranslation("Ναι.", "Είσαι ο Master Chief;", dm, 40) == ["latin letters added"]
+    assert check_retranslation("Θα βρω το εγχειρίδιο.", "Dungeon Master;", dm, 40) == ["latin letters added"]
+    assert check_retranslation("Θα βρω το εγχειρίδιο.", "Dungeon Master\u037e", dm, 40) == ["latin letters added"]
+    assert check_retranslation("Θα βρω το εγχειρίδιο.", "Dungeon Master\u1fbd;", dm, 40) == ["latin letters added"]
+    assert check_retranslation("Θα βρω το εγχειρίδιο.", "Γιατί Dungeon Master Master;", dm, 40) == ["latin letters added"]
+    jesus = "-Holly, how do we play this game?\n-Jesus, watch out!"
+    assert check_retranslation("Ναι, μόλις τελειώσαμε.", "-Χόλι, πώς παίζεται;\n-Χριστέ μου, πρόσεχε!", jesus, 60) == []
+    assert check_retranslation("Ναι.", "-Θεέ μου, πρόσεχε!", "-Oh, my God, watch out!", 40) == []
+    assert check_retranslation("Ναι.", "-Θεέ μου, πρόσεχε!", "-Watch out!", 40) == ["pronoun added: μου"]
+    assert check_retranslation("Ναι.", "Θεέ μου, το σπίτι μου!", "Oh, my God, the house!", 40) == ["pronoun added: μου"]
+    assert check_retranslation("Ναι.", "Θεέ μου, το σπίτι μου!", "Oh, my\nGod, the house!", 40) == ["pronoun added: μου"]
+    assert check_retranslation("Ναι.", "Θεέ μου, το σπίτι μου!", "Oh, my  God, the house!", 40) == ["pronoun added: μου"]
+    assert check_retranslation("Ναι.", "Χριστέ μου, το σπίτι μου!", "Jesus, the house!", 40) == ["pronoun added: μου"]
+    assert check_change("Ναι.", "-Θεέ μου, πρόσεχε!", "-Oh, my God, watch out!", 40) == ["pronoun added: μου"]
     # The correction pass (small edits) keeps Harold's strict rules.
     assert check_change("Με προστάτεψες.", "Με πήρες κοντά σου.", "You took me in.", 40) == ["pronoun added: σου"]
     assert check_change("Έγινες πατέρας μου.", "Και δεν είμαι η Σάρα.", "And I'm not Sara.", 40) == ["names added: Σάρα"]
