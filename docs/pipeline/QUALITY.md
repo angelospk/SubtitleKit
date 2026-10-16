@@ -384,3 +384,30 @@ GitHub/npm builds stop at 1.19.0. v2 comes from Homebrew (`brew install
 opencode`, 2.0.29 here), and `/home/linuxbrew/.linuxbrew/bin` must come before
 `~/.local/bin` and `~/.opencode/bin` in the run's PATH. With 1.19 every call
 fails at once and translation keeps the English (`0/968 translated`).
+
+## E21 result (mini PC, 2026-10-16 04:14-08:11)
+
+`cfg-Fhyb6.yaml` = E20 config on the code where `check_retranslation` accepts
+Latin words and the μου of «Θεέ μου» / «Χριστέ μου» when the source has them
+(E20 ST: the two shifted-block errors left were right Opus fixes rejected for
+"Dungeon Master" and "Jesus"). Confirmed serious/hour, Sonnet audits,
+gpt-6.1-sol confirms:
+
+| Run | Euphoria | Kumail | Stranger Things |
+|---|---|---|---|
+| E20 Fhyb5 | 1.01 (13.1) | 1.06 (19.2) | 1.96 (7.4) |
+| E21 Fhyb6 | 1.01 (17.1) | 1.06 (21.3) | **0.0** (10.8) |
+| Lopus3 | 0.0 (7.0) | 0.0 (8.5) | 0.98 (6.4) |
+
+- Stranger Things: no confirmed error left; the shifted block is fixed.
+- Euphoria: one error in 0.99 h, cue 54 "God bless!" -> «Θεός φύλαγε!» (that
+  means "God forbid").
+- Kumail: one error in 0.94 h, the "high" pun (cue 96) for the third run in a
+  row; the hard-lines stage does not pick it.
+- Noticeable errors per hour are 2-3x Lopus3's.
+
+Verdict: the free hybrid is now one error per film from the goal (1.01 and
+1.06 against ≤ 1), which is the run-to-run noise. It still misses ≤ 1/h on
+2 of 3 films, so Lopus3 stays the locked default (D27). Fixing the two errors
+one by one would tune the pipeline to these 3 films; the next real test of
+the free hybrid needs a fourth film.

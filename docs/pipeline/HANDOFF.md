@@ -1,7 +1,7 @@
 # Handoff: where the pipeline stands (2026-10-15 23:00)
 
 Read this first when you resume. Source-of-truth docs: `QUALITY.md` (quality
-loop, E11–E20), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D26),
+loop, E11–E20), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D27),
 `EXPERIMENTS.md` (standing lessons), `RUNBOOK.md` (how to run, Greek).
 
 ## What exists
@@ -81,7 +81,7 @@ Layout matches the MacBook, so scripts work unchanged:
 
 ## Next step
 
-Harold decides the default (proposed: Lopus3, the only config at ≤ 1/h on all
-3 films). Then rewrite `locked.yaml` to it, and merge the branch when he says
-so. A free config would need a fix for the shifted-block failure in the free
-translator first (E17, E20 ST).
+Lopus3 is locked (D27). E21 (2026-10-16) fixed the free hybrid's shifted block
+(ST 0.0) but Euphoria 1.01 and Kumail 1.06 stay just over 1/h, one error each.
+Open: merge the branch when Harold says so; Q4 (which judge defines
+"serious") is Harold's call; a fourth film is the next test of the free hybrid.
