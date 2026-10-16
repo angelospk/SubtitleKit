@@ -1,7 +1,7 @@
 # Handoff: where the pipeline stands (2026-10-15 23:00)
 
 Read this first when you resume. Source-of-truth docs: `QUALITY.md` (quality
-loop, E11–E20), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D27),
+loop, E11–E21), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D27),
 `EXPERIMENTS.md` (standing lessons), `RUNBOOK.md` (how to run, Greek).
 
 ## What exists
