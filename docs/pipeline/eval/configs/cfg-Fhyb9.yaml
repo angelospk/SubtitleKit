@@ -1,5 +1,6 @@
 # E23: Fhyb6 with the translator changed to Gemini 3.8 Flash (medium thinking) through agy.
 # Checker (big-pickle), Opus hard lines and review escalation as Fhyb6. Euphoria only, first try.
+# timeout 300 s: agy often ends the stream in ~20 s, then hangs until the timeout (E23 first try lost 30 min per hang).
 llm:
   backend: opencode
   opencode_model: opencode/big-pickle
@@ -8,7 +9,7 @@ llm:
 style_rules: true
 translate:
   chunk_size: 300
-  llm: {backend: agy, agy_model: gemini-3.8-flash-medium, timeout_s: 1800}
+  llm: {backend: agy, agy_model: gemini-3.8-flash-medium, timeout_s: 300}
 glossary:
   enabled: true
 hard_lines:
