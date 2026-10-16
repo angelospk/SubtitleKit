@@ -1,0 +1,24 @@
+# E22: Fhyb6 with the translator changed to the free DeepSeek v4.1 Flash (opencode/deepseek-v4.1-flash-free).
+# Checker (big-pickle), Opus hard lines and review escalation as Fhyb6. Stranger Things only, first try.
+llm:
+  backend: opencode
+  opencode_model: opencode/big-pickle
+  timeout_s: 1200
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 300
+  llm: {backend: opencode, opencode_model: opencode/deepseek-v4.1-flash-free, timeout_s: 1200}
+glossary:
+  enabled: true
+hard_lines:
+  enabled: true
+  select_also_hard: true
+  llm: {backend: claude, claude_model: claude-opus-5-5, claude_effort: medium, claude_tools: WebSearch, timeout_s: 1800}
+correction:
+  llm: null
+review_pass:
+  enabled: true
+  min_sev: 2
+  batch: 75
+  escalate: true

@@ -411,3 +411,37 @@ Verdict: the free hybrid is now one error per film from the goal (1.01 and
 2 of 3 films, so Lopus3 stays the locked default (D27). Fixing the two errors
 one by one would tune the pipeline to these 3 films; the next real test of
 the free hybrid needs a fourth film.
+
+Harold's check of E21 (2026-10-16): both confirmed errors are fine
+(cue 54 «Θεός φύλαγε!» for "God bless!", Kumail cue 96, the "high" pun).
+With his judgement E21 is 0 / 0 / 0 and meets ≤ 1/h on all 3 films. Q4
+data point: the two-judge audit is stricter than Harold. Every line the
+auditor flagged in E21 (65 lines, with the judges' reasons) is in
+`~/pipeline-demo/eval/review/spotcheck-E21.md` (not in git) for his
+spot-check of the noticeable errors.
+
+## E22 result (mini PC, 2026-10-16 13:51-16:46)
+
+`cfg-Fhyb7.yaml` = Fhyb6 with the translator changed to the free DeepSeek
+v4.1 Flash (`opencode/deepseek-v4.1-flash-free`); big-pickle checks, Opus
+hard lines and review escalation as before. Stranger Things only, as a first
+try. Translation of 1418 cues took about 1 h 40 min. A first run was killed
+by the agent's background time limit in the hard-lines stage; the second run
+was started detached (`setsid nohup`).
+
+| Run | Stranger Things |
+|---|---|
+| E21 Fhyb6 (muse-spark translates) | 0.0 (10.8) |
+| E22 Fhyb7 (DeepSeek translates) | 0.98 (15.2) |
+| Lopus3 | 0.98 (6.4) |
+
+- 2 confirmed in 2.04 h: cue 16, «κι ένα σωρό πράγματα να πάνε καλά» (the
+  "have to" is missing, the line breaks), and cue 1389, «ημίφυλος» for the
+  D&D "halfling".
+- No shifted-block failure. Hard lines: 98 changed of 134 selected.
+- Noticeable errors went up (10.8 to 15.2/h), mostly "unnatural" (16 of 31).
+
+Verdict: DeepSeek v4.1 Flash as translator meets ≤ 1/h on the hardest film
+for the free models, at the Lopus3 level, but with more noticeable errors
+than muse-spark. It is no clear gain over Fhyb6; running it on Euphoria and
+Kumail would tell if it helps on the pun and idiom errors that Fhyb6 left.
