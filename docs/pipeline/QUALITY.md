@@ -469,3 +469,65 @@ by the shared opencode rate limit (three runs used big-pickle at once).
 Verdict: DeepSeek is the better free translator for noticeable errors on
 two films of three, but it misses ≤ 1/h on Kumail (one real non-word) and
 is slow (about 1 h 40 min for 1418 cues). No change to the locked pipeline.
+
+## E23 result: Gemini 3.8 Flash low/medium translator (Euphoria, 2026-10-17)
+
+`cfg-Fhyb8.yaml` / `cfg-Fhyb9.yaml` = Fhyb6 with the translator changed to
+Gemini 3.8 Flash through `agy` (thinking `low` / `medium`). Euphoria only.
+Harold's agy account (pro) had quota; a first account had hit "Individual
+quota reached" (reset in ~115 h).
+
+- agy bug: about every second call ends the stream in ~20 s, then the
+  process hangs until the timeout. With `timeout_s: 1800` the first run
+  needed 2 h for 300 cues; with `timeout_s: 300` the whole translation took
+  under 5 minutes for each model.
+- Low and medium overlapped for ~3 minutes (one medium call), then medium
+  was stopped and restarted after the low translation, so Harold can read
+  the Google quota per model. The low run was restarted once (300 cues
+  translated twice).
+
+| Run | Euphoria |
+|---|---|
+| E21 Fhyb6 (muse-spark) | 1.01 (17.1) |
+| E22 Fhyb7 (DeepSeek) | 1.01 (8.1) |
+| E23 Fhyb8 (Flash low) | 2.01 (3.0) |
+| E23 Fhyb9 (Flash medium) | 10.06 (9.1) |
+| Lopus3 | 0.0 (7.0) |
+
+- Flash low: the fewest noticeable errors of any run so far, but 2
+  confirmed, both over-condensed: cue 312 «το κορυφαίο ίδρυμα
+  ανακουφιστικής» (noun dropped), cue 429 «-Γκέι: περισπασμός? / -Διώχνει ο
+  στρατός,» (meaning lost, Latin "?").
+- Flash medium: a shifted block, cues 219-289 each carry the next cue's
+  Greek. All 10 confirmed errors are in that block; no validator caught it.
+- The three Euphoria runs (Fhyb7/8/9) shared the opencode rate limit for the
+  big-pickle checks. In Fhyb7 all 48 hard lines were reverted because the
+  fidelity recheck failed with opencode errors, so its 1.01 is a degraded run.
+
+Verdict: Flash low is fast and fluent but condenses too hard; Flash medium
+has the shifted-block failure. Neither meets ≤ 1/h on Euphoria.
+
+## E24 result: Lopus3 + film context, the published plot (2026-10-17)
+
+`cfg-Lplot.yaml` = Lopus3 + `film_context` (D28): Sonnet 5.5 + WebSearch
+finds the plot; it goes into the translation prompt (the eval films keep a
+file glossary). Plots found: Euphoria and Stranger Things on Wikipedia
+(episode pages), Kumail on tvinsider.com (a stand-up special, 731 chars).
+
+The first Kumail run hit the Claude session limit at about 04:30 (368 cues
+untranslated, audit 42.6/h, mostly "english"); it is discarded and was rerun
+at 06:25.
+
+| Run | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| Lopus3 | 0.0 (7.0) | 0.98 (6.4) | 0.0 (8.5) |
+| E24 Lplot (+ plot) | 0.0 (10.1) | 0.0 (4.4) | 0.0 (10.6) |
+
+- 0 confirmed serious errors on all three films: the first config at 0/0/0.
+- Noticeable errors: lower on Stranger Things, higher on Euphoria and Kumail.
+  Lopus3 was not rerun, so part of each difference is audit noise (E21 vs
+  E20 showed swings of this size).
+
+Verdict: the plot does not hurt and Lplot is the first 0/0/0 run, but the
+noticeable errors do not show a clear gain. Keep `film_context` optional;
+no change to the locked pipeline without a same-day Lopus3 rerun.
