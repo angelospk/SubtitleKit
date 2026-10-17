@@ -1,0 +1,27 @@
+# E25: Fhyb8 (Gemini 3.8 Flash low via agy) + film_context from the E24 plot.md (no web search), chunk_size 600.
+# timeout 480 s (not 300): a 600-cue reply is twice as long.
+# Checker big-pickle, Opus hard lines, review escalation as Fhyb8. 3 films.
+llm:
+  backend: opencode
+  opencode_model: opencode/big-pickle
+  timeout_s: 1200
+  cache_dir: null
+style_rules: true
+translate:
+  chunk_size: 600
+  llm: {backend: agy, agy_model: gemini-3.8-flash-low, timeout_s: 480}
+glossary:
+  enabled: true
+hard_lines:
+  enabled: true
+  select_also_hard: true
+  llm: {backend: claude, claude_model: claude-opus-5-5, claude_effort: medium, claude_tools: WebSearch, timeout_s: 1800}
+correction:
+  llm: null
+review_pass:
+  enabled: true
+  min_sev: 2
+  batch: 75
+  escalate: true
+film_context:
+  enabled: true

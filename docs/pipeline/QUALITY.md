@@ -531,3 +531,28 @@ at 06:25.
 Verdict: the plot does not hurt and Lplot is the first 0/0/0 run, but the
 noticeable errors do not show a clear gain. Keep `film_context` optional;
 no change to the locked pipeline without a same-day Lopus3 rerun.
+
+## E25 result: Gemini Flash low + plot, chunks of 300 and 600 (2026-10-17)
+
+`cfg-Fplot.yaml` = Fhyb8 (Flash low through agy, big-pickle checker, Opus hard lines, review escalation,
+`min_sev: 2`) + `film_context` from the E24 `plot.md` (copied into the film folder, no web search).
+`cfg-Fplot6.yaml` = the same with `chunk_size: 600` (agy timeout 480 s). Flash translated 600 cues per
+call without a problem.
+
+| Run | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| E23 Fhyb8 (Flash low, no plot) | 2.01 (3.0) | – | – |
+| E25 Fplot (+ plot, 300) | 1.01 (9.1) | 0.0 (12.3) | 3.19 (13.8) |
+| E25 Fplot6 (+ plot, 600) | 0.0 (7.0) | 24.04 (9.8) | 4.26 (13.8) |
+| E24 Lplot (Opus + plot) | 0.0 (10.1) | 0.0 (4.4) | 0.0 (10.6) |
+
+- Fplot6 Stranger Things: a shifted block, cues 1110-1157 each carry the next cue's Greek (48 of the 49
+  confirmed errors). The JSON key check does not catch a shift inside a chunk; bigger chunks shift more.
+- Kumail: Flash loses puns (joke 2/1) on both chunk sizes.
+
+Verdict: Flash low + plot misses ≤ 1/h on Kumail at both sizes; 600-cue chunks need a shift detector.
+
+Harold's review of the pipeline (2026-10-17) after this run: prompts in Greek from his own prompts; no
+compression (no CPS budget, no condense pressure, only "short and natural"); SRT text in, not JSON keys;
+captions before translation; a simpler pipeline (Flash translates, a strong model corrects); keep glossary
+and plot; detect shifted blocks. Next: design the simple pipeline (E26).
