@@ -445,3 +445,27 @@ Verdict: DeepSeek v4.1 Flash as translator meets ≤ 1/h on the hardest film
 for the free models, at the Lopus3 level, but with more noticeable errors
 than muse-spark. It is no clear gain over Fhyb6; running it on Euphoria and
 Kumail would tell if it helps on the pun and idiom errors that Fhyb6 left.
+
+### E22 on all three films (2026-10-16 17:44 to 2026-10-17 04:27)
+
+Kumail finished in the first chain. The first Euphoria run stopped without
+an error in the fidelity check (20:47); the rerun finished at 04:27, slowed
+by the shared opencode rate limit (three runs used big-pickle at once).
+
+| Run | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| E21 Fhyb6 (muse-spark translates) | 1.01 (17.1) | 0.0 (10.8) | 1.06 (21.3) |
+| E22 Fhyb7 (DeepSeek translates) | 1.01 (8.1) | 0.98 (15.2) | 2.13 (13.8) |
+| Lopus3 | 0.0 (7.0) | 0.98 (6.4) | 0.0 (8.5) |
+
+- Euphoria, cue 654: "to fuck me in the ass. And Kurt." → «να με γαμήσουν.
+  Και τον Κερτ.» (plural verb for the zoning board; Kurt made an object).
+- Kumail, cue 96: the "high" pun, the same line Harold judged fine in E21.
+  Cue 239: «άρχισε να χωραεί πίσω», not a Greek word ("backing up").
+- By Harold's E21 standard (the pun is fine), Kumail is 1.06/h.
+- Noticeable errors: much lower than Fhyb6 on Euphoria and Kumail, higher on
+  Stranger Things. Lopus3 stays lowest on all three.
+
+Verdict: DeepSeek is the better free translator for noticeable errors on
+two films of three, but it misses ≤ 1/h on Kumail (one real non-word) and
+is slow (about 1 h 40 min for 1418 cues). No change to the locked pipeline.
