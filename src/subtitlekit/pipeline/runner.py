@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 import yaml
 
 from .analyzer import analyze_film, detect_content_language, discover_candidates
+from .film_context import PLOT_FILE, fetch_plot, load_plot
 from .glossary import build_glossary, check_glossary, load_glossary
 from .captions import find_captions, insert_captions, translate_captions
 from .correct import correct_translation
@@ -138,6 +139,7 @@ def run_film(
     force: bool = False, log: Callable[[str], None] = print,
     translate_backend: Optional[LLMBackend] = None, hard_backend: Optional[LLMBackend] = None,
     review_backend: Optional[LLMBackend] = None, correct_backend: Optional[LLMBackend] = None,
+    context_backend: Optional[LLMBackend] = None,
 ) -> FilmReport:
     film_dir = os.path.abspath(os.path.expanduser(film_dir))
     film = os.path.basename(film_dir)
@@ -232,6 +234,25 @@ def run_film(
     if max_cues:
         source = source[: int(max_cues)]
         report.data["partial"] = True
+    # Film context: the published plot for story and tone; prompts carry it as data only.
+    film_meta = FilmMeta.from_dict(meta)
+    fcfg = cfg["film_context"]
+    if fcfg["enabled"]:
+        ctx, ctx_notes = load_plot(film_dir, fcfg["max_chars"])
+        # Only the film_context backend searches: the main one may have no web search (OpenCode forbids tools).
+        if ctx is None and context_backend is not None:
+            log(f"[{film}] finding the plot")
+            ctx, more = fetch_plot(film_meta, context_backend, fcfg["max_chars"],
+                                   str(meta.get("release", "")), film)
+            ctx_notes += more
+        elif ctx is None and not ctx_notes:
+            ctx_notes = ["film_context: no plot.md and no film_context.llm (needs web search)"]
+        if ctx:
+            film_meta = dataclasses.replace(film_meta, plot=ctx.text)
+            (film_out / PLOT_FILE).write_text(ctx.to_markdown(), encoding="utf-8")
+        report.data["film_context"] = {"origin": ctx.origin if ctx else None, "chars": len(ctx.text) if ctx else 0,
+                                       "source_url": ctx.source_url if ctx else "", "problems": ctx_notes[:5]}
+
     glossary, gloss_notes = None, []
     if meta.get("glossary"):
         gloss_path = os.path.join(film_dir, str(meta["glossary"]))
@@ -245,7 +266,7 @@ def run_film(
     elif cfg["glossary"]["enabled"] and backend:
         log(f"[{film}] building glossary")
         glossary, gloss_notes = build_glossary(
-            source, backend, FilmMeta.from_dict(meta), cfg["target_language"], cfg["glossary"]["max_terms"])
+            source, backend, film_meta, cfg["target_language"], cfg["glossary"]["max_terms"])
     if glossary:
         film_out.mkdir(parents=True, exist_ok=True)
         (film_out / "glossary.json").write_text(
@@ -257,7 +278,7 @@ def run_film(
     log(f"[{film}] translating {len(source)} cues from {chosen.language} with "
         f"{getattr(tr_backend, 'name', None)}")
     tr = translate_cues(
-        source, tr_backend, FilmMeta.from_dict(meta), chosen.language, cfg["target_language"],
+        source, tr_backend, film_meta, chosen.language, cfg["target_language"],
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
         hints=hints, hint_lang=hint_lang, budget_cps=cfg["translate"].get("budget_cps"),
@@ -494,6 +515,9 @@ def render_markdown(d: Dict[str, Any]) -> str:
               f"- Cues: {d['source']['cues']} (partial run)" if d.get("partial") else f"- Cues: {d['source']['cues']}",
               f"- LLM backend: {d['translation']['backend']}, calls: {d['translation']['calls']}, "
               f"untranslated: {len(d['translation']['untranslated'])}",
+              *([f"- Film context: {d['film_context']['origin']}, {d['film_context']['chars']} chars"
+                 + (f", {d['film_context']['source_url']}" if d['film_context']['source_url'] else "")]
+                if "film_context" in d else []),
               *([f"- Glossary: {d['glossary']['origin']}, {d['glossary']['terms']} terms"] if "glossary" in d else []),
               *([f"- Correction: {d['correction']['applied']} applied, {d['correction']['rejected']} rejected, "
                  f"{d['correction']['reverted']} reverted"] if "correction" in d else []),

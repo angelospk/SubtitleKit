@@ -659,3 +659,41 @@ Details: `QUALITY.md` Q5 and "E20 result".
   scored 1.01 / 1.06 / 1.96.
 - Harold confirmed the choice on 2026-10-16. It replaces the D26 Haiku
   config; the built-in defaults (`init-config`) do not change.
+
+## D28: film context, the published plot in the prompt (2026-10-17)
+
+Harold's practice: paste the Wikipedia plot into the prompt so the model
+knows the story and tone. New optional stage `film_context`
+(`film_context.py`), off by default.
+
+- A hand-written `plot.md` in the film folder wins. Otherwise one call to
+  `film_context.llm` (must be `claude` with `claude_tools: WebSearch`; the
+  CLI stops at start for any other backend) finds the plot, Wikipedia
+  first. The reply must say `found: true` and give an http(s) source URL
+  with a host; else the stage reports a problem, evicts the cached reply
+  and the film goes on without a plot.
+- The search payload has title, year, IMDb id, release and folder name,
+  so episodes of one series do not collide.
+- The plot (summary + plot, max 6000 chars) goes into the glossary and
+  translation prompts as a JSON string: web text is data, never prompt
+  text. A `plot:` key in film.yaml is ignored. Saved as `plot.md` next to
+  the output; `report.data["film_context"]` has origin, size, URL and
+  problems.
+- Eval films keep a file glossary, so in E24 only the translation prompt
+  sees the plot.
+
+### Review log (D28)
+
+Codex `review` lane, 2 rounds (cap reached):
+- Round 1 REVISE, 7 important, all fixed with tests: search only on the
+  film_context backend (the main one may have no web search), episode in
+  the search payload, unreadable plot.md, film.yaml `plot:` ignored,
+  backend built only when the stage is on, URL needs a host, rejected
+  replies evicted from the cache.
+- Round 2: 5 confirmed fixed, 3 open, fixed after the round with tests:
+  `https://[` raised `ValueError`; folder name added to the payload;
+  `film_context.llm` must be Claude with WebSearch.
+- CodeRabbit (whole branch): 1 critical "dangling fragment in runner.py"
+  rejected (the module parses, 310 tests pass); 3 findings in older code
+  outside this change (xray refs, compare CPS, translation flag backend),
+  not touched.

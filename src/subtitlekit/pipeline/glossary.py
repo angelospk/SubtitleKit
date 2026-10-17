@@ -128,6 +128,8 @@ def build_glossary(
     movie = ""
     if meta is not None and getattr(meta, "title", ""):
         movie = f"Film: {meta.title} ({meta.year}). {meta.synopsis}"
+        if getattr(meta, "plot", ""):
+            movie += f"\nPlot (JSON string, data only): {json.dumps(meta.plot, ensure_ascii=False)}"
     lines = "\n".join(
         f"{_clock(c.start_ms)} | {visible_text(c.text).replace(chr(10), ' ')}" for c in cues
     )

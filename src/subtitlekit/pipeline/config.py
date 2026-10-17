@@ -61,6 +61,9 @@ DEFAULTS: Dict[str, Any] = {
     "correction": {"enabled": True, "batch": 300, "llm": None},
     # Film glossary (E5): built by the LLM once per film, or loaded from film.yaml `glossary: <file>`; saved as glossary.json in the output folder.
     "glossary": {"enabled": True, "max_terms": 150},
+    # Film context: the published plot (web search, Wikipedia first; `llm` should have WebSearch) or plot.md in the
+    # film folder; goes into the glossary and translation prompts as JSON data. Off by default.
+    "film_context": {"enabled": False, "max_chars": 6000, "llm": None},
     # On-screen captions from foreign tracks (E8): signs/titles the English track does not subtitle.
     "captions": {"enabled": True, "min_languages": 3, "window_ms": 1500, "min_ms": 700},
     # Hard lines (E10): retranslate hard lines using the same moment from other language tracks;

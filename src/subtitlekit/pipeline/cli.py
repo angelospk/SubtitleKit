@@ -58,6 +58,19 @@ def correct_backend_from(cfg) -> Optional[LLMBackend]:
     return make_backend(deep_merge(cfg["llm"], override)) if override else None
 
 
+def context_backend_from(cfg) -> Optional[LLMBackend]:
+    """Backend for the plot search only, from ``film_context.llm`` (merged over ``llm``); None = no web search."""
+    fcfg = cfg.get("film_context", {})
+    override = fcfg.get("llm")
+    if not (fcfg.get("enabled") and override):
+        return None
+    merged = deep_merge(cfg["llm"], override)
+    # Only Claude with WebSearch can look the plot up; other backends forbid tools and would guess.
+    if merged.get("backend") != "claude" or "WebSearch" not in str(merged.get("claude_tools") or ""):
+        raise SystemExit("film_context.llm needs backend: claude with claude_tools: WebSearch")
+    return make_backend(merged)
+
+
 def hard_backend_from(cfg) -> Optional[LLMBackend]:
     """Backend for the hard-lines retranslation only, from ``hard_lines.llm`` (merged over ``llm``); None = use the main one."""
     override = cfg.get("hard_lines", {}).get("llm")
@@ -117,13 +130,15 @@ def cmd_run(args):
     hard_backend = None if mocked else hard_backend_from(cfg)
     review_backend = None if mocked else review_backend_from(cfg)
     correct_backend = None if mocked else correct_backend_from(cfg)
+    context_backend = None if mocked else context_backend_from(cfg)
     print(f"LLM backend: {getattr(backend, 'name', 'none')}  output: {out}", flush=True)
     failed = []
     for film in films:
         try:
             rep = run_film(film, cfg, backend, out, force=args.force, log=lambda m: print(m, flush=True),
                            translate_backend=translate_backend, hard_backend=hard_backend,
-                           review_backend=review_backend, correct_backend=correct_backend)
+                           review_backend=review_backend, correct_backend=correct_backend,
+                           context_backend=context_backend)
         except Exception as exc:  # one broken film must not stop the batch
             failed.append(film)
             print(f"==> {os.path.basename(film)}: ERROR {type(exc).__name__}: {exc}", flush=True)
