@@ -145,6 +145,9 @@ def run_film(
     review_backend: Optional[LLMBackend] = None, correct_backend: Optional[LLMBackend] = None,
     context_backend: Optional[LLMBackend] = None,
 ) -> FilmReport:
+    correction_passes = cfg.get("correction", {}).get("passes", 1)
+    if isinstance(correction_passes, bool) or not isinstance(correction_passes, int) or correction_passes < 1:
+        raise ValueError(f"correction.passes must be an integer >= 1, not {correction_passes!r}")
     film_dir = os.path.abspath(os.path.expanduser(film_dir))
     film = os.path.basename(film_dir)
     report = FilmReport(film)
@@ -357,18 +360,28 @@ def run_film(
         log(f"[{film}] correcting translation")
         cps = cfg["translate"].get("budget_cps")
         budgets = char_budgets(source, cps) if cps else None
-        crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
-                                   batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
-                                   known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
-                                   prompt_variant=cfg["correction"]["prompt"],
-                                   meaning_budgets=char_budgets(source, 17.0) if cfg["correction"]["meaning_fix"] else None)
-        report.data["correction"] = crep.to_dict()
-        if crep.applied:
+        passes = []
+        for _ in range(correction_passes):
+            crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
+                                       batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
+                                       known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
+                                       prompt_variant=cfg["correction"]["prompt"],
+                                       meaning_budgets=char_budgets(source, 17.0) if cfg["correction"]["meaning_fix"] else None)
+            passes.append(crep.to_dict())
+            if not crep.applied:
+                continue
             tr.cues = crep.cues
             rule_flags = rule_qa()
             # A verified cue clears only its own verdict, never a batch-level "unchecked" blocker.
             fid_flags = [f for f in fid_flags if not (f.cue in crep.verified and f.reason.startswith("LLM translation check:"))]
+            gloss_flags = [Flag(i, reason) for i, reason in check_glossary(source, tr.cues, glossary)] if glossary else []
             qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
+        counts = ("applied", "rejected", "reverted", "failed_batches")
+        report.data["correction"] = {
+            **{k: sum(p[k] for p in passes) for k in counts},
+            **{k: [x for p in passes for x in p[k]][:n] for k, n in
+               (("items", 50), ("rejected_items", 30), ("reverted_items", 30))},
+            "passes": [{k: p[k] for k in counts} for p in passes]}
     tracks = [(c.language, c.cues) for c in candidates
               if c.language not in (cfg["target_language"], chosen.language)]
     cps = cfg["translate"].get("budget_cps")

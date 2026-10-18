@@ -349,6 +349,50 @@ def test_correction_pass_runs_after_translation_and_lands_in_the_output(tmp_path
     assert not any(p.startswith("You correct Greek subtitles") for p in off.prompts)
 
 
+def test_correction_passes_run_again_on_the_corrected_text(tmp_path):
+    # E26: a second sol pass took Euphoria from 7.0 to 5.0 noticeable errors per hour.
+    film = make_film(tmp_path)
+    assert DEFAULTS["correction"]["passes"] == 1
+    fix = [{"id": 3, "rx": "φίλε μου", "sb": "φίλε", "rate": 5, "type": "σύντμηση"}]
+    backend = greek_backend(corrections=fix)
+    run_film(str(film), cfg(correction={"passes": 2}), backend, str(tmp_path / "out"), log=lambda m: None)
+    prompts = [p for p in backend.prompts if p.startswith("You correct Greek subtitles")]
+    assert len(prompts) == 2 and '"el": "Γραμμή 3, φίλε."' in prompts[1]
+    rep = read_report(tmp_path / "out")["correction"]
+    assert rep["applied"] == 1 and rep["rejected"] == 1  # pass 2: "rx not found"
+    assert [p["applied"] for p in rep["passes"]] == [1, 0]
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert "Γραμμή 3, φίλε." in srt
+
+
+def test_invalid_correction_passes_fail_before_any_llm_call(tmp_path):
+    import pytest
+
+    film = make_film(tmp_path)
+    for bad in (0, -1, 1.5, "2", None, True):
+        backend = greek_backend()
+        with pytest.raises(ValueError, match="correction.passes"):
+            run_film(str(film), cfg(correction={"passes": bad}), backend, str(tmp_path / "out"), log=lambda m: None)
+        assert not backend.prompts
+    c = cfg()
+    c["correction"].pop("passes")
+    run_film(str(film), c, greek_backend(), str(tmp_path / "out"), log=lambda m: None)  # absent: one pass
+    assert [p["applied"] for p in read_report(tmp_path / "out")["correction"]["passes"]] == [0]
+
+
+def test_a_later_correction_pass_sees_fresh_glossary_flags(tmp_path):
+    # Pass 1 fixes the glossary term; pass 2 must not get the old "glossary:" problem for that cue.
+    film = make_film(tmp_path)
+    reply = {"style": "Δράμα.", "terms": [{"source": "friend", "greek": "κολλητός", "kind": "term"}]}
+    fix = [{"id": 3, "rx": "φίλε μου", "sb": "κολλητέ μου", "rate": 6, "type": "ορολογία"}]
+    backend = greek_backend(glossary_reply=reply, corrections=fix)
+    run_film(str(film), cfg(correction={"passes": 2}), backend, str(tmp_path / "out"), log=lambda m: None)
+    prompts = [p for p in backend.prompts if p.startswith("You correct Greek subtitles")]
+    assert len(prompts) == 2
+    first, second = (p.count("glossary: 'friend'") for p in prompts)
+    assert first > 1 and second == first - 1
+
+
 def test_correction_pass_uses_its_own_backend_when_configured(tmp_path):
     # Free translator, strongest corrector: the correction pass runs on correction.llm, the rest on llm.
     film = make_film(tmp_path)

@@ -273,3 +273,13 @@ def test_a_short_meaning_fix_is_not_cut_by_min_keep():
     rep = correct_translation(src, el, router(fix), budgets={1: 40}, meaning_budgets={1: 51})
     assert [a.cue for a in rep.applied] == [1]
     assert not correct_translation(src, el, router(fix), budgets={1: 40}).applied  # MIN_KEEP still guards the rest
+
+
+def test_with_meaning_budgets_any_fix_may_grow_to_the_budget():
+    # E26 Kumail pass 2: 11 of 27 rejections were "longer than allowed" by 1-10 chars, with no CPS budget in the run.
+    src = [Cue(1, 0, 3000, "Smoke with him!")]
+    el = [Cue(1, 0, 3000, "Έπινες μαζί του!")]
+    fix = [{"id": 1, "rx": "Έπινες", "sb": "Κάπνιζες", "rate": 6, "type": "φυσικότητα"}]
+    assert not correct_translation(src, el, router(fix)).applied
+    assert [a.cue for a in correct_translation(src, el, router(fix), meaning_budgets={1: 51}).applied] == [1]
+    assert not correct_translation(src, el, router(fix), meaning_budgets={1: 16}).applied  # the budget still holds

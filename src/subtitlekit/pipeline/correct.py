@@ -284,8 +284,9 @@ def correct_translation(
     """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
 
     human: the Greek is a professional translation (E9 enrich): fix clear errors only, never restyle.
-    meaning_budgets: a "νόημα" fix rated 8+ is a new line, not a small edit (E26: the strict rules rejected every
-    meaning fix of a wrong line): retranslation rules, up to FIX_SLACK over this budget; the fidelity recheck follows.
+    meaning_budgets: a run with no CPS budget (E26): any fix may grow to this budget. A "νόημα" fix rated 8+ is a new
+    line, not a small edit (the strict rules rejected every meaning fix of a wrong line): retranslation rules, up to
+    FIX_SLACK over this budget; the fidelity recheck follows.
     """
     reasons: Dict[int, List[str]] = {}
     for f in flags:
@@ -332,6 +333,8 @@ def correct_translation(
             allowed = _length(original[cid])
             if cid in problems:
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
+            if meaning_budgets is not None:
+                allowed = max(allowed, meaning_budgets.get(cid, 0))
             meaning = meaning_budgets is not None and _is_meaning_fix(item)
             if meaning:
                 allowed = max(allowed, int(meaning_budgets.get(cid, 0) * FIX_SLACK))

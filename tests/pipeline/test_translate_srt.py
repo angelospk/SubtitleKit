@@ -264,6 +264,10 @@ def test_a_title_kept_in_latin_is_not_untranslated():
     assert not _untranslated("Family Feud.", "Family Feud.", "el")  # a title alone
     assert _untranslated("I'm watching Family Feud tonight.", "I'm watching Family Feud tonight.", "el")
     assert _untranslated("Ah, Family Feud.", "Ah, the Family Feud show.", "el")
+    # CodeRabbit: a sentence-initial capital is not a title; a short line is not a title by length alone.
+    assert _untranslated("Whatever, man. Really.", "Whatever, φίλε. Really.", "el")
+    assert _untranslated("Seriously, dude?", "Seriously, dude?", "el")
+    assert not _untranslated("I love Zach Galifianakis.", "Λατρεύω τον Zach Galifianakis.", "el")
 
 
 def test_anchor_tolerates_cut_words_and_dialogue_lines():

@@ -44,16 +44,36 @@ def anchor_matches(anchor: str, source: str) -> bool:
     return bool(a) and all(any(same(w, x) for x in head) for w in a)
 
 
+def _title_words(source: str) -> Tuple[set, bool]:
+    """Capitalised Latin words of the source that look like a title or a name: not a sentence's first word ("Yes, I
+    know"), unless next to another capitalised word (Family Feud). Also: is every source word one of them."""
+    text = visible_text(source)
+    toks = list(re.finditer(r"[A-Za-z]+", text))
+    kept = set()
+    for k, m in enumerate(toks):
+        w = m.group(0)
+        if not w[0].isupper():
+            continue
+        gap = text[toks[k - 1].end():m.start()] if k else ""
+        first = k == 0 or bool(re.search(r"[.!?:\n]", gap))
+        def joined(j: int) -> bool:
+            a, b = sorted((k, j))
+            return 0 <= j < len(toks) and toks[j].group(0)[0].isupper() and not text[toks[a].end():toks[b].start()].strip()
+        if not first or joined(k - 1) or joined(k + 1):
+            kept.add(w)
+    return kept, bool(toks) and all(m.group(0) in kept for m in toks)
+
+
 def _untranslated(source: str, text: str, target_lang: str) -> bool:
-    """_looks_untranslated, but capitalised Latin words copied from the source (a title, a name) do not count, as long as the
-    line has Greek in it; a short source line (2 words or fewer) may stay Latin as a whole (a title alone)."""
+    """_looks_untranslated, but title or name words copied from the source (_title_words) do not count, as long as the
+    line has Greek in it; a source line made only of such words may stay Latin as a whole (a title alone)."""
     if not _looks_untranslated(source, text, target_lang):
         return False
-    kept = {w for w in re.findall(r"[A-Za-z]+", visible_text(source)) if w[0].isupper()}  # titles and names only
+    kept, only_titles = _title_words(source)
     rest = re.sub(r"[A-Za-z]+", lambda m: "" if m.group(0) in kept else m.group(0), visible_text(text))
     if re.search(r"[A-Za-z]", rest):
         return True
-    return not (re.search(r"[\u0370-\u03ff\u1f00-\u1fff]", text) or len(_words(source)) <= 2)
+    return not (re.search(r"[\u0370-\u03ff\u1f00-\u1fff]", text) or only_titles)
 
 
 def build_prompt_srt(chunk: Sequence[Cue], meta: FilmMeta, source_lang: str,
