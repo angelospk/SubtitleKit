@@ -195,3 +195,21 @@ def test_qa_translation_flags_a_line_much_shorter_than_its_source():
     el = [Cue(1, 0, 3000, "Τι;"), Cue(2, 3000, 5000, "Αυτό ακριβώς λέω."), Cue(3, 5000, 6000, "Τι;")]
     flags = [f for f in qa_translation(src, el, FixConfig()) if "shorter" in f.reason]
     assert [f.cue for f in flags] == [1] and flags[0].blocker
+
+
+def test_qa_flags_a_line_that_nearly_repeats_the_previous_one():
+    # Euphoria 570 (E27): Flash repeated cue 569 with small changes and dropped "in the state of California."
+    src = [Cue(569, 0, 2000, "of the dirtiest, most delectable strip clubs"),
+           Cue(570, 2000, 4000, "in the state of California.")]
+    el = [Cue(569, 0, 2000, "από τα πιο πρόστυχα,\nλαχταριστά στριπτιτζάδικα"),
+          Cue(570, 2000, 4000, "απ' τα πιο πρόστυχα,\nτα πιο λαχταριστά στριπτιτζάδικα")]
+    flags = [f for f in qa_translation(src, el, FixConfig()) if "repeats" in f.reason]
+    assert [f.cue for f in flags] == [570] and flags[0].blocker
+
+
+def test_qa_similar_lines_with_similar_sources_are_fine():
+    src = [Cue(1, 0, 2000, "I love you so much, Rue."), Cue(2, 2000, 4000, "I love you so much, Rue!"),
+           Cue(3, 4000, 6000, "We have to go right now."), Cue(4, 6000, 8000, "We have to leave right now.")]
+    el = [Cue(1, 0, 2000, "Σ' αγαπώ τόσο πολύ, Ρου."), Cue(2, 2000, 4000, "Σ' αγαπώ τόσο πολύ, Ρου!"),
+          Cue(3, 4000, 6000, "Πρέπει να φύγουμε τώρα."), Cue(4, 6000, 8000, "Πρέπει να φύγουμε αμέσως.")]
+    assert not [f for f in qa_translation(src, el, FixConfig()) if "repeats" in f.reason]

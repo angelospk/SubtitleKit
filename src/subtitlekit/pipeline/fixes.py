@@ -7,9 +7,11 @@ is reverted as a whole. Condensed lines are checked one by one (rule checks
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -285,6 +287,27 @@ GREEK_NEGATION_RE = re.compile(
     r"\b(δεν|δε|μην|μη|όχι|ποτέ|τίποτα|τίποτε|κανείς|κανένας|κανένα|καμία|καμιά|ούτε|χωρίς|ουδέποτε)\b", re.I)
 
 
+# E27 Euphoria 570: Flash repeated the previous line with small changes and dropped the new one (Greek 0.92
+# similar, English 0.38). Parallel lines ("Everybody, hands up!" / "I said, hands up!") have similar sources too.
+NEAR_REPEAT = 0.88
+SOURCE_DIFFERENT = 0.5
+
+
+def _fold_line(text: str) -> str:
+    text = unicodedata.normalize("NFD", visible_text(text).lower())
+    return " ".join(re.sub(r"[^\w\s]|\d", " ", "".join(ch for ch in text if not unicodedata.combining(ch))).split())
+
+
+def _repeats(prev_src: str, src: str, prev_el: str, el: str) -> bool:
+    """The translation repeats the previous one (exactly, or nearly for a longer line) while the source does not."""
+    if el == prev_el:
+        return True
+    a, b = _fold_line(prev_el), _fold_line(el)
+    if min(len(a), len(b)) < 15 or difflib.SequenceMatcher(None, a, b).ratio() < NEAR_REPEAT:
+        return False
+    return difflib.SequenceMatcher(None, _fold_line(prev_src), _fold_line(src)).ratio() < SOURCE_DIFFERENT
+
+
 def qa_translation(
     source: Sequence[Cue], translated: Sequence[Cue], cfg: FixConfig, target_lang: str = "el"
 ) -> List[Flag]:
@@ -314,7 +337,7 @@ def qa_translation(
             # placeholder the translator left, and visible_text() would hide it.
             if re.search(r"@@|[{}<>\[\]]", _ASS_RE.sub("", _FORMAT_RE.sub("", t.text))):
                 flags.append(Flag(t.index, "placeholder or markup left in the text", s.text, t.text, blocker=True))
-        if prev is not None and t.text == prev.text and s.text != prev_src.text:
+        if prev is not None and s.text != prev_src.text and _repeats(prev_src.text, s.text, prev.text, t.text):
             flags.append(Flag(t.index, "repeats the previous translation", s.text, t.text, blocker=True))
         prev, prev_src = t, s
     return flags
