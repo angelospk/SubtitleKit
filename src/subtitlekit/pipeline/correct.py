@@ -12,6 +12,7 @@ from . import validators
 from .fixes import SOURCE_NEGATION_RE, check_translation, reflow_text
 from .greek_style import STYLE_RULES_EL
 from .greek_vocab import VOCAB_EL
+from .prompts_el import STYLE_EL
 from .llm import LLMBackend, LLMError, extract_json, forget
 from .srt import Cue, visible_text
 
@@ -54,8 +55,22 @@ HUMAN_NOTE = """
 HUMAN_TYPES = ("γραμματική", "νόημα")
 
 
-def correction_prompt(payload: str, source_lang: str = "English", human: bool = False) -> str:
-    prompt = CORRECTION_PROMPT.format(source=source_lang, style=STYLE_RULES_EL, vocab=VOCAB_EL, payload=payload)
+# Harold's lines that the v1 prompt left out (his stage 4, 2026-10-18); the "harold" prompt adds them.
+HAROLD_EXTRA = """✓ αφαίρεση διπλών σημείων στίξης (εκτός αποσιωπητικών) και περιττών κενών
+✓ ελεύθερη και ευφάνταστη χρήση βρισιών/αργκό όταν ταιριάζει στο ύφος· ιδιωματισμοί και φρασεολογία της νεοελληνικής όταν κάνουν τον λόγο πιο φυσικό
+• προτίμησε την ενεργητική φωνή όταν ακούγεται πιο δυναμικά
+• αν ένας υπότιτλος ακούγεται «μεταφραστικός», ξανάγραψέ τον σαν να τον λέει Έλληνας στην παρέα
+• σε έντονες σκηνές δράσης ή καβγά, ανέβασε την αργκό έναν βαθμό· κράτα πάντα τον τόνο του χαρακτήρα (σαρκαστικός, τρυφερός, απειλητικός)
+"""
+PROMPTS = ("v1", "harold")
+
+
+def correction_prompt(payload: str, source_lang: str = "English", human: bool = False, variant: str = "v1") -> str:
+    """variant "v1": English style rules; "harold": his Greek style block and the lines v1 left out."""
+    if variant not in PROMPTS:
+        raise ValueError(f"correction prompt must be one of {PROMPTS}, got {variant!r}")
+    style = STYLE_RULES_EL if variant == "v1" else HAROLD_EXTRA + "\n" + STYLE_EL
+    prompt = CORRECTION_PROMPT.format(source=source_lang, style=style, vocab=VOCAB_EL, payload=payload)
     if human:
         prompt = prompt.replace("\n\nΤο JSON στο τέλος", "\n" + HUMAN_NOTE + "\nΤο JSON στο τέλος", 1)
     return prompt
@@ -253,7 +268,7 @@ def correct_translation(
     source: Sequence[Cue], translated: Sequence[Cue], backend: LLMBackend, flags: Sequence[Any] = (),
     budgets: Optional[Dict[int, int]] = None, batch: int = 300,
     source_lang: str = "English", target_lang: str = "Greek", known_names: Sequence[str] = (),
-    human: bool = False,
+    human: bool = False, prompt_variant: str = "v1",
 ) -> CorrectionReport:
     """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
 
@@ -276,7 +291,7 @@ def correct_translation(
             {str(t.index): {"src": s.text, "el": current[t.index],
                             **({"problem": problems[t.index]} if t.index in problems else {})} for s, t in part},
             ensure_ascii=False, indent=0)
-        prompt = correction_prompt(payload, source_lang, human)
+        prompt = correction_prompt(payload, source_lang, human, prompt_variant)
         try:
             data = extract_json(backend.complete(prompt))
         except LLMError:

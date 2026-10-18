@@ -53,6 +53,7 @@ class TranslationResult:
     untranslated: List[int] = field(default_factory=list)  # cue indices kept in source language
     calls: int = 0
     log: List[str] = field(default_factory=list)
+    shifted: List[int] = field(default_factory=list)  # cues kept although they still looked shifted (SRT mode)
 
 
 def prepare_source(cues: Sequence[Cue]) -> (List[Cue], List[str]):

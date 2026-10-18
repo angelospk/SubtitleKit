@@ -233,3 +233,18 @@ def test_check_retranslation_judges_names_pronouns_and_questions_by_the_source()
     # The correction pass (small edits) keeps Harold's strict rules.
     assert check_change("Με προστάτεψες.", "Με πήρες κοντά σου.", "You took me in.", 40) == ["pronoun added: σου"]
     assert check_change("Έγινες πατέρας μου.", "Και δεν είμαι η Σάρα.", "And I'm not Sara.", 40) == ["names added: Σάρα"]
+
+
+def test_harold_correction_prompt_is_greek_and_has_his_extra_lines():
+    import pytest
+
+    from subtitlekit.pipeline.correct import correction_prompt
+
+    v1 = correction_prompt("{}")
+    h = correction_prompt("{}", variant="harold")
+    assert "Greek style: write natural spoken Modern Greek" in v1
+    assert "Greek style:" not in h and "«ελληνικό αυτί»" in h
+    assert "ευφάνταστη χρήση βρισιών" in h and "στην παρέα" in h
+    assert h.rstrip().endswith("{}")
+    with pytest.raises(ValueError):
+        correction_prompt("{}", variant="v2")

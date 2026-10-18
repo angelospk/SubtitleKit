@@ -20,7 +20,10 @@ import yaml
 from .analyzer import analyze_film, detect_content_language, discover_candidates
 from .film_context import PLOT_FILE, fetch_plot, load_plot
 from .glossary import build_glossary, check_glossary, load_glossary
-from .captions import find_captions, insert_captions, translate_captions
+from .captions import (caption_numbers_ok, caption_source_text, find_captions, finish_captions, greek_caps,
+                       insert_captions, translate_captions)
+from .fixes import reflow_text
+from .greek_style import fix_final_n
 from .correct import correct_translation
 from .audit import audit_cues
 from .hardlines import HardReport, retranslate_hard, select_hard_lines
@@ -30,6 +33,7 @@ from .metrics import Limits, compute_metrics
 from .srt import Cue, load_srt, save_srt
 from .timing import TimingConfig
 from .translate import FilmMeta, char_budgets, merge_for_hybrid, prepare_source, translate_cues
+from .translate_srt import translate_cues_srt
 from .upload import plan_upload
 from .fixes import Flag
 from .validators import validate_structure
@@ -275,9 +279,28 @@ def run_film(
                                "terms": len(glossary.terms) if glossary else 0, "problems": gloss_notes[:20]}
     tr_backend = translate_backend or backend
     report.data["translate_backend"] = getattr(tr_backend, "name", None)
+    srt_mode = cfg["translate"]["format"] == "srt"
+    ccfg = cfg["captions"]
+    pre_caps: List[int] = []
+    if srt_mode and ccfg["enabled"] and ccfg["before_translation"] and not hints and tr_backend:
+        # E26: on-screen captions go into the source, so the translator sees them in their scene.
+        pre_tracks = [(c.language, c.cues) for c in candidates
+                      if c.language not in (cfg["target_language"], chosen.language)]
+        caps = find_captions(pre_tracks, source, ccfg["window_ms"], ccfg["min_languages"])
+        if caps:
+            res = insert_captions(source, [(c, caption_source_text(c)) for c in caps], min_ms=ccfg["min_ms"])
+            source, pre_caps = res.cues, res.added
+            report.data["captions"] = {"found": len(caps), "added": 0, "before_translation": True,
+                                       "skipped": [list(x) for x in res.skipped[:20]], "problems": []}
     log(f"[{film}] translating {len(source)} cues from {chosen.language} with "
         f"{getattr(tr_backend, 'name', None)}")
-    tr = translate_cues(
+    if srt_mode and tr_backend:
+        tr = translate_cues_srt(
+            source, tr_backend, film_meta, chosen.language, cfg["target_language"],
+            cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
+            progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"), glossary=glossary)
+    else:
+        tr = translate_cues(
         source, tr_backend, film_meta, chosen.language, cfg["target_language"],
         cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
         progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"),
@@ -285,6 +308,12 @@ def run_film(
         rescue=cfg["translate"].get("rescue_untranslated", True),
         style_rules=cfg.get("style_rules", False), glossary=glossary,
     ) if tr_backend else _no_llm(source)
+    if pre_caps:
+        done = finish_captions(source, tr.cues, pre_caps, tr.untranslated)
+        source, tr.cues = done.source, done.translated
+        tr.untranslated = [done.mapping[i] for i in tr.untranslated if i in done.mapping]
+        tr.shifted = [done.mapping[i] for i in tr.shifted if i in done.mapping]
+        report.data["captions"].update(added=len(done.added), cues=done.added, problems=done.problems[:10])
     v_tr = validate_structure(source, tr.cues, "translate", max_shift_ms=0)
 
     # 4. fixes
@@ -300,7 +329,16 @@ def run_film(
 
     src_name = LANG_NAMES.get(chosen.language, chosen.language)
     tgt_name = LANG_NAMES.get(cfg["target_language"], cfg["target_language"])
-    rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+    caption_cues = set(report.data.get("captions", {}).get("cues", []))
+
+    def rule_qa() -> List[Flag]:
+        """Rule QA; a caption put in before translation has a many-language source: only its numbers are checked,
+        against each language version."""
+        flags = [f for f in qa_translation(source, tr.cues, fix_cfg, cfg["target_language"]) if f.cue not in caption_cues]
+        return flags + [Flag(s.index, "caption: numbers differ from every source language", blocker=True)
+                        for s, t in zip(source, tr.cues) if s.index in caption_cues and not caption_numbers_ok(s.text, t.text)]
+
+    rule_flags = rule_qa()
     fid_flags: List[Flag] = []
     off_flags: List[Flag] = []
     if cfg["review"]["translation_fidelity"] == "llm":
@@ -309,6 +347,8 @@ def run_film(
     else:
         off_flags = [Flag(0, "translation fidelity check disabled in config", blocker=True)]
     gloss_flags = [Flag(i, reason) for i, reason in check_glossary(source, tr.cues, glossary)] if glossary else []
+    # A shift the translator kept after its retries: the correction pass sees it as a known problem.
+    off_flags += [Flag(i, "the translation may carry the neighbouring line's text (shifted block)") for i in tr.shifted]
     qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
     if cfg.get("correction", {}).get("enabled") and backend:
         log(f"[{film}] correcting translation")
@@ -316,11 +356,12 @@ def run_film(
         budgets = char_budgets(source, cps) if cps else None
         crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
                                    batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
-                                   known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else ())
+                                   known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
+                                   prompt_variant=cfg["correction"]["prompt"])
         report.data["correction"] = crep.to_dict()
         if crep.applied:
             tr.cues = crep.cues
-            rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+            rule_flags = rule_qa()
             # A verified cue clears only its own verdict, never a batch-level "unchecked" blocker.
             fid_flags = [f for f in fid_flags if not (f.cue in crep.verified and f.reason.startswith("LLM translation check:"))]
             qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
@@ -334,7 +375,7 @@ def run_film(
         """Flags after a retranslation stage: rule QA again; a recheck-passed cue drops its old fidelity verdict."""
         nonlocal rule_flags, fid_flags, qa_flags
         redone = {c["cue"] for c in changed}
-        rule_flags = qa_translation(source, tr.cues, fix_cfg, cfg["target_language"])
+        rule_flags = rule_qa()
         fid_flags = [f for f in fid_flags if not (f.cue in redone and f.reason.startswith("LLM translation check:"))]
         qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
 
@@ -407,13 +448,16 @@ def run_film(
         reference = load_srt(ref_path) if os.path.exists(ref_path) else None
     log(f"[{film}] fixing timing / reading speed")
     fx = run_fixes(tr.cues, backend, fix_cfg, reference=reference)
+    if caption_cues:
+        # Captions stay Greek capitals without accents after every text pass (a correction or condense keeps its words).
+        fx.cues = [c.with_text(reflow_text(fix_final_n(greek_caps(" ".join(c.text.split())))[0]))
+                   if c.index in caption_cues else c for c in fx.cues]
     if glossary:
         # Judge the glossary on the final text: condensing may change a rendering after the first check.
         qa_flags = [f for f in qa_flags if f not in gloss_flags]
         qa_flags += [Flag(i, reason) for i, reason in check_glossary(source, fx.cues, glossary)]
-    report.data["captions"] = {"found": 0, "added": 0, "skipped": [], "problems": []}
-    ccfg = cfg["captions"]
-    if ccfg["enabled"] and backend:
+    report.data.setdefault("captions", {"found": 0, "added": 0, "skipped": [], "problems": []})
+    if ccfg["enabled"] and backend and not report.data["captions"].get("before_translation"):
         caps = find_captions(tracks, source, ccfg["window_ms"], ccfg["min_languages"])
         if caps:
             log(f"[{film}] adding on-screen captions")

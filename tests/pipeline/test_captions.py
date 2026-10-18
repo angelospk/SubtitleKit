@@ -129,3 +129,13 @@ def test_find_captions_second_tracks_of_a_language_do_not_make_a_duplicate():
     tr = [(lang, [Cue(1, 10000 + k * 100, 12000, text)]) for k in range(2) for lang, text in sign.items()]
     caps = find_captions(tr, [], min_languages=3)
     assert len(caps) == 1 and set(caps[0].texts) == {"fre", "spa", "ger"}
+
+
+def test_caption_numbers_are_checked_against_each_language_version():
+    from subtitlekit.pipeline.captions import caption_numbers_ok
+
+    src = "[ΛΕΖΑΝΤΑ] fr: PARIS, 1986 | es: PARÍS, 1986 | und: PARIZ '86"
+    assert caption_numbers_ok(src, "ΠΑΡΙΣΙ, 1986")
+    assert caption_numbers_ok(src, "ΠΑΡΙΣΙ '86")
+    assert not caption_numbers_ok(src, "ΠΑΡΙΣΙ, 1987")
+    assert not caption_numbers_ok(src, "ΠΑΡΙΣΙ, 1986, 1986")

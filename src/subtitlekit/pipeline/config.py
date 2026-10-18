@@ -56,16 +56,18 @@ DEFAULTS: Dict[str, Any] = {
     # chunk_size: cues per LLM call; large chunks keep names, register and εσύ/εσείς consistent (E5).
     # llm: optional override of the llm section for the translate stage only (E7 model comparison)
     "translate": {"chunk_size": 300, "context_lines": 4, "max_cues": None, "budget_cps": 17,
-                  "rescue_untranslated": True, "llm": None},
+                  "rescue_untranslated": True, "llm": None,
+                  "format": "json"},  # json: {"id": text} chunks; srt: Harold's Greek prompt, SRT text (E26)
     # Correction pass (E6, Harold's stage 4): LLM proposes rx/sb edits; code enforces no growth, no added pronouns/names, numbers, negation, then rechecks fidelity.
-    "correction": {"enabled": True, "batch": 300, "llm": None},
+    "correction": {"enabled": True, "batch": 300, "llm": None, "prompt": "v1"},  # v1 | harold
     # Film glossary (E5): built by the LLM once per film, or loaded from film.yaml `glossary: <file>`; saved as glossary.json in the output folder.
     "glossary": {"enabled": True, "max_terms": 150},
     # Film context: the published plot (web search, Wikipedia first; `llm` should have WebSearch) or plot.md in the
     # film folder; goes into the glossary and translation prompts as JSON data. Off by default.
     "film_context": {"enabled": False, "max_chars": 6000, "llm": None},
     # On-screen captions from foreign tracks (E8): signs/titles the English track does not subtitle.
-    "captions": {"enabled": True, "min_languages": 3, "window_ms": 1500, "min_ms": 700},
+    "captions": {"enabled": True, "min_languages": 3, "window_ms": 1500, "min_ms": 700,
+                 "before_translation": False},  # srt format only: captions go into the source
     # Hard lines (E10): retranslate hard lines using the same moment from other language tracks;
     # `llm` overrides the backend for the retranslation (e.g. Sonnet with claude_tools: WebSearch);
     # `select_also_hard` lets that backend pick hard lines too, merged with the main model's picks.

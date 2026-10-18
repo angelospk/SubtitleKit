@@ -188,3 +188,62 @@ def insert_captions(cues: Sequence[Cue], items: Sequence[Tuple[Caption, str]],
         else:
             mapping[cue.index] = new_idx
     return CaptionInsert(out, mapping, added, skipped)
+
+
+def caption_source_text(cap: Caption, max_langs: int = 4) -> str:
+    """A caption as a source cue for SRT-mode translation: the mark, then the texts of a few languages."""
+    from .prompts_el import CAPTION_MARK
+
+    return CAPTION_MARK + " " + " | ".join(f"{lang}: {' '.join(text.split())}"
+                                           for lang, text in list(cap.texts.items())[:max_langs])
+
+
+def caption_numbers_ok(source_text: str, greek: str) -> bool:
+    """The caption's numbers match one language version of its many-language source (see caption_source_text)."""
+    from .prompts_el import CAPTION_MARK
+
+    digits = lambda t: sorted(re.findall(r"\d+", t))
+    body = source_text.replace(CAPTION_MARK, "", 1)
+    versions = [v.split(": ", 1)[-1] for v in body.split(" | ")]
+    return any(digits(v) == digits(greek) for v in versions)
+
+
+@dataclass
+class CaptionFinish:
+    source: List[Cue]
+    translated: List[Cue]
+    mapping: Dict[int, int]  # old index -> new index, for every cue kept
+    added: List[int]  # new indices of the captions kept
+    problems: List[str]
+
+
+def finish_captions(source: Sequence[Cue], translated: Sequence[Cue], caption_idx: Sequence[int],
+                    untranslated: Sequence[int] = ()) -> CaptionFinish:
+    """After SRT-mode translation: captions become Greek capitals without accents; a caption left with the mark,
+    without Greek or too long is dropped from both lists, and both are renumbered 1..n."""
+    from .prompts_el import CAPTION_MARK
+
+    caps, missed = set(caption_idx), set(untranslated)
+    kept: List[Tuple[Cue, Cue]] = []
+    problems: List[str] = []
+    for s, t in zip(source, translated):
+        if s.index in caps:
+            text = " ".join(t.text.split())
+            ok = s.index not in missed and CAPTION_MARK not in text and _has_greek(text)
+            if ok:
+                text = reflow_text(fix_final_n(greek_caps(text))[0])
+                lines = text.split("\n")
+                ok = len(lines) <= 2 and all(len(l) <= 42 for l in lines)
+            if not ok:
+                problems.append(f"caption dropped: {t.text[:60]!r}")
+                continue
+            t = t.with_text(text)
+        kept.append((s, t))
+    out = CaptionFinish([], [], {}, [], problems)
+    for n, (s, t) in enumerate(kept, start=1):
+        out.mapping[s.index] = n
+        out.source.append(Cue(n, s.start_ms, s.end_ms, s.text))
+        out.translated.append(Cue(n, t.start_ms, t.end_ms, t.text))
+        if s.index in caps:
+            out.added.append(n)
+    return out

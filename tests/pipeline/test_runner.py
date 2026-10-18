@@ -662,3 +662,54 @@ def test_cli_builds_the_review_backend_from_config():
     b = review_backend_from({"llm": {"backend": "claude", "timeout_s": 600, "cache_dir": None},
                              "review_pass": {"llm": {"claude_model": "claude-opus-5-5", "claude_effort": "medium"}}})
     assert b.model == "claude-opus-5-5" and b.effort == "medium"
+
+
+def test_srt_mode_puts_captions_in_the_source_and_uses_harolds_prompts(tmp_path):
+    from subtitlekit.pipeline.srt import parse_srt
+
+    film = make_film(tmp_path)
+    end = pro_english()[-1].end_ms
+    for lang, sign in (("fre", "MEXIQUE, 1986"), ("spa", "MÉXICO, 1986"), ("ger", "MEXIKO, 1986")):
+        cues = [Cue(c.index, c.start_ms, c.end_ms, f"Ligne {c.index}.") for c in pro_english()]
+        cues.append(Cue(61, end + 3000, end + 6000, sign))
+        (film / f"Test.Film.2025.1080p.WEB-DL.{lang}.srt").write_text(format_srt(cues), encoding="utf-8")
+    base = greek_backend()
+    seen = []
+
+    def reply(prompt):
+        if "κορυφαίος Έλληνας υποτιτλιστής" in prompt:
+            seen.append(prompt)
+            chunk = parse_srt(prompt.split("## Υπότιτλοι\n", 1)[1])
+            return format_srt([Cue(c.index, 0, 1, "Μεξικό, 1986" if "[ΛΕΖΑΝΤΑ]" in c.text
+                                   else f"Γραμμή {c.index}, φίλε μου.") for c in chunk])
+        if prompt.startswith("You translate on-screen text"):
+            raise AssertionError("captions were already translated with the dialogue")
+        if prompt.startswith("You correct Greek subtitles"):  # a correction that would undo the capitals
+            return json.dumps([{"id": 61, "rx": "ΜΕΞΙΚΟ, 1986", "sb": "Μεξικό 1986", "rate": 5, "type": "άλλο"}],
+                              ensure_ascii=False)
+        return base.replies(prompt)
+
+    backend = MockBackend(replies=reply, name="test-llm")
+    conf = cfg(translate={"format": "srt", "budget_cps": None}, captions={"before_translation": True},
+               correction={"prompt": "harold"})
+    run_film(str(film), conf, backend, str(tmp_path / "out"), log=lambda m: None)
+    rep = read_report(tmp_path / "out")
+    assert len(seen) == 1 and "61\n" in seen[0] and "Λεζάντες" in seen[0]
+    assert rep["captions"]["before_translation"] and rep["captions"]["added"] == 1
+    assert rep["translation"]["untranslated"] == []
+    srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
+    assert srt.rstrip().endswith("ΜΕΞΙΚΟ 1986")  # the correction stays, in capitals and "\n61\n" in srt
+    correction = [p for p in backend.prompts if p.startswith("You correct Greek subtitles")]
+    assert correction and "«ελληνικό αυτί»" in correction[0]
+    assert not [f for f in rep["flags"] if f["cue"] == 61]  # no rule QA on a caption's many-language source
+
+
+def test_srt_mode_drops_a_caption_left_untranslated(tmp_path):
+    from subtitlekit.pipeline.captions import finish_captions
+
+    src = [Cue(1, 0, 1000, "Hi."), Cue(2, 2000, 3000, "[ΛΕΖΑΝΤΑ] es: HOLA"), Cue(3, 4000, 5000, "Bye.")]
+    tr = [Cue(1, 0, 1000, "Γεια."), Cue(2, 2000, 3000, "[ΛΕΖΑΝΤΑ] HOLA"), Cue(3, 4000, 5000, "Αντίο.")]
+    done = finish_captions(src, tr, [2])
+    assert [c.text for c in done.translated] == ["Γεια.", "Αντίο."]
+    assert [c.index for c in done.source] == [1, 2] and done.mapping == {1: 1, 3: 2} and done.added == []
+    assert done.problems

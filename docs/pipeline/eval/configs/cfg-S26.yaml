@@ -1,0 +1,29 @@
+# E26: the simple pipeline (Harold's review, 2026-10-17). Gemini 3.8 Flash low (agy) translates SRT text in
+# 500-cue chunks with Harold's Greek prompt (prompts_el.py), no CPS budget and no condensing; the shift detector
+# (shift.py) asks a shifted block again. Captions go into the source before translation. Opus corrects with
+# Harold's Greek rx/sb prompt. No fidelity check, hard lines or review pass; timing is code only.
+llm:
+  backend: claude
+  claude_model: claude-opus-5-5
+  claude_effort: medium
+  timeout_s: 1800
+  cache_dir: null
+style_rules: true
+translate:
+  format: srt
+  chunk_size: 500
+  budget_cps: null
+  llm: {backend: agy, agy_model: gemini-3.8-flash-low, timeout_s: 480}
+glossary:
+  enabled: true
+correction:
+  enabled: true
+  prompt: harold
+captions:
+  before_translation: true
+film_context:
+  enabled: true
+fixes:
+  condense_above_cps: 999
+review:
+  translation_fidelity: "none"
