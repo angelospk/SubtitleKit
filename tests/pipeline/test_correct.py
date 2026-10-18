@@ -293,3 +293,28 @@ def test_both_greek_prompts_keep_the_swearing_strength_of_the_source():
     assert "ίδια ένταση με το πρωτότυπο" in STYLE_EL
     h = correction_prompt("{}", variant="harold")
     assert "ίδια ένταση με το πρωτότυπο" in h and "ανέβασε την αργκό έναν βαθμό" not in h
+
+
+def test_batches_also_stop_at_a_byte_limit():
+    # E26 batch A/B: a whole film in one prompt broke Linux's 128 KiB limit for one argument (bridge, claude CLI).
+    src = [Cue(i, i * 1000, i * 1000 + 900, f"Line number {i} is here.") for i in range(1, 41)]
+    el = [Cue(i, i * 1000, i * 1000 + 900, f"Γραμμή νούμερο {i} εδώ.") for i in range(1, 41)]
+    prompts = []
+
+    def reply(prompt):
+        if prompt.startswith("You correct Greek subtitles"):
+            prompts.append(prompt)
+            return "[]"
+        raise AssertionError(prompt[:60])
+
+    correct_translation(src, el, MockBackend(replies=reply), batch=1000)
+    assert len(prompts) == 1
+    prompts.clear()
+    from subtitlekit.pipeline.correct import correction_prompt
+
+    fixed = len(correction_prompt("").encode())
+    one = len(json.dumps({"1": {"src": src[0].text, "el": el[0].text}}, ensure_ascii=False, indent=0).encode())
+    correct_translation(src, el, MockBackend(replies=reply), batch=1000, max_bytes=fixed + one * 10)
+    assert len(prompts) >= 4 and all(len(p.encode()) <= fixed + one * 10 for p in prompts)
+    ids = [int(k) for p in prompts for k in json.loads(p[p.index("{\n"):p.rindex("}") + 1])]
+    assert ids == list(range(1, 41))  # every cue once, in order

@@ -352,7 +352,7 @@ def test_correction_pass_runs_after_translation_and_lands_in_the_output(tmp_path
 def test_correction_passes_run_again_on_the_corrected_text(tmp_path):
     # E26: a second sol pass took Euphoria from 7.0 to 5.0 noticeable errors per hour.
     film = make_film(tmp_path)
-    assert DEFAULTS["correction"]["passes"] == 1
+    assert DEFAULTS["correction"]["passes"] == 1 and DEFAULTS["correction"]["max_bytes"] == 120_000
     fix = [{"id": 3, "rx": "φίλε μου", "sb": "φίλε", "rate": 5, "type": "σύντμηση"}]
     backend = greek_backend(corrections=fix)
     run_film(str(film), cfg(correction={"passes": 2}), backend, str(tmp_path / "out"), log=lambda m: None)

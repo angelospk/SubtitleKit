@@ -39,7 +39,7 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", ba
         flags += [Flag(i, r) for i, r in check_glossary(source, ours, glossary)]
     backend = make_backend({"timeout_s": 2400, "cache_dir": None, **llm})
     names = [t.greek for t in glossary.terms if t.kind == "name"] if glossary else ()
-    rep = correct_translation(source, ours, backend, flags=flags, batch=int(batch), known_names=names, prompt_variant="harold",
+    rep = correct_translation(source, ours, backend, flags=flags, batch=int(batch), max_bytes=120_000, known_names=names, prompt_variant="harold",
                               meaning_budgets=char_budgets(source, 17.0))
     fixed = {c.index: c.text for c in rep.cues}
     caps = {g.index for s, g in zip(aligned, raw) if not s.text}

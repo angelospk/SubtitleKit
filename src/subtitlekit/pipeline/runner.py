@@ -363,7 +363,8 @@ def run_film(
         passes = []
         for _ in range(correction_passes):
             crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
-                                       batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
+                                       batch=cfg["correction"]["batch"], max_bytes=cfg["correction"].get("max_bytes"),
+                                       source_lang=src_name, target_lang=tgt_name,
                                        known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
                                        prompt_variant=cfg["correction"]["prompt"],
                                        meaning_budgets=char_budgets(source, 17.0) if cfg["correction"]["meaning_fix"] else None)

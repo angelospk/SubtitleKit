@@ -280,6 +280,7 @@ def correct_translation(
     budgets: Optional[Dict[int, int]] = None, batch: int = 300,
     source_lang: str = "English", target_lang: str = "Greek", known_names: Sequence[str] = (),
     human: bool = False, prompt_variant: str = "v1", meaning_budgets: Optional[Dict[int, int]] = None,
+    max_bytes: Optional[int] = None,
 ) -> CorrectionReport:
     """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
 
@@ -287,6 +288,7 @@ def correct_translation(
     meaning_budgets: a run with no CPS budget (E26): any fix may grow to this budget. A "νόημα" fix rated 8+ is a new
     line, not a small edit (the strict rules rejected every meaning fix of a wrong line): retranslation rules, up to
     FIX_SLACK over this budget; the fidelity recheck follows.
+    max_bytes: a batch also ends before its whole prompt passes this size (E26: one argument may not pass 128 KiB).
     """
     reasons: Dict[int, List[str]] = {}
     for f in flags:
@@ -298,13 +300,23 @@ def correct_translation(
     rep = CorrectionReport(cues=list(translated))
     pairs = list(zip(source, translated))
     src_by_id = {t.index: s.text for s, t in pairs}
-    for start in range(0, len(pairs), batch):
-        part = pairs[start : start + batch]
+    def entry(s: Cue, t: Cue) -> Dict[str, str]:
+        return {"src": s.text, "el": current[t.index], **({"problem": problems[t.index]} if t.index in problems else {})}
+
+    # max_bytes is for the whole prompt: the fixed text takes ~20 KB of it.
+    room = max_bytes - len(correction_prompt("", source_lang, human, prompt_variant).encode()) if max_bytes else None
+    parts: List[List[Tuple[Cue, Cue]]] = [[]]
+    size = 0
+    for s, t in pairs:
+        n = len(json.dumps({str(t.index): entry(s, t)}, ensure_ascii=False, indent=0).encode())
+        if parts[-1] and (len(parts[-1]) >= batch or (room is not None and size + n > room)):
+            parts.append([])
+            size = 0
+        parts[-1].append((s, t))
+        size += n
+    for part in filter(None, parts):
         ids = {t.index for _, t in part}
-        payload = json.dumps(
-            {str(t.index): {"src": s.text, "el": current[t.index],
-                            **({"problem": problems[t.index]} if t.index in problems else {})} for s, t in part},
-            ensure_ascii=False, indent=0)
+        payload = json.dumps({str(t.index): entry(s, t) for s, t in part}, ensure_ascii=False, indent=0)
         prompt = correction_prompt(payload, source_lang, human, prompt_variant)
         try:
             data = extract_json(backend.complete(prompt))
