@@ -281,6 +281,7 @@ class BridgeBackend(LLMBackend):
     effort: str = "medium"
     client: str = field(default_factory=lambda: os.path.expanduser("~/agent-bridge/agent_client.py"))
     timeout: float = 1800.0
+    job_timeout: Optional[int] = None  # bridge job budget (enqueue --timeout); None = the bridge's effort default
     runner: Runner = field(default=_run, repr=False)
     name: str = "bridge"
 
@@ -303,7 +304,8 @@ class BridgeBackend(LLMBackend):
 
     def complete(self, prompt: str) -> str:
         enqueue = [
-            "python3", self.client, "enqueue", "exec", "-c", f"model={self.model}",
+            "python3", self.client, "enqueue", "exec",
+            *(["--timeout", str(self.job_timeout)] if self.job_timeout else []), "-c", f"model={self.model}",
             "-c", f"model_reasoning_effort={self.effort}", BRIDGE_TEXT_ONLY + prompt,
         ]
         with tempfile.TemporaryDirectory(prefix="subtitlekit-llm-") as cwd:
@@ -470,8 +472,10 @@ def _make_uncached(cfg: Dict[str, Any]) -> LLMBackend:
     if kind == "agy":
         return AgyBackend(model=cfg.get("agy_model", "gemini-3.8-flash-high"), timeout=timeout)
     if kind == "bridge":
+        job = int(cfg["bridge_timeout_s"]) if cfg.get("bridge_timeout_s") else None
         return BridgeBackend(model=cfg.get("bridge_model", "gpt-5.6-luna"),
-                             effort=cfg.get("bridge_effort", "medium"), timeout=timeout)
+                             effort=cfg.get("bridge_effort", "medium"), job_timeout=job,
+                             timeout=max(timeout, job + 300) if job else timeout)
     if kind == "fallback":
         return FallbackBackend([opencode, gemini])
     if kind == "mock":

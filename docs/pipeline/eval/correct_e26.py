@@ -1,6 +1,6 @@
 """E26 A/B: only the correction pass, on the raw SRT-mode translation of a run, with another corrector.
 
-Usage: correct_e26.py <film>.<variant> <tag> <backend-json> [input-srt-name]
+Usage: correct_e26.py <film>.<variant> <tag> <backend-json> [input-srt-name] [batch]
   backend-json: an llm config, e.g. '{"backend": "bridge", "bridge_model": "gpt-6.1-sol", "bridge_effort": "high"}'
 Reads out/<film>.<variant>/translation.el.srt (before any later pass), corrects it with Harold's Greek prompt and
 correction.meaning_fix as in cfg-S26b, then the same caption capitals and style stage as the run. Writes
@@ -25,7 +25,7 @@ from subtitlekit.pipeline.translate import char_budgets, prepare_source
 E = os.path.expanduser("~/pipeline-demo/eval")
 
 
-def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt") -> None:
+def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", batch: str = "300") -> None:
     src_path = glob.glob(f"{E}/films/{variant}/*.eng.srt") or glob.glob(f"{E}/films/{variant}/*track3_[[]eng[]].srt")
     english, _ = prepare_source(load_srt(src_path[0]))
     raw = load_srt(f"{E}/out/{variant}/{name}")
@@ -39,7 +39,7 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt") ->
         flags += [Flag(i, r) for i, r in check_glossary(source, ours, glossary)]
     backend = make_backend({"timeout_s": 2400, "cache_dir": None, **llm})
     names = [t.greek for t in glossary.terms if t.kind == "name"] if glossary else ()
-    rep = correct_translation(source, ours, backend, flags=flags, known_names=names, prompt_variant="harold",
+    rep = correct_translation(source, ours, backend, flags=flags, batch=int(batch), known_names=names, prompt_variant="harold",
                               meaning_budgets=char_budgets(source, 17.0))
     fixed = {c.index: c.text for c in rep.cues}
     caps = {g.index for s, g in zip(aligned, raw) if not s.text}
@@ -61,4 +61,4 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt") ->
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), *sys.argv[4:5])
+    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), *sys.argv[4:6])

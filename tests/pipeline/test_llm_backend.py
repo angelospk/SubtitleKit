@@ -294,6 +294,29 @@ def test_make_backend_builds_agy_and_bridge():
     assert bridge.name == "bridge" and bridge.model == "gpt-5.6-luna" and bridge.effort == "low"
 
 
+def test_bridge_job_timeout_is_passed_only_when_set():
+    # A whole film in one correction call outlasts the bridge's 900 s default for effort high.
+    from subtitlekit.pipeline.llm import BridgeBackend
+
+    calls = []
+
+    def run(argv, cwd, timeout):
+        calls.append((argv, timeout))
+        if argv[2] == "enqueue":
+            return subprocess.CompletedProcess(argv, 0, stdout='{"job_id": "J"}', stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout='{"status": "completed", "output": "x"}', stderr="")
+
+    BridgeBackend(client="/x/c.py", runner=run).complete("p")
+    assert "--timeout" not in calls[0][0]
+    calls.clear()
+    make = make_backend({"backend": "bridge", "bridge_timeout_s": "3000", "timeout_s": 1800})  # YAML may give a string
+    make.runner = run
+    make.client = "/x/c.py"
+    make.complete("p")
+    assert calls[0][0][2:6] == ["enqueue", "exec", "--timeout", "3000"]
+    assert calls[1][1] >= 3000  # the client waits at least as long as the job may run
+
+
 def test_claude_cli_backend_can_allow_web_search_only():
     from subtitlekit.pipeline.llm import ClaudeCliBackend
 
