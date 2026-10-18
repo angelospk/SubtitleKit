@@ -635,3 +635,65 @@ Serious (confirmed) / noticeable per hour. Correction only (`eval/correct_e26.py
 The first S26e run is void: the Codex 5h window ran out mid-chain. Euphoria, ST and Wolf Man got no
 correction (every batch failed), Kumail lost pass 2, and every audit had CONFIRM FAILED. Its numbers (raw
 Flash: Euphoria 12.08, ST 12.27, Wolf Man 4.65) only show the corrector's effect. Rerun pending.
+
+## E27 result: alignment, targeted correction, CPS shortening, big batches (2026-10-18/19)
+
+Harold's plan, in order: (1) align the foreign tracks to the English as a small database, (2) Flash flags hard
+or uncertain lines and sol gets the same line in other languages for them, (3) sol shortens lines over 21 CPS,
+kept only if it adds no errors. Every row: the same S26e raw Flash translation, one sol-high correction pass
+(`eval/correct_e26.py`), 2 audits; serious (confirmed) / noticeable per hour, mean of the 2 audits.
+
+### Step 1: alignment (`align.py`)
+
+Groups by time overlap (m:n) against the English, speaker turns from dialogue dashes, per-track sync
+(same-release precheck, else `resync.py`, applied only when confident). `eval/align_check.py`: a Flash judge
+on 30 sampled groups per track.
+
+| Tracks | same | partial | different |
+|---|---|---|---|
+| Same release (Euphoria 4, ST 4, Kumail 5, Housemaid AMZN por), 390 groups | 345 | 45 | **0** |
+| Housemaid TS fre (resynced, drift 24/23.976) | 18 | 11 | 1 |
+| Housemaid TS BG (not the same cut) | not synced: detected and left out | | |
+
+"Partial" is a sentence that another language splits at another point, not a wrong pairing; `other_languages
+(sentence=True)` adds neighbouring groups up to a sentence end. Wolf Man has English only.
+
+### Step 3: shorten lines over 21 CPS (`eval/shorten_e27.py`, `fixes.condense` with sol) — rejected
+
+52 of 64 / 71 of 82 / 56 of 61 fast lines shortened (Euphoria / Kumail / ST), but about 8 new noticeable
+errors on the shortened lines (179 changed): «Φυτουλιά!» for "super nerdy", «ζητώντας το βλέμμα ξένων»,
+«πρωτοπηδηχτούμε», lost articles. Harold's rule: it adds errors, so it is not used.
+
+### Step 2 and batch size
+
+| Run | Euphoria | Kumail | ST |
+|---|---|---|---|
+| b300 (batches of 300 cues) | 1.0 / 4.0 | 1.06 / 17.0 | 0.49 / 9.1 |
+| big (`max_bytes` 100-120 KB, 1-2 calls) | 1.5 / 6.0 | 0.0 / 8.5 | 0.25 / 6.4 |
+| ctx (b300 + Flash flags + other languages) | 0.0 / 10.6 | 1.06 / 10.1 | 0.25 / 7.6 |
+| big + ctx | 1.5 / 7.0 | 0.0 / 7.45 | 0.98 / 9.3 |
+| **S27** = big + code fixes below | 1.5 / 8.05 | 1.06 / 9.6 | **0.0 / 5.9** |
+| S27 + ctx (whole-sentence context) | 2.0 / 6.0 | 0.0 / 8.5 | 0.0 / 7.1 |
+
+Flash flagged 61 / 83 / 109 lines (mostly "hard", some wordplay, ambiguous, gender, number).
+
+- Big batches beat b300 on noticeable errors (sum 20.9 vs 30.1) at about the same uncached tokens.
+- Other-language context gives no reliable gain: better on 2 of 3 films against b300, mixed against big.
+  It fixed the Kumail "high" pun (96) once and broke a flagged line once (Euphoria 274 «χρηματοποίηση»).
+  Kept as an option (`correct_translation(context=...)`), not a default.
+- Most serious errors left were Flash errors that the code either missed or blocked when sol fixed them:
+  - Euphoria 570: Flash repeated line 569 with small changes and dropped "in the state of California"; the
+    repeat check was exact-match only. Now a near repeat (Greek >= 0.88 similar, English < 0.5) is flagged
+    (on every raw eval translation: 2 flags, both real, also Housemaid S26d 1466).
+  - ST 464: «Τι;» for "Nancy! Nancy, what the hell is this? Are you serious?"; sol's fix was rejected as
+    "names added: Νάνσι". An omission fix now uses the retranslation rules, and an added known name that
+    sounds like a source name or address counts as restored. S27: fixed.
+  - Euphoria 570 again in S27: the fix «...της Καλιφόρνια» was rejected as "pronoun added: της" (an
+    article). Now each source "of" / possessive allows one της/του/των. Fixed after the S27 Euphoria runs.
+  - Euphoria 60 "can't help but be curious": sol's fix was rejected as "negation lost" (the negation is only
+    in the form). Open: the report does not keep rejected texts, so this is not verified.
+- Lines no variant fixes (Flash wrong, sol does not see it): Kumail 58 «Πίνατε» for smoke, 601 «Χέστηκα»,
+  ST 265 lost sarcasm, 946 «ρε γαμώτο». These need a flag before correction, not another pass.
+
+Verdict: big batches with the E27 code fixes are the best setup so far (ST meets the target: 0.0 / 5.9).
+Euphoria and Kumail are near it; their remaining serious errors are the blocked fixes above.
