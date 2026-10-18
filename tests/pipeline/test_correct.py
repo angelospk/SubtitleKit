@@ -1,7 +1,7 @@
 import json
 
-from subtitlekit.pipeline.correct import (apply_correction, check_change, check_correction, check_retranslation,
-                                          correct_translation, correction_prompt)
+from subtitlekit.pipeline.correct import (CONTEXT_NOTE, apply_correction, check_change, check_correction,
+                                          check_retranslation, correct_translation, correction_prompt)
 from subtitlekit.pipeline.fixes import Flag
 from subtitlekit.pipeline.llm import LLMError, MockBackend
 from subtitlekit.pipeline.srt import Cue
@@ -318,3 +318,26 @@ def test_batches_also_stop_at_a_byte_limit():
     assert len(prompts) >= 4 and all(len(p.encode()) <= fixed + one * 10 for p in prompts)
     ids = [int(k) for p in prompts for k in json.loads(p[p.index("{\n"):p.rindex("}") + 1])]
     assert ids == list(range(1, 41))  # every cue once, in order
+
+
+def test_context_adds_check_and_other_languages_to_flagged_cues_only():
+    src, el = src_and_greek()
+    context = {2: {"check": "ευγένεια: εσύ ή εσείς;", "other": {"fre": "À moins que vous assumiez,", "ger": "Außer Sie"}}}
+    corrections = [{"id": 2, "rx": "Αν θες ενοχές,", "sb": "Αν θέλετε να ζείτε με ενοχές,", "rate": 8, "type": "άλλο"}]
+    backend = router(corrections)
+    rep = correct_translation(src, el, backend, budgets={1: 30, 2: 34, 3: 30}, context=context)
+    prompt = backend.prompts[0]
+    payload = json.loads(prompt[prompt.index("{\n"):prompt.rindex("}") + 1])
+    assert payload["2"]["check"] == "ευγένεια: εσύ ή εσείς;"
+    assert payload["2"]["other"] == {"fre": "À moins que vous assumiez,", "ger": "Außer Sie"}
+    assert "check" not in payload["1"] and "other" not in payload["1"]
+    assert CONTEXT_NOTE.strip() in prompt
+    # a "check" cue may grow up to its budget, like a cue with a "problem"
+    assert {c.index: c.text for c in rep.cues}[2] == "Αν θέλετε να ζείτε με ενοχές,"
+
+
+def test_no_context_keeps_the_prompt_unchanged():
+    src, el = src_and_greek()
+    backend = router([])
+    correct_translation(src, el, backend)
+    assert CONTEXT_NOTE.strip() not in backend.prompts[0]

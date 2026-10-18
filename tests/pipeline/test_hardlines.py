@@ -1,6 +1,6 @@
 import json
 
-from subtitlekit.pipeline.hardlines import moment_lines, retranslate_hard, select_hard_lines
+from subtitlekit.pipeline.hardlines import FLAG_PROMPT, moment_lines, retranslate_hard, select_hard_lines
 from subtitlekit.pipeline.llm import LLMError, MockBackend
 from subtitlekit.pipeline.srt import Cue
 
@@ -253,3 +253,13 @@ def test_retranslate_hard_counts_a_web_lookup_once_per_line_and_always_sends_max
     rep = retranslate_hard(source, ours, {2: "wrong meaning"}, [], MockBackend(replies=reply))  # no budgets
     assert '"max_chars": 9' in calls[0]  # the current length is the cap
     assert len(calls) == 2 and rep.web_lookups == 1
+
+
+def test_select_hard_lines_with_the_uncertainty_prompt():
+    source, ours = films()
+    backend = MockBackend(replies=[json.dumps({"2": "gender: who speaks?", "3": "number: εσύ or εσείς"})])
+    hard = select_hard_lines(source, ours, backend, prompt=FLAG_PROMPT, per_batch=25)
+    prompt = backend.prompts[0]
+    assert prompt.startswith("You review a subtitle translation") and "at most 25" in prompt
+    assert "εσύ/εσείς" in prompt and "He kicked the bucket." in prompt
+    assert hard == {2: "gender: who speaks?", 3: "number: εσύ or εσείς"}

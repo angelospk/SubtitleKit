@@ -64,15 +64,28 @@ HAROLD_EXTRA = """✓ αφαίρεση διπλών σημείων στίξης 
 """
 PROMPTS = ("v1", "harold")
 
+# Targeted correction (E27): a first reader flagged hard lines; other-language subtitles of the same line come along.
+CONTEXT_NOTE = """Μερικά id έχουν και "check" (δύσκολο σημείο που σημείωσε πρώτος αναγνώστης: λογοπαίγνιο, αμφισημία, φύλο,
+ενικός/πληθυντικός, ευγένεια εσύ/εσείς) και "other" (η ίδια ατάκα σε επαγγελματικούς υπότιτλους άλλων γλωσσών).
+Έλεγξε αυτά τα σημεία με τη βοήθεια του "other": οι άλλες γλώσσες δείχνουν συχνά φύλο, αριθμό και ευγένεια
+(tu/vous, du/Sie, tú/usted). Διόρθωσε μόνο αν το ελληνικό είναι λάθος ή χάνει το νόημα· ένας υπότιτλος με
+"check" μπορεί να μεγαλώσει όσο χρειάζεται για τη διόρθωση.
+"""
 
-def correction_prompt(payload: str, source_lang: str = "English", human: bool = False, variant: str = "v1") -> str:
-    """variant "v1": English style rules; "harold": his Greek style block and the lines v1 left out."""
+
+def correction_prompt(payload: str, source_lang: str = "English", human: bool = False, variant: str = "v1",
+                      context: bool = False) -> str:
+    """variant "v1": English style rules; "harold": his Greek style block and the lines v1 left out.
+
+    context: some cues carry "check" and "other" fields; the prompt explains them."""
     if variant not in PROMPTS:
         raise ValueError(f"correction prompt must be one of {PROMPTS}, got {variant!r}")
     style = STYLE_RULES_EL if variant == "v1" else HAROLD_EXTRA + "\n" + STYLE_EL
     prompt = CORRECTION_PROMPT.format(source=source_lang, style=style, vocab=VOCAB_EL, payload=payload)
     if human:
         prompt = prompt.replace("\n\nΤο JSON στο τέλος", "\n" + HUMAN_NOTE + "\nΤο JSON στο τέλος", 1)
+    if context:
+        prompt = prompt.replace("\n\nΔιορθώνεις μόνο", "\n" + CONTEXT_NOTE + "\nΔιορθώνεις μόνο", 1)
     return prompt
 
 
@@ -280,7 +293,7 @@ def correct_translation(
     budgets: Optional[Dict[int, int]] = None, batch: int = 300,
     source_lang: str = "English", target_lang: str = "Greek", known_names: Sequence[str] = (),
     human: bool = False, prompt_variant: str = "v1", meaning_budgets: Optional[Dict[int, int]] = None,
-    max_bytes: Optional[int] = None,
+    max_bytes: Optional[int] = None, context: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> CorrectionReport:
     """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
 
@@ -289,7 +302,10 @@ def correct_translation(
     line, not a small edit (the strict rules rejected every meaning fix of a wrong line): retranslation rules, up to
     FIX_SLACK over this budget; the fidelity recheck follows.
     max_bytes: a batch also ends before its whole prompt passes this size (E26: one argument may not pass 128 KiB).
+    context: extra fields per cue id, e.g. {"check": why it is hard, "other": {lang: text}} (E27 targeted
+    correction); such a cue may grow to its budget like a flagged one.
     """
+    context = context or {}
     reasons: Dict[int, List[str]] = {}
     for f in flags:
         if f.cue != 0:
@@ -301,10 +317,12 @@ def correct_translation(
     pairs = list(zip(source, translated))
     src_by_id = {t.index: s.text for s, t in pairs}
     def entry(s: Cue, t: Cue) -> Dict[str, str]:
-        return {"src": s.text, "el": current[t.index], **({"problem": problems[t.index]} if t.index in problems else {})}
+        return {"src": s.text, "el": current[t.index], **({"problem": problems[t.index]} if t.index in problems else {}),
+                **context.get(t.index, {})}
 
     # max_bytes is for the whole prompt: the fixed text takes ~20 KB of it.
-    room = max_bytes - len(correction_prompt("", source_lang, human, prompt_variant).encode()) if max_bytes else None
+    room = (max_bytes - len(correction_prompt("", source_lang, human, prompt_variant, bool(context)).encode())
+            if max_bytes else None)
     parts: List[List[Tuple[Cue, Cue]]] = [[]]
     size = 0
     for s, t in pairs:
@@ -317,7 +335,7 @@ def correct_translation(
     for part in filter(None, parts):
         ids = {t.index for _, t in part}
         payload = json.dumps({str(t.index): entry(s, t) for s, t in part}, ensure_ascii=False, indent=0)
-        prompt = correction_prompt(payload, source_lang, human, prompt_variant)
+        prompt = correction_prompt(payload, source_lang, human, prompt_variant, bool(context))
         try:
             data = extract_json(backend.complete(prompt))
         except LLMError:
@@ -343,7 +361,7 @@ def correct_translation(
                 continue
             new = reflow_text(new)
             allowed = _length(original[cid])
-            if cid in problems:
+            if cid in problems or cid in context:
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
             if meaning_budgets is not None:
                 allowed = max(allowed, meaning_budgets.get(cid, 0))
