@@ -65,6 +65,7 @@ def test_valid_corrections_are_applied_checked_and_verified():
     assert [c.cue for c in rep.applied] == [1, 2] and rep.verified == {1, 2}
     reasons = " ".join(r for _, r in rep.rejected)
     assert "longer than allowed" in reasons and "unknown id" in reasons and "bad item" in reasons
+    assert rep.rejected_text == {3: "Βγάζει νόημα και σε όλους μας."}
     prompt = backend.prompts[0]
     assert "Μας την έφερε" in prompt and "ΑΠΑΓΟΡΕΥΕΤΑΙ" in prompt
     assert "Unless you're okay with the guilt," in prompt and "meaning reversed" in prompt

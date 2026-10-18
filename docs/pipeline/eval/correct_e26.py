@@ -84,7 +84,7 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", ba
     save_srt(cues, f"{out}/{variant}{tag}.el.srt")
     data = rep.to_dict()
     data["items"] = [a.to_dict() for a in rep.applied]
-    data["rejected_items"] = [[i, r] for i, r in rep.rejected]
+    data["rejected_items"] = [[i, r, rep.rejected_text.get(i)] for i, r in rep.rejected]
     with open(f"{out}/correction.json", "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False, indent=1)
     print(f"{variant}{tag}: applied {len(rep.applied)}, rejected {len(rep.rejected)}, reverted {len(rep.reverted)}, "

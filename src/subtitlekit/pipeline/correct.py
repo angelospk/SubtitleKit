@@ -307,6 +307,8 @@ class CorrectionReport:
     rejected: List[Tuple[int, str]] = field(default_factory=list)
     reverted: List[Tuple[int, str]] = field(default_factory=list)
     failed_batches: int = 0
+    # cue -> the last line a rule check rejected (E27: to see which fixes the rules block)
+    rejected_text: Dict[int, str] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -432,6 +434,7 @@ def correct_translation(
                 bad.append(f"cut too much ({_length(new)} < {MIN_KEEP:.0%} of {_length(original[cid])})")
             if bad:
                 rep.rejected.append((cid, "; ".join(bad)))
+                rep.rejected_text[cid] = new
                 continue
             current[cid] = new
             rep.applied.append(Applied(cid, item["rx"], item["sb"], item.get("rate"), str(item.get("type", ""))))
