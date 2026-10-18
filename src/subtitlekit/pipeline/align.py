@@ -208,25 +208,49 @@ def build_db(
     return con
 
 
-def other_languages(con: sqlite3.Connection, ref_pos: int) -> Dict[str, str]:
+_SENTENCE_END = (".", "!", "?", "…", "»", '"', "”")
+
+
+def _sentence_end(text: str) -> bool:
+    return visible_text(text).rstrip().endswith(_SENTENCE_END)
+
+
+def other_languages(con: sqlite3.Connection, ref_pos: int, sentence: bool = False, reach: int = 2) -> Dict[str, str]:
     """Text of every synced track language aligned to reference cue ``ref_pos``.
 
     A track that could not be synced to the reference is skipped: its groups
-    pair lines by accident."""
+    pair lines by accident. sentence: languages split a sentence at other
+    points, so the text grows to up to ``reach`` neighbouring groups on each
+    side until it starts and ends at a sentence end."""
     out: Dict[str, str] = {}
     for lang, grp in con.execute(
         "SELECT g.lang, g.grp FROM groups g JOIN tracks t ON t.lang=g.lang "
         "WHERE g.side='ref' AND g.pos=? AND t.synced=1 ORDER BY g.lang",
         (ref_pos,),
     ).fetchall():
-        texts = [
-            visible_text(t).replace("\n", " ")
-            for (t,) in con.execute(
+        def texts(g: int) -> List[str]:
+            return [t for (t,) in con.execute(
                 "SELECT c.text FROM groups g JOIN cues c ON c.lang=g.lang AND c.pos=g.pos "
-                "WHERE g.lang=? AND g.grp=? AND g.side='track' ORDER BY g.pos",
-                (lang, grp),
-            )
-        ]
-        if texts:
-            out[lang] = " / ".join(texts)
+                "WHERE g.lang=? AND g.grp=? AND g.side='track' ORDER BY g.pos", (lang, g))]
+
+        parts = texts(grp)
+        if not parts:
+            continue
+        if sentence:
+            lo = hi = grp
+            for _ in range(reach):  # backward: the previous group's text does not end a sentence
+                prev = texts(lo - 1) if lo > 0 else []
+                if not prev or _sentence_end(prev[-1]):
+                    break
+                lo -= 1
+                parts = prev + parts
+            for _ in range(reach):  # forward: this text does not end a sentence yet
+                if _sentence_end(parts[-1]):
+                    break
+                hi += 1
+                nxt = texts(hi)
+                if not nxt:
+                    break
+                parts = parts + nxt
+        out[lang] = " / ".join(visible_text(t).replace("\n", " ") for t in parts)
     return out

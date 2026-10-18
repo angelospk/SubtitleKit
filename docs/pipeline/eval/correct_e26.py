@@ -39,7 +39,7 @@ def flagged_context(film: str, source, ours, out: str) -> dict:
                              per_batch=25)
     con = build_db(f"{out}/align.db", "eng", source, {l: load_srt(p) for l, p in tracks.items()})
     pos = {g.index: k for k, g in enumerate(ours)}
-    ctx = {cid: {"check": why, "other": other_languages(con, pos[cid])} for cid, why in hard.items()}
+    ctx = {cid: {"check": why, "other": other_languages(con, pos[cid], sentence=True)} for cid, why in hard.items()}
     con.close()
     return ctx
 

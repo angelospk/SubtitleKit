@@ -153,3 +153,18 @@ def test_sync_track_zero_span_track_against_ref_at_zero_is_unsynced():
     track = [C(1, 0, 0, "a"), C(2, 0, 0, "b")]
     cues, info = sync_track(track, ref)
     assert cues == track and not info["synced"]
+
+
+def test_other_languages_sentence_spans_neighbour_groups(tmp_path):
+    # EN splits one sentence into 3 cues, the track into 2: ref cue 0 alone sees only "Soy dueño y opero cinco"
+    ref = [C(1, 0, 2000, "I own and operate five"), C(2, 2100, 4000, "of the dirtiest strip clubs"),
+           C(3, 4100, 6000, "in the state of California."), C(4, 7000, 8000, "Next.")]
+    spa = [C(1, 0, 2000, "Soy dueño y opero cinco"), C(2, 2100, 6000, "de los clubes más sucios de California."),
+           C(3, 7000, 8000, "Siguiente.")]
+    con = build_db(str(tmp_path / "s.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0) == {"spa": "Soy dueño y opero cinco"}
+    full = "Soy dueño y opero cinco / de los clubes más sucios de California."
+    assert other_languages(con, 0, sentence=True) == {"spa": full}
+    assert other_languages(con, 2, sentence=True) == {"spa": full}
+    assert other_languages(con, 3, sentence=True) == {"spa": "Siguiente."}
+    con.close()
