@@ -254,3 +254,28 @@ def test_mixed_reply_without_enough_anchors_still_strips_the_ones_given():
     reply = reply_for(chunk, ["⟦Where were⟧ " + EL[0], EL[1], EL[2]])
     out, problems = parse_reply(chunk, reply, anchor=True)
     assert out == {1: EL[0], 2: EL[1], 3: EL[2]} and "anchors not checked" in problems[0]
+
+
+def test_a_title_kept_in_latin_is_not_untranslated():
+    from subtitlekit.pipeline.translate_srt import _untranslated
+
+    assert not _untranslated("Ah, <i>Family Feud.</i>", "Α, το <i>Family Feud</i>.", "el")
+    assert not _untranslated("I'm watching <i>Family Feud.</i>", "Βλέπω <i>Family Feud</i>.", "el")
+    assert not _untranslated("Family Feud.", "Family Feud.", "el")  # a title alone
+    assert _untranslated("I'm watching Family Feud tonight.", "I'm watching Family Feud tonight.", "el")
+    assert _untranslated("Ah, Family Feud.", "Ah, the Family Feud show.", "el")
+
+
+def test_anchor_tolerates_cut_words_and_dialogue_lines():
+    from subtitlekit.pipeline.translate_srt import anchor_matches
+
+    assert anchor_matches("-Hi. What -I was", "-Hi. What's up?\n-I was gonna call.")
+    assert anchor_matches("-I'm sorry. -It's okay.", "-I'm sorry.\n-It's okay.")
+    assert not anchor_matches("Because he", "She left early.")
+
+
+def test_short_anchor_words_need_an_exact_match():
+    from subtitlekit.pipeline.translate_srt import anchor_matches
+
+    assert not anchor_matches("I", "It's late.")
+    assert anchor_matches("I", "I know.")

@@ -32,11 +32,28 @@ def _words(text: str) -> List[str]:
 
 
 def anchor_matches(anchor: str, source: str) -> bool:
-    """The anchor words open the source line (or all sit in its first five words); a source with no words passes."""
+    """Every anchor word is one of the source's first 8 words, or (3+ letters) its prefix: "What" for "What's",
+    and words from both lines of a dialogue cue. A source with no words passes."""
     a, s = _words(anchor), _words(source)
     if not s:
         return True
-    return bool(a) and (s[:len(a)] == a or all(w in s[:5] for w in a))
+    head = s[:8]
+    def same(w: str, x: str) -> bool:
+        return w == x or (min(len(w), len(x)) >= 3 and (w.startswith(x) or x.startswith(w)))
+
+    return bool(a) and all(any(same(w, x) for x in head) for w in a)
+
+
+def _untranslated(source: str, text: str, target_lang: str) -> bool:
+    """_looks_untranslated, but Latin words copied from the source (a title, a name) do not count, as long as the
+    line has Greek in it; a short source line (2 words or fewer) may stay Latin as a whole (a title alone)."""
+    if not _looks_untranslated(source, text, target_lang):
+        return False
+    kept = {w.lower() for w in re.findall(r"[A-Za-z]+", visible_text(source))}
+    rest = re.sub(r"[A-Za-z]+", lambda m: "" if m.group(0).lower() in kept else m.group(0), visible_text(text))
+    if re.search(r"[A-Za-z]", rest):
+        return True
+    return not (re.search(r"[\u0370-\u03ff\u1f00-\u1fff]", text) or len(_words(source)) <= 2)
 
 
 def build_prompt_srt(chunk: Sequence[Cue], meta: FilmMeta, source_lang: str,
@@ -106,7 +123,7 @@ def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el",
             problems.append(f"cue {cue.index}: empty translation")
         elif "-->" in text:
             problems.append(f"cue {cue.index}: contains an SRT timing arrow")
-        elif _looks_untranslated(src.text, text, target_lang):
+        elif _untranslated(src.text, text, target_lang):
             problems.append(f"cue {cue.index}: looks untranslated")
         else:
             out[cue.index] = text

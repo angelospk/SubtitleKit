@@ -596,3 +596,17 @@ raw translations corrected by sol, `eval/correct_e26.py`.)
 
 Verdict: S26d is the first free-translator config at 0 confirmed serious on all three films, with noticeable
 errors at or below the paid Lplot on Euphoria and ST. Next: new material (Wolf Man, The Housemaid).
+
+New material, full `cfg-S26d.yaml` runs (plot by Sonnet + WebSearch; Wolf Man: no plot found):
+
+| Film | Hours | Serious (confirmed) | Noticeable |
+|---|---|---|---|
+| Wolf Man (2025, horror, `~/wolfmaneng.srt`) | 1.51 | 0.0 | 1.33 |
+| The Housemaid (2025, thriller, WEB eng) | 2.09 | 0.0 | 11.03 |
+
+- Wolf Man: the 2 unconfirmed Sonnet "serious" are fine Greek («Κάθομαι.» for a sarcastic "I'm not busy at
+  all", «Μας κλέβεις!» for cheating at a game).
+- The Housemaid log showed two small faults, fixed after the run: the untranslated check rejected a title kept
+  in Latin ("Family Feud", cues 500 and 549 left in English); the anchor check rejected dialogue cues whose
+  anchor took words from both lines or cut "What's" to "What" (only extra retries). Hamnet was dropped: its
+  only track is Spanish.

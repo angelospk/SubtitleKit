@@ -1,4 +1,12 @@
-# Handoff: where the pipeline stands (2026-10-15 23:00)
+# Handoff: where the pipeline stands (2026-10-18)
+
+**Update 2026-10-18 (E26).** The simple pipeline is `cfg-S26d.yaml`: Gemini Flash low (agy) translates SRT
+text with Harold's Greek prompt (`prompts_el.py`) and anchors, gpt-6.1-sol high corrects with his Greek
+rx/sb prompt, timing by code only. 0 confirmed serious on Euphoria, Stranger Things and Kumail (noticeable
+7.0 / 3.9 / 11.7), and on the new films Wolf Man (1.3) and The Housemaid (11.0). Results and caveats: `QUALITY.md`, "E26 result".
+Not yet locked: `locked.yaml` is still Lopus3 (needs Harold's go). The text below is the 2026-10-15 state.
+
+# Handoff (2026-10-15 23:00)
 
 Read this first when you resume. Source-of-truth docs: `QUALITY.md` (quality
 loop, E11–E21), `ROADMAP.md` (E7–E10, locked config), `DECISIONS.md` (D1–D27),
