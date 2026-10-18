@@ -185,3 +185,13 @@ def test_qa_flags_a_tag_like_placeholder_but_not_formatting():
           Cue(3, 4000, 5000, '{\\an8}<font color="#ffff00">Εκεί πάνω.</font>')]
     flags = [f for f in qa_translation(src, el, FixConfig()) if f.reason.startswith("placeholder")]
     assert [f.cue for f in flags] == [1] and flags[0].blocker
+
+
+def test_qa_translation_flags_a_line_much_shorter_than_its_source():
+    # E26 Stranger Things 464: the whole angry line became «Τι;» and the correction pass left it.
+    src = [Cue(1, 0, 3000, "Nancy! Nancy, what the hell is this? Are you serious?"),
+           Cue(2, 3000, 5000, "See, this is what I'm talking about."),
+           Cue(3, 5000, 6000, "What?")]
+    el = [Cue(1, 0, 3000, "Τι;"), Cue(2, 3000, 5000, "Αυτό ακριβώς λέω."), Cue(3, 5000, 6000, "Τι;")]
+    flags = [f for f in qa_translation(src, el, FixConfig()) if "shorter" in f.reason]
+    assert [f.cue for f in flags] == [1] and flags[0].blocker

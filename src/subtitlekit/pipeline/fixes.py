@@ -296,6 +296,9 @@ def qa_translation(
         tc = len(visible_text(t.text).replace("\n", ""))
         if sc >= 10 and tc > cfg.max_expansion * sc:
             flags.append(Flag(t.index, f"translation {tc / sc:.1f}× longer than source", s.text, t.text))
+        if sc >= 25 and tc < 0.3 * sc:
+            # E26 ST 464: a long line became «Τι;». On 5 films this flags only real omissions.
+            flags.append(Flag(t.index, "translation much shorter than source (omission?)", s.text, t.text, blocker=True))
         if sorted(NUMBER_RE.findall(visible_text(s.text))) != sorted(NUMBER_RE.findall(visible_text(t.text))):
             flags.append(Flag(t.index, "numbers differ from source", s.text, t.text, blocker=True))
         if (target_lang == "el" and SOURCE_NEGATION_RE.search(visible_text(s.text))
