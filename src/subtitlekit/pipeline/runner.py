@@ -382,6 +382,11 @@ def run_film(
             **{k: [x for p in passes for x in p[k]][:n] for k, n in
                (("items", 50), ("rejected_items", 30), ("reverted_items", 30))},
             "passes": [{k: p[k] for k in counts} for p in passes]}
+        failed = report.data["correction"]["failed_batches"]
+        if failed:
+            # E26e: a corrector out of quota fails every batch; the uncorrected text must not pass as corrected.
+            off_flags.append(Flag(0, f"correction: {failed} batches failed", blocker=True))
+            qa_flags = rule_flags + fid_flags + off_flags + gloss_flags
     tracks = [(c.language, c.cues) for c in candidates
               if c.language not in (cfg["target_language"], chosen.language)]
     cps = cfg["translate"].get("budget_cps")

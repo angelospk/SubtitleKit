@@ -393,6 +393,23 @@ def test_a_later_correction_pass_sees_fresh_glossary_flags(tmp_path):
     assert first > 1 and second == first - 1
 
 
+def test_failed_correction_batches_block_auto_approval(tmp_path):
+    # E26e: the corrector's quota ran out; every batch failed and the raw translation shipped without a blocker.
+    film = make_film(tmp_path)
+
+    def reply(prompt):
+        if prompt.startswith("You correct Greek subtitles"):
+            raise LLMError("usage limit reached")
+        return greek_backend().replies(prompt)
+
+    res = run_film(str(film), cfg(correction={"passes": 2}), greek_backend(), str(tmp_path / "out"),
+                   log=lambda m: None, correct_backend=MockBackend(replies=reply, name="test-llm"))
+    assert res.decision != AUTO
+    rep = read_report(tmp_path / "out")
+    assert [p["failed_batches"] for p in rep["correction"]["passes"]] == [1, 1]
+    assert any(f["reason"] == "correction: 2 batches failed" and f["blocker"] for f in rep["flags"])
+
+
 def test_correction_pass_uses_its_own_backend_when_configured(tmp_path):
     # Free translator, strongest corrector: the correction pass runs on correction.llm, the rest on llm.
     film = make_film(tmp_path)
