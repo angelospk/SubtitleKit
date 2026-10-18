@@ -45,12 +45,12 @@ def anchor_matches(anchor: str, source: str) -> bool:
 
 
 def _untranslated(source: str, text: str, target_lang: str) -> bool:
-    """_looks_untranslated, but Latin words copied from the source (a title, a name) do not count, as long as the
+    """_looks_untranslated, but capitalised Latin words copied from the source (a title, a name) do not count, as long as the
     line has Greek in it; a short source line (2 words or fewer) may stay Latin as a whole (a title alone)."""
     if not _looks_untranslated(source, text, target_lang):
         return False
-    kept = {w.lower() for w in re.findall(r"[A-Za-z]+", visible_text(source))}
-    rest = re.sub(r"[A-Za-z]+", lambda m: "" if m.group(0).lower() in kept else m.group(0), visible_text(text))
+    kept = {w for w in re.findall(r"[A-Za-z]+", visible_text(source)) if w[0].isupper()}  # titles and names only
+    rest = re.sub(r"[A-Za-z]+", lambda m: "" if m.group(0) in kept else m.group(0), visible_text(text))
     if re.search(r"[A-Za-z]", rest):
         return True
     return not (re.search(r"[\u0370-\u03ff\u1f00-\u1fff]", text) or len(_words(source)) <= 2)

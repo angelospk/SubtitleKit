@@ -279,3 +279,9 @@ def test_short_anchor_words_need_an_exact_match():
 
     assert not anchor_matches("I", "It's late.")
     assert anchor_matches("I", "I know.")
+
+
+def test_only_capitalised_source_words_are_excused():
+    from subtitlekit.pipeline.translate_srt import _untranslated
+
+    assert _untranslated("I'm watching Family Feud tonight.", "Α, watching Family Feud tonight.", "el")
