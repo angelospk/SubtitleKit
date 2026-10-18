@@ -235,6 +235,11 @@ def _sounds_in_source(name: str, src_text: str) -> bool:
     return any(difflib.SequenceMatcher(None, _el_sound(name), _en_sound(w)).ratio() >= 0.7 for w in words)
 
 
+# "'s" after these words is a contraction (let's, it's, what's), not a possessive.
+_NOT_POSSESSIVE = {"let", "it", "that", "what", "there", "here", "who", "where", "how", "he", "she", "this", "when",
+                   "why", "everyone", "everybody", "nobody", "somebody", "someone", "nothing", "something", "everything"}
+
+
 def check_retranslation(before: str, after: str, source: str, allowed_chars: int, known_names: Sequence[str] = (),
                         source_lang: str = "English") -> List[str]:
     """check_change for a whole new line (hard lines, review fixes), not a small correction: a question, names
@@ -265,8 +270,20 @@ def check_retranslation(before: str, after: str, source: str, allowed_chars: int
         # in "my God" the "my" already counts.
         exclaims = len(re.findall(_EN_EXCLAIM, src_text, re.I)) - len(re.findall(rf"\bmy\s+{_EN_EXCLAIM}", src_text, re.I))
         a_mou = _EL_EXCLAIM.sub("", a, count=exclaims) if exclaims > 0 else a  # count=0 would mean all
-        bad = [b for b in bad if not (b.startswith("pronoun added: ") and _count(b[15:], a_mou if b[15:] == "μου" else a)
-                                      <= len(re.findall(rf"\b(?:{_EN_PERSON.get(b[15:], '(?!)')})\b", src_text, re.I)))]
+        # E27 Euphoria 570: «στην πολιτεία της Καλιφόρνια» for "in the state of California": της/του/των are also
+        # genitive articles, so each "of" / "'s" of the source allows one of them.
+        flat = src_text.replace("\u2019", "'")
+        genitive = len(re.findall(r"\bof\b", flat, re.I)) + sum(
+            1 for w in re.findall(r"\b(\w+)'s\b", flat) if w.lower() not in _NOT_POSSESSIVE)
+
+        def person(p: str) -> int:
+            return len(re.findall(rf"\b(?:{_EN_PERSON.get(p, '(?!)')})\b", src_text, re.I))
+
+        # One allowance for της, του and των together.
+        excess = sum(max(0, _count(p, a) - person(p)) for p in ("της", "του", "των"))
+        bad = [b for b in bad if not (b.startswith("pronoun added: ") and (
+            excess <= genitive if b[15:] in ("της", "του", "των")
+            else _count(b[15:], a_mou if b[15:] == "μου" else a) <= person(b[15:])))]
     return bad
 
 

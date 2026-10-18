@@ -397,3 +397,40 @@ def test_a_restored_vocative_name_may_move_to_the_end():
     fix = [{"id": 1, "rx": "-Έλα!", "sb": "-Έλα εδώ, Νάνσι!", "rate": 9, "type": "νόημα"}]
     rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 40}, known_names=["Νάνσι"])
     assert {c.index: c.text for c in rep.cues}[1] == "-Έλα εδώ, Νάνσι!\n-Όχι.", rep.rejected
+
+
+def test_a_genitive_article_is_not_an_added_pronoun():
+    # E27 S27 Euphoria 570: the fix of a repeated line was rejected as "pronoun added: της".
+    src = [Cue(569, 0, 2000, "of the dirtiest, most delectable strip clubs"),
+           Cue(570, 2000, 4000, "in the state of California.")]
+    el = [Cue(569, 0, 2000, "από τα πιο πρόστυχα,\nλαχταριστά στριπτιτζάδικα"),
+          Cue(570, 2000, 4000, "απ' τα πιο πρόστυχα,\nτα πιο λαχταριστά στριπτιτζάδικα")]
+    flags = [Flag(570, "repeats the previous translation", blocker=True)]
+    fix = [{"id": 570, "rx": "απ' τα πιο πρόστυχα,\nτα πιο λαχταριστά στριπτιτζάδικα",
+            "sb": "στην πολιτεία της Καλιφόρνια.", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={569: 40, 570: 40})
+    assert {c.index: c.text for c in rep.cues}[570] == "στην πολιτεία της Καλιφόρνια.", rep.rejected
+
+
+def test_a_clitic_pronoun_is_still_counted():
+    src = [Cue(1, 0, 2000, "I told the truth.")]
+    el = [Cue(1, 0, 2000, "Λέω.")]
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 1, "rx": "Λέω.", "sb": "Της είπα την αλήθεια.", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 40})
+    assert {c.index: c.text for c in rep.cues}[1] == "Λέω."
+
+
+def test_genitive_allowance_follows_the_source():
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    cases = [("The father of the child said no.", "Ο πατέρας του παιδιού είπε όχι.", True),
+             ("Tell the words.", "Πες της τις λέξεις.", False),
+             ("You told the truth.", "Της είπες την αλήθεια.", False),
+             ("Let's tell the truth.", "Ας της πούμε την αλήθεια.", False),
+             ("The child\u2019s father spoke.", "Ο πατέρας του παιδιού μίλησε.", True),
+             ("The child's father spoke.", "Ο πατέρας του παιδιού της μίλησε.", False)]
+    for en, fix_text, kept in cases:
+        rep = correct_translation([Cue(1, 0, 3000, en)], [Cue(1, 0, 3000, "Όχι.")],
+                                  router([{"id": 1, "rx": "Όχι.", "sb": fix_text, "rate": 9, "type": "νόημα"}]),
+                                  flags=flags, meaning_budgets={1: 50})
+        assert ({c.index: c.text for c in rep.cues}[1] == fix_text) is kept, (en, rep.rejected)
