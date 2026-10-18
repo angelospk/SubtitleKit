@@ -298,7 +298,8 @@ def run_film(
         tr = translate_cues_srt(
             source, tr_backend, film_meta, chosen.language, cfg["target_language"],
             cfg["translate"]["chunk_size"], cfg["translate"]["context_lines"],
-            progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"), glossary=glossary)
+            progress=lambda d, n: log(f"[{film}]   {d}/{n} translated"), glossary=glossary,
+            anchor=cfg["translate"]["anchor"])
     else:
         tr = translate_cues(
         source, tr_backend, film_meta, chosen.language, cfg["target_language"],

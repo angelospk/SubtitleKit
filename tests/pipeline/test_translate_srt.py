@@ -179,3 +179,58 @@ def test_split_keeps_the_shifted_texts_of_the_parent_chunk():
                             max_consecutive_errors=2)
     assert any(line.startswith("split") for line in tr.log)
     assert tr.shifted and all(re.search("[α-ω]", tr.cues[i - 1].text) for i in tr.shifted)
+
+
+def anchored(chunk, texts):
+    """A reply that follows the anchor rule: the first 2 source words of each cue's own line."""
+    return reply_for(chunk, [f"⟦{' '.join(c.text.split()[:2])}⟧ {t}" for c, t in zip(chunk, texts)])
+
+
+def test_anchor_matching_tolerates_case_and_punctuation():
+    from subtitlekit.pipeline.translate_srt import anchor_matches
+
+    assert anchor_matches("Where were", "Where were you?")
+    assert anchor_matches("derek wait", "-Derek! -Wait! Holly!")
+    assert anchor_matches("you", "Okay, you win.")  # in the first five words
+    assert not anchor_matches("Like I'm", "And I'm not.")
+    assert anchor_matches("", "♪ ♪")  # a line with no words passes
+
+
+def test_anchor_is_stripped_and_a_wrong_anchor_rejects_the_cue():
+    chunk = cues(3)
+    reply = anchored(chunk, EL[:3])
+    out, problems = parse_reply(chunk, reply, anchor=True)
+    assert out == {1: EL[0], 2: EL[1], 3: EL[2]} and problems == []
+    # Cue 2 carries cue 3's text and anchor: the anchor gives it away.
+    bad = reply_for(chunk, ["⟦Where were⟧ " + EL[0], "⟦Sorry!⟧ " + EL[2], "⟦Sorry!⟧ " + EL[2]])
+    out, problems = parse_reply(chunk, bad, anchor=True)
+    assert set(out) == {1, 3} and "cue 2: anchor" in " ".join(problems)
+
+
+def test_a_reply_without_anchors_is_read_without_the_check():
+    chunk = cues(3)
+    out, problems = parse_reply(chunk, reply_for(chunk, EL[:3]), anchor=True)
+    assert len(out) == 3 and "anchors not checked" in problems[0]
+
+
+def test_anchor_rule_is_in_the_prompt_only_when_on():
+    assert "⟦" in build_prompt_srt(cues(2), FilmMeta(), "en", anchor=True)
+    assert "⟦" not in build_prompt_srt(cues(2), FilmMeta(), "en")
+
+
+def test_misplaced_text_found_by_its_anchor_is_asked_again_with_neighbours():
+    src = cues(12)
+    calls = []
+
+    def reply(prompt):
+        calls.append(prompt)
+        chunk = srt_in(prompt)
+        texts = [EL[SRC.index(c.text)] for c in chunk]
+        r = anchored(chunk, texts)
+        if len(calls) == 1:  # cue 6 gets cue 7's line with cue 7's anchor (a local slip)
+            r = r.replace(f"⟦It's the⟧ {EL[5]}", f"⟦Call a⟧ {EL[6]}")
+        return r
+
+    tr = translate_cues_srt(src, MockBackend(replies=reply), chunk_size=12, anchor=True)
+    assert len(calls) == 2 and [c.index for c in srt_in(calls[1])] == [3, 4, 5, 6, 7, 8, 9]
+    assert [c.text for c in tr.cues] == EL

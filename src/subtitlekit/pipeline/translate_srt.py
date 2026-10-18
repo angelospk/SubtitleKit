@@ -12,7 +12,8 @@ import re
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .llm import LLMBackend, LLMError, forget
-from .prompts_el import CAPTION_MARK, CAPTION_NOTE_EL, GLOSSARY_HEADER_EL, STYLE_EL, TRANSLATE_PROMPT_EL
+from .prompts_el import (ANCHOR_NOTE_EL, CAPTION_MARK, CAPTION_NOTE_EL, GLOSSARY_HEADER_EL, STYLE_EL,
+                         TRANSLATE_PROMPT_EL)
 from .shift import find_shifts
 from .srt import Cue, format_srt, parse_srt, visible_text
 from .translate import FilmMeta, TranslationResult, _looks_untranslated, match_dashes, normalize_text
@@ -20,10 +21,26 @@ from .translate import FilmMeta, TranslationResult, _looks_untranslated, match_d
 SOURCE_NAMES_EL = {"en": "τα αγγλικά", "fr": "τα γαλλικά", "de": "τα γερμανικά", "es": "τα ισπανικά",
                    "it": "τα ιταλικά", "pt": "τα πορτογαλικά"}
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*$", re.M)
+# Anchor (E26c): each Greek cue starts with the first source words, so code sees which line the text belongs to.
+_ANCHOR = re.compile(r"^\s*⟦([^⟧]*)⟧\s*")
+_ANY_ANCHOR = re.compile(r"⟦[^⟧]*⟧\s*")
+_WORD = re.compile(r"[^\W_]+(?:'[^\W_]+)?")
+
+
+def _words(text: str) -> List[str]:
+    return [w.lower() for w in _WORD.findall(visible_text(text))]
+
+
+def anchor_matches(anchor: str, source: str) -> bool:
+    """The anchor words open the source line (or all sit in its first five words); a source with no words passes."""
+    a, s = _words(anchor), _words(source)
+    if not s:
+        return True
+    return bool(a) and (s[:len(a)] == a or all(w in s[:5] for w in a))
 
 
 def build_prompt_srt(chunk: Sequence[Cue], meta: FilmMeta, source_lang: str,
-                     context: Sequence[Tuple[str, str]] = (), glossary=None) -> str:
+                     context: Sequence[Tuple[str, str]] = (), glossary=None, anchor: bool = False) -> str:
     movie = ""
     if meta.title:
         movie = f"\n## Ταινία (δεδομένα)\n- Τίτλος: {meta.title}" + (f" ({meta.year})" if meta.year else "")
@@ -46,16 +63,24 @@ def build_prompt_srt(chunk: Sequence[Cue], meta: FilmMeta, source_lang: str,
         style += "\n## Λεζάντες\n" + CAPTION_NOTE_EL
     return TRANSLATE_PROMPT_EL.format(
         source=SOURCE_NAMES_EL.get(source_lang, source_lang), style=style, first=chunk[0].index,
+        anchor=ANCHOR_NOTE_EL if anchor else "",
         last=chunk[-1].index, movie=movie, glossary=gloss, context=ctx, payload=format_srt(chunk).rstrip("\n"))
 
 
-def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el") -> Tuple[Dict[int, str], List[str]]:
-    """Accepted texts by cue index, and problems. Timestamps in the reply are ignored."""
+def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el",
+                anchor: bool = False) -> Tuple[Dict[int, str], List[str]]:
+    """Accepted texts by cue index, and problems. Timestamps in the reply are ignored. With ``anchor`` a cue whose
+    anchor does not match its own source line is rejected; a reply where most cues have no anchor is read as a
+    model that ignored the rule: its anchors are not checked (the shift detector still is)."""
     by_index = {c.index: c for c in chunk}
     out: Dict[int, str] = {}
     problems: List[str] = []
     seen = set()
-    for cue in parse_srt(_FENCE.sub("", reply)):
+    parsed = parse_srt(_FENCE.sub("", reply))
+    if anchor and sum(bool(_ANCHOR.match(c.text)) for c in parsed) < len(parsed) / 2:
+        problems.append("most cues have no anchor: anchors not checked")
+        anchor = False
+    for cue in parsed:
         src = by_index.get(cue.index)
         if src is None:
             problems.append(f"unexpected cue number {cue.index}")
@@ -65,7 +90,14 @@ def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el") -> Tu
             out.pop(cue.index, None)
             continue
         seen.add(cue.index)
-        text = match_dashes(src.text, normalize_text(cue.text))
+        body = cue.text
+        if anchor:
+            m = _ANCHOR.match(body)
+            if m is None or not anchor_matches(m.group(1), src.text):
+                problems.append(f"cue {cue.index}: anchor {m.group(1) if m else None!r} does not match its line")
+                continue
+            body = body[m.end():]
+        text = match_dashes(src.text, normalize_text(_ANY_ANCHOR.sub("", body)))
         if not visible_text(text).strip():
             problems.append(f"cue {cue.index}: empty translation")
         elif "-->" in text:
@@ -100,7 +132,7 @@ def translate_cues_srt(
     cues: Sequence[Cue], backend: LLMBackend, meta: Optional[FilmMeta] = None, source_lang: str = "en",
     target_lang: str = "el", chunk_size: int = 500, context_lines: int = 4, max_attempts: int = 3,
     max_consecutive_errors: int = 4, progress: Optional[Callable[[int, int], None]] = None, glossary=None,
-    margin: int = 3,
+    margin: int = 3, anchor: bool = False,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
     done: Dict[int, str] = {}
@@ -121,7 +153,7 @@ def translate_cues_srt(
         for attempt in range(1, max_attempts + 1):
             ask = _with_neighbours(pending, chunk, margin)
             prev = [c for c in cues if c.index < ask[0].index and c.index in done][-context_lines:]
-            prompt = build_prompt_srt(ask, meta, source_lang, [(c.text, done[c.index]) for c in prev], glossary)
+            prompt = build_prompt_srt(ask, meta, source_lang, [(c.text, done[c.index]) for c in prev], glossary, anchor)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += (f"\n\nΠροσπάθεια {attempt}: η προηγούμενη απάντηση απορρίφθηκε ({last_problem[:300]}). "
@@ -136,7 +168,7 @@ def translate_cues_srt(
                 result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {exc}")
                 continue
             errors_in_row = 0
-            accepted, problems = parse_reply(ask, reply, target_lang)
+            accepted, problems = parse_reply(ask, reply, target_lang, anchor)
             # Only the pending cues are taken; the neighbours were sent for context and keep their earlier text.
             wanted = {c.index for c in pending}
             accepted = {i: t for i, t in accepted.items() if i in wanted}
