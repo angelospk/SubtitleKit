@@ -283,3 +283,13 @@ def test_with_meaning_budgets_any_fix_may_grow_to_the_budget():
     assert not correct_translation(src, el, router(fix)).applied
     assert [a.cue for a in correct_translation(src, el, router(fix), meaning_budgets={1: 51}).applied] == [1]
     assert not correct_translation(src, el, router(fix), meaning_budgets={1: 16}).applied  # the budget still holds
+
+
+def test_both_greek_prompts_keep_the_swearing_strength_of_the_source():
+    # E26e Euphoria: 5 of 12 noticeable errors were swearing stronger than the English («Τι στον πούτσο;»).
+    from subtitlekit.pipeline.correct import correction_prompt
+    from subtitlekit.pipeline.prompts_el import STYLE_EL
+
+    assert "ίδια ένταση με το πρωτότυπο" in STYLE_EL
+    h = correction_prompt("{}", variant="harold")
+    assert "ίδια ένταση με το πρωτότυπο" in h and "ανέβασε την αργκό έναν βαθμό" not in h
