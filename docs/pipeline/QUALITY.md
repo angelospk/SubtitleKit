@@ -610,3 +610,28 @@ New material, full `cfg-S26d.yaml` runs (plot by Sonnet + WebSearch; Wolf Man: n
   in Latin ("Family Feud", cues 500 and 549 left in English); the anchor check rejected dialogue cues whose
   anchor took words from both lines or cut "What's" to "What" (only extra retries). Hamnet was dropped: its
   only track is Spanish.
+
+### E26 follow-up: more correction passes, auditor noise (2026-10-18)
+
+Serious (confirmed) / noticeable per hour. Correction only (`eval/correct_e26.py`, sol high) on earlier outputs:
+
+| Run | Euphoria | ST | Kumail |
+|---|---|---|---|
+| 1 sol pass (S26d) | 0.0 / 7.04 | 0.0 / 3.92 | 0.0 / 11.71 |
+| 2 sol passes | 0.0 / 5.03 | – | 0.0 / 9.58 |
+| 3 sol passes | – | – | 0.0 / 13.83 |
+| 2 passes, second audit of the same file | – | – | 0.0 / 7.45 |
+
+- Auditor noise: the same Kumail file scored 9.58 and 7.45. Only 6 items are in both audits. Of the 13
+  pass-3 items, only 1 is on a line that pass 3 changed. One audit cannot resolve the < 7 target, so a
+  result is now the mean of 2 audits (Kumail 2 passes: 8.5).
+- A third pass does not help. Lines that no pass fixes: 58 «Έπινες» (smoking), 96 the "high" pun,
+  470, 601 «Χέστηκα» for "Fuck you", 644 «έκανα opening», 846 «φυτό» (valid slang). 341 and 644 were
+  rejected 2-3 times by Harold's no-added-pronoun rule.
+- 11 of 27 pass-2 rejections on Kumail were length only (often 1-2 chars). With `meaning_fix` any fix may
+  now grow to the 17 CPS budget.
+- Code: `correction.passes` (cfg-S26e = S26d + 2 passes); failed correction batches are now a blocker.
+
+The first S26e run is void: the Codex 5h window ran out mid-chain. Euphoria, ST and Wolf Man got no
+correction (every batch failed), Kumail lost pass 2, and every audit had CONFIRM FAILED. Its numbers (raw
+Flash: Euphoria 12.08, ST 12.27, Wolf Man 4.65) only show the corrector's effect. Rerun pending.
