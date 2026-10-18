@@ -8,6 +8,8 @@ eng() {
     Euphoria.S03E01.*) echo ~/Downloads/Subtitles-1/43c52854aee2ff8b/Euphoria.US.S03E01.1080p.WEB.h264-ETHEL_track3_[eng].srt ;;
     Stranger.Things.S05E08.*) echo ~/Downloads/Subtitles/8023c67d80b190ea/Stranger.Things.S05E08.1080p.WEB.h264-ETHEL_track3_[eng].srt ;;
     Kumail.*) echo ~/Downloads/Subs/English.srt ;;
+    Wolf.Man.2025.*) echo "$E/films/$1/Wolf.Man.2025.WEB.eng.srt" ;;
+    The.Housemaid.2025.*) echo "$E/films/$1/The.Housemaid.2025.WEB.eng.srt" ;;
   esac
 }
 failed=0
