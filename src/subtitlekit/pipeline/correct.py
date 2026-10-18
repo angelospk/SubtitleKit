@@ -264,15 +264,28 @@ def _item_id(item: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+FIX_SLACK = 1.25  # as hardlines.FIX_SLACK
+
+
+def _is_meaning_fix(item: Dict[str, Any]) -> bool:
+    try:
+        rate = float(item.get("rate", 0))
+    except (TypeError, ValueError):
+        return False
+    return str(item.get("type", "")).strip() == "νόημα" and rate >= 8
+
+
 def correct_translation(
     source: Sequence[Cue], translated: Sequence[Cue], backend: LLMBackend, flags: Sequence[Any] = (),
     budgets: Optional[Dict[int, int]] = None, batch: int = 300,
     source_lang: str = "English", target_lang: str = "Greek", known_names: Sequence[str] = (),
-    human: bool = False, prompt_variant: str = "v1",
+    human: bool = False, prompt_variant: str = "v1", meaning_budgets: Optional[Dict[int, int]] = None,
 ) -> CorrectionReport:
     """LLM proposes rx/sb edits; code enforces the hard rules, then the fidelity check is re-run.
 
     human: the Greek is a professional translation (E9 enrich): fix clear errors only, never restyle.
+    meaning_budgets: a "νόημα" fix rated 8+ is a new line, not a small edit (E26: the strict rules rejected every
+    meaning fix of a wrong line): retranslation rules, up to FIX_SLACK over this budget; the fidelity recheck follows.
     """
     reasons: Dict[int, List[str]] = {}
     for f in flags:
@@ -319,7 +332,11 @@ def correct_translation(
             allowed = _length(original[cid])
             if cid in problems:
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
-            bad = check_change(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
+            if meaning_budgets is not None and _is_meaning_fix(item):
+                allowed = max(allowed, int(meaning_budgets.get(cid, 0) * FIX_SLACK))
+                bad = check_retranslation(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
+            else:
+                bad = check_change(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
             # E6: most losing corrections cut a line that already fit its budget down to a stub.
             fits = budgets is not None and _length(original[cid]) <= budgets.get(cid, 0)
             if cid not in problems and fits and _length(new) < MIN_KEEP * _length(original[cid]):

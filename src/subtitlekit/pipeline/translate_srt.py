@@ -88,10 +88,19 @@ def _shifted(chunk: Sequence[Cue], texts: Dict[int, str], new: Dict[int, str]) -
     return [got[k].index for lo, hi in ranges for k in range(lo, hi + 1) if got[k].index in new]
 
 
+def _with_neighbours(pending: Sequence[Cue], chunk: Sequence[Cue], margin: int) -> List[Cue]:
+    """The pending cues plus ``margin`` chunk cues on each side, in order: a retry of a few cues keeps its scene."""
+    want = {c.index for c in pending}
+    pos = [k for k, c in enumerate(chunk) if c.index in want]
+    keep = {j for k in pos for j in range(max(0, k - margin), min(len(chunk), k + margin + 1))}
+    return [chunk[j] for j in sorted(keep)]
+
+
 def translate_cues_srt(
     cues: Sequence[Cue], backend: LLMBackend, meta: Optional[FilmMeta] = None, source_lang: str = "en",
     target_lang: str = "el", chunk_size: int = 500, context_lines: int = 4, max_attempts: int = 3,
     max_consecutive_errors: int = 4, progress: Optional[Callable[[int, int], None]] = None, glossary=None,
+    margin: int = 3,
 ) -> TranslationResult:
     meta = meta or FilmMeta()
     done: Dict[int, str] = {}
@@ -110,8 +119,9 @@ def translate_cues_srt(
         pending = list(chunk)
         last_problem = ""
         for attempt in range(1, max_attempts + 1):
-            prev = [c for c in cues if c.index < pending[0].index and c.index in done][-context_lines:]
-            prompt = build_prompt_srt(pending, meta, source_lang, [(c.text, done[c.index]) for c in prev], glossary)
+            ask = _with_neighbours(pending, chunk, margin)
+            prev = [c for c in cues if c.index < ask[0].index and c.index in done][-context_lines:]
+            prompt = build_prompt_srt(ask, meta, source_lang, [(c.text, done[c.index]) for c in prev], glossary)
             if last_problem:
                 # Also changes the cache key, so a retry never replays a cached bad reply.
                 prompt += (f"\n\nΠροσπάθεια {attempt}: η προηγούμενη απάντηση απορρίφθηκε ({last_problem[:300]}). "
@@ -126,7 +136,10 @@ def translate_cues_srt(
                 result.log.append(f"cues {pending[0].index}-{pending[-1].index} attempt {attempt}: {exc}")
                 continue
             errors_in_row = 0
-            accepted, problems = parse_reply(pending, reply, target_lang)
+            accepted, problems = parse_reply(ask, reply, target_lang)
+            # Only the pending cues are taken; the neighbours were sent for context and keep their earlier text.
+            wanted = {c.index for c in pending}
+            accepted = {i: t for i, t in accepted.items() if i in wanted}
             shifted = _shifted(chunk, {**{c.index: done[c.index] for c in chunk if c.index in done}, **accepted},
                                accepted)
             if shifted:

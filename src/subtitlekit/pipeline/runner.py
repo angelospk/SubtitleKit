@@ -308,6 +308,8 @@ def run_film(
         rescue=cfg["translate"].get("rescue_untranslated", True),
         style_rules=cfg.get("style_rules", False), glossary=glossary,
     ) if tr_backend else _no_llm(source)
+    if srt_mode:
+        save_srt(tr.cues, str(film_out / "translation.el.srt"))  # the translator's text before any later pass
     if pre_caps:
         done = finish_captions(source, tr.cues, pre_caps, tr.untranslated)
         source, tr.cues = done.source, done.translated
@@ -357,7 +359,8 @@ def run_film(
         crep = correct_translation(source, tr.cues, correct_backend or backend, flags=qa_flags, budgets=budgets,
                                    batch=cfg["correction"]["batch"], source_lang=src_name, target_lang=tgt_name,
                                    known_names=[t.greek for t in glossary.terms if t.kind == "name"] if glossary else (),
-                                   prompt_variant=cfg["correction"]["prompt"])
+                                   prompt_variant=cfg["correction"]["prompt"],
+                                   meaning_budgets=char_budgets(source, 17.0) if cfg["correction"]["meaning_fix"] else None)
         report.data["correction"] = crep.to_dict()
         if crep.applied:
             tr.cues = crep.cues

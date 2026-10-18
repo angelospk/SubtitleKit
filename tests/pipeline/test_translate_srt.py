@@ -96,10 +96,11 @@ def test_missing_cue_is_asked_again():
         chunk = srt_in(prompt)
         if len(calls) == 1:
             chunk = [c for c in chunk if c.index != 5]
-        return reply_for(chunk, [EL[SRC.index(c.text)] for c in chunk])
+            return reply_for(chunk, [EL[SRC.index(c.text)] for c in chunk])
+        return reply_for(chunk, [EL[SRC.index(c.text)] if c.index == 5 else "Άλλο κείμενο." for c in chunk])
 
     tr = translate_cues_srt(src, MockBackend(replies=reply), chunk_size=12)
-    assert [c.index for c in srt_in(calls[1])] == [5]
+    assert [c.index for c in srt_in(calls[1])] == [2, 3, 4, 5, 6, 7, 8]  # with 3 neighbours each side
     assert "Προσπάθεια 2" in calls[1] and "missing cues [5]" in calls[1]
     assert [c.text for c in tr.cues] == EL
 

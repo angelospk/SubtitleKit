@@ -59,7 +59,8 @@ DEFAULTS: Dict[str, Any] = {
                   "rescue_untranslated": True, "llm": None,
                   "format": "json"},  # json: {"id": text} chunks; srt: Harold's Greek prompt, SRT text (E26)
     # Correction pass (E6, Harold's stage 4): LLM proposes rx/sb edits; code enforces no growth, no added pronouns/names, numbers, negation, then rechecks fidelity.
-    "correction": {"enabled": True, "batch": 300, "llm": None, "prompt": "v1"},  # v1 | harold
+    "correction": {"enabled": True, "batch": 300, "llm": None, "prompt": "v1",  # v1 | harold
+                   "meaning_fix": False},  # a meaning fix may grow to the 17 CPS budget (E26)
     # Film glossary (E5): built by the LLM once per film, or loaded from film.yaml `glossary: <file>`; saved as glossary.json in the output folder.
     "glossary": {"enabled": True, "max_terms": 150},
     # Film context: the published plot (web search, Wikipedia first; `llm` should have WebSearch) or plot.md in the

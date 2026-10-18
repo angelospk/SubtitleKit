@@ -248,3 +248,19 @@ def test_harold_correction_prompt_is_greek_and_has_his_extra_lines():
     assert h.rstrip().endswith("{}")
     with pytest.raises(ValueError):
         correction_prompt("{}", variant="v2")
+
+
+def test_a_meaning_fix_may_grow_to_the_budget_with_retranslation_rules():
+    # E26 Euphoria cue 327: the Greek carried the previous line; the right line is longer and has "της".
+    src = [Cue(1, 0, 4000, "of her floral arrangements, or a wedding cake.")]
+    el = [Cue(1, 0, 4000, "Δε θέλω να μαλώνουμε.")]
+    fix = [{"id": 1, "rx": "Δε θέλω να μαλώνουμε.", "sb": "για τα λουλούδια της ή μια τούρτα γάμου.",
+            "rate": 9, "type": "νόημα"}]
+    strict = correct_translation(src, el, router(fix))
+    assert not strict.applied and "longer than allowed" in strict.rejected[0][1]
+    loose = correct_translation(src, el, router(fix), meaning_budgets={1: 68})
+    assert [a.cue for a in loose.applied] == [1]
+    style = [dict(fix[0], type="φυσικότητα")]
+    assert not correct_translation(src, el, router(style), meaning_budgets={1: 68}).applied
+    low = [dict(fix[0], rate="5")]
+    assert not correct_translation(src, el, router(low), meaning_budgets={1: 68}).applied
