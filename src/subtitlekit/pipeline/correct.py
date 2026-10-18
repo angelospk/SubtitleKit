@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import unicodedata
@@ -63,6 +64,8 @@ HAROLD_EXTRA = """✓ αφαίρεση διπλών σημείων στίξης 
 • σε έντονες σκηνές δράσης ή καβγά, κοφτός και ζωντανός λόγος· κράτα πάντα τον τόνο του χαρακτήρα (σαρκαστικός, τρυφερός, απειλητικός)
 """
 PROMPTS = ("v1", "harold")
+# QA flags (fixes.qa_translation) that mean a line lost its content: its fix is a retranslation.
+OMISSION_FLAGS = ("much shorter than source", "repeats the previous translation")
 
 # Targeted correction (E27): a first reader flagged hard lines; other-language subtitles of the same line come along.
 CONTEXT_NOTE = """Μερικά id έχουν και "check" (δύσκολο σημείο που σημείωσε πρώτος αναγνώστης: λογοπαίγνιο, αμφισημία, φύλο,
@@ -204,6 +207,34 @@ _EN_EXCLAIM = r"\b(?:jesus|christ|god|lord|gosh)\b"
 _EL_EXCLAIM = re.compile(r"(?<!\w)(?:Θεέ|Χριστέ|Κύριε|Παναγία)\s+μου(?!\w)", re.I)
 
 
+# A known name the fix adds is a restoration when it sounds like a capitalised source word (E27 ST 464: «Νάνσι»
+# for a sentence-initial "Nancy!", which NAME_RE skips). Rough Greek -> Latin sounds, digraphs first.
+_EL_DIGRAPHS = (("ου", "u"), ("μπ", "b"), ("ντ", "d"), ("γκ", "g"), ("τζ", "j"), ("αι", "e"), ("ει", "i"), ("οι", "i"))
+_EL_SOUNDS = str.maketrans("αβγδεζηθικλμνξοπρσςτυφχψω", "avgdezitiklmnxoprsstifhpo")
+_EN_SOUNDS = (("ph", "f"), ("th", "t"), ("ch", "h"), ("y", "i"), ("c", "k"), ("w", "u"), ("q", "k"))
+
+
+def _el_sound(word: str) -> str:
+    w = _fold(re.sub("άι|αϊ|άυ", lambda m: "ai" if m.group(0)[1] in "ιϊ" else "av", word.lower()))
+    for a, b in _EL_DIGRAPHS:
+        w = w.replace(a, b)
+    return w.translate(_EL_SOUNDS)
+
+
+def _en_sound(word: str) -> str:
+    w = word.lower()
+    w = w[:-1] if len(w) > 3 and w.endswith("e") else w  # silent final e: Steve, Mike
+    for a, b in _EN_SOUNDS:
+        w = w.replace(a, b)
+    return w
+
+
+def _sounds_in_source(name: str, src_text: str) -> bool:
+    # Names inside a sentence, or a sentence-initial word in address ("Nancy!", "Nancy,"): not "Make it quick!".
+    words = validators._names(src_text) | set(re.findall(r"\b([A-Z][a-z]+)(?=[!,?])", src_text))
+    return any(difflib.SequenceMatcher(None, _el_sound(name), _en_sound(w)).ratio() >= 0.7 for w in words)
+
+
 def check_retranslation(before: str, after: str, source: str, allowed_chars: int, known_names: Sequence[str] = (),
                         source_lang: str = "English") -> List[str]:
     """check_change for a whole new line (hard lines, review fixes), not a small correction: a question, names
@@ -224,6 +255,10 @@ def check_retranslation(before: str, after: str, source: str, allowed_chars: int
         # found by the regex is a form of it.
         found = validators._names(after, validators.NAME_ADDED_RE)
         extra = [n for n in known_names if _name_count(n, a) and not any(_name_count(n, f) for f in found)]
+        # A known name that sounds like a source name or address is a restoration, wherever the fix puts it.
+        heard = {n for n in known_names if _sounds_in_source(n, src_text)}
+        found = {f for f in found if not any(_name_count(n, f) for n in heard)}
+        extra = [n for n in extra if n not in heard]
         if len(found) + len(extra) <= len(validators._names(src_text)):
             bad = [b for b in bad if not b.startswith("names added")]
         # The μου of «Θεέ μου» / «Χριστέ μου» translates an exclamation the source has (E20 ST: "Jesus");
@@ -365,7 +400,10 @@ def correct_translation(
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
             if meaning_budgets is not None:
                 allowed = max(allowed, meaning_budgets.get(cid, 0))
-            meaning = meaning_budgets is not None and _is_meaning_fix(item)
+            # E27 ST 464: an omission flag («Τι;» for a whole line) needs the words the source has; the strict
+            # rules rejected its fix as "names added". Retranslation rules count against the source.
+            omission = cid in problems and any(k in problems[cid] for k in OMISSION_FLAGS)
+            meaning = meaning_budgets is not None and (_is_meaning_fix(item) or omission)
             if meaning:
                 allowed = max(allowed, int(meaning_budgets.get(cid, 0) * FIX_SLACK))
                 bad = check_retranslation(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)

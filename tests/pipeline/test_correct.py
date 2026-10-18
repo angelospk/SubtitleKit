@@ -341,3 +341,59 @@ def test_no_context_keeps_the_prompt_unchanged():
     backend = router([])
     correct_translation(src, el, backend)
     assert CONTEXT_NOTE.strip() not in backend.prompts[0]
+
+
+def test_a_fix_of_a_flagged_line_may_add_what_the_source_says():
+    # E27 ST 464: Flash wrote only «Τι;»; sol's fix brought back the name and was rejected as "names added".
+    src = [Cue(464, 0, 3000, "Nancy! Nancy, what the hell is this? Are you serious?")]
+    el = [Cue(464, 0, 3000, "Τι;")]
+    flags = [Flag(464, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 464, "rx": "Τι;", "sb": "Νάνσι! Νάνσι, τι διάολο είναι αυτό;\nΣοβαρολογείς;", "rate": 9,
+            "type": "γραμματική"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={464: 60}, known_names=["Νάνσι"])
+    assert {c.index: c.text for c in rep.cues}[464].startswith("Νάνσι!"), rep.rejected
+
+
+def test_a_flag_that_is_not_an_omission_keeps_the_strict_rules():
+    src = [Cue(1, 0, 3000, "Go to the smoke shop.")]
+    el = [Cue(1, 0, 3000, "Πήγαινε στο smoke μαγαζί.")]
+    flags = [Flag(1, "English word left: smoke")]
+    fix = [{"id": 1, "rx": "smoke μαγαζί", "sb": "smoke shop", "rate": 3, "type": "άλλο"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 40})
+    assert {c.index: c.text for c in rep.cues}[1] == "Πήγαινε στο smoke μαγαζί."
+
+
+def test_a_command_is_not_a_name_slot_and_unknown_names_stay_out():
+    src = [Cue(1, 0, 3000, "Run! Get out of here!")]
+    el = [Cue(1, 0, 3000, "Τρέξε!")]
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 1, "rx": "Τρέξε!", "sb": "Τρέξε, Νάνσι! Φύγε από δω!", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 40}, known_names=["Νάνσι"])
+    assert {c.index: c.text for c in rep.cues}[1] == "Τρέξε!"
+
+
+def test_a_dialogue_dash_vocative_name_may_be_restored():
+    src = [Cue(1, 0, 3000, "-Nancy! What the hell is this?\n-Nothing.")]
+    el = [Cue(1, 0, 3000, "-Τι;\n-Τίποτα.")]
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 1, "rx": "-Τι;", "sb": "-Νάνσι! Τι διάολο είναι αυτό;", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 60}, known_names=["Νάνσι"])
+    assert {c.index: c.text for c in rep.cues}[1].startswith("-Νάνσι!"), rep.rejected
+
+
+def test_a_sentence_initial_command_is_not_a_name():
+    src = [Cue(1, 0, 3000, "Make it quick! We have no time, okay?")]
+    el = [Cue(1, 0, 3000, "Γρήγορα!")]
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 1, "rx": "Γρήγορα!", "sb": "Μάικ! Κάνε γρήγορα, δεν έχουμε χρόνο!", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 50}, known_names=["Μάικ"])
+    assert {c.index: c.text for c in rep.cues}[1] == "Γρήγορα!"
+
+
+def test_a_restored_vocative_name_may_move_to_the_end():
+    src = [Cue(1, 0, 3000, "-Nancy! Come here!\n-No.")]
+    el = [Cue(1, 0, 3000, "-Έλα!\n-Όχι.")]
+    flags = [Flag(1, "translation much shorter than source (omission?)", blocker=True)]
+    fix = [{"id": 1, "rx": "-Έλα!", "sb": "-Έλα εδώ, Νάνσι!", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), flags=flags, meaning_budgets={1: 40}, known_names=["Νάνσι"])
+    assert {c.index: c.text for c in rep.cues}[1] == "-Έλα εδώ, Νάνσι!\n-Όχι.", rep.rejected
