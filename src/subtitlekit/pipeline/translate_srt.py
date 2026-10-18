@@ -23,7 +23,7 @@ SOURCE_NAMES_EL = {"en": "τα αγγλικά", "fr": "τα γαλλικά", "de
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*$", re.M)
 # Anchor (E26c): each Greek cue starts with the first source words, so code sees which line the text belongs to.
 _ANCHOR = re.compile(r"^\s*⟦([^⟧]*)⟧\s*")
-_ANY_ANCHOR = re.compile(r"⟦[^⟧]*⟧\s*")
+_LINE_ANCHOR = re.compile(r"^(\s*(?:<[^>]+>)*\s*[-–—]?\s*)⟦[^⟧]*⟧\s*", re.M)  # at a line start, after a dash
 _WORD = re.compile(r"[^\W_]+(?:'[^\W_]+)?")
 
 
@@ -77,9 +77,10 @@ def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el",
     problems: List[str] = []
     seen = set()
     parsed = parse_srt(_FENCE.sub("", reply))
+    check = anchor
     if anchor and sum(bool(_ANCHOR.match(c.text)) for c in parsed) < len(parsed) / 2:
         problems.append("most cues have no anchor: anchors not checked")
-        anchor = False
+        check = False
     for cue in parsed:
         src = by_index.get(cue.index)
         if src is None:
@@ -91,13 +92,16 @@ def parse_reply(chunk: Sequence[Cue], reply: str, target_lang: str = "el",
             continue
         seen.add(cue.index)
         body = cue.text
-        if anchor:
+        if check:
             m = _ANCHOR.match(body)
             if m is None or not anchor_matches(m.group(1), src.text):
                 problems.append(f"cue {cue.index}: anchor {m.group(1) if m else None!r} does not match its line")
                 continue
             body = body[m.end():]
-        text = match_dashes(src.text, normalize_text(_ANY_ANCHOR.sub("", body)))
+        if anchor:
+            # Anchors open lines (a dialogue cue may carry one per line); brackets inside the text stay.
+            body = _LINE_ANCHOR.sub(r"\1", body)
+        text = match_dashes(src.text, normalize_text(body))
         if not visible_text(text).strip():
             problems.append(f"cue {cue.index}: empty translation")
         elif "-->" in text:

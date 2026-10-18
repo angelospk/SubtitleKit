@@ -556,3 +556,43 @@ Harold's review of the pipeline (2026-10-17) after this run: prompts in Greek fr
 compression (no CPS budget, no condense pressure, only "short and natural"); SRT text in, not JSON keys;
 captions before translation; a simpler pipeline (Flash translates, a strong model corrects); keep glossary
 and plot; detect shifted blocks. Next: design the simple pipeline (E26).
+
+## E26 result: the simple pipeline with Harold's Greek prompts (2026-10-18)
+
+Harold's review after E25: Greek prompts from his own, no compression, SRT text in, captions before
+translation, Flash translates and a strong model corrects, detect shifted blocks. New code (opt-in, defaults
+unchanged): `translate.format: srt` (`translate_srt.py`, prompt in `prompts_el.py`), `shift.py` (no-LLM
+shift detector, 2 scales, 0 false positives on 93 earlier eval outputs, flags the 5 known shifted ones),
+`captions.before_translation`, `correction.prompt: harold` (his Greek style block and the lines v1 left out),
+`correction.meaning_fix` (a "νόημα" fix rated 8+ may grow to the 17 CPS budget, retranslation rules),
+`translate.anchor` (each Greek cue opens with its first 2 source words in ⟦ ⟧; code checks and strips them).
+Out: CPS budget, Haiku fidelity check, hard lines, review pass, LLM condense.
+
+Translator in every row: Gemini 3.8 Flash low (agy), 500-cue chunks, plot.md. Corrector as named.
+
+| Run | Euphoria | Stranger Things | Kumail |
+|---|---|---|---|
+| E25 Fplot (old pipeline, 300) | 1.01 (9.1) | 0.0 (12.3) | 3.19 (13.8) |
+| E24 Lplot (Opus translates) | 0.0 (10.1) | 0.0 (4.4) | 0.0 (10.6) |
+| S26 (SRT, Opus medium corrects) | 2.01 (14.1) | 4.91 (15.7) | – |
+| S26b (+ meaning_fix, retries with neighbours) | 0.0 (14.1) | – | – |
+| S26c (+ anchor) | – | 0.49 (7.4) | 2.13 (16.0) |
+| **S26d = S26c translation, sol high corrects** | **0.0 (7.0)** | **0.0 (3.9)** | **0.0 (11.7)** |
+
+(Euphoria S26d row: the S26b raw translation, which had no shift, corrected by sol; ST and Kumail: the S26c
+raw translations corrected by sol, `eval/correct_e26.py`.)
+
+- S26 ST: Flash drops a cue number now and then and moves the next lines by one (cues 916-943, 995-1000);
+  the detector misses runs of long lines with few signals. The anchor removes this: S26c raw translations of
+  ST and Kumail have no shift and no anchor left.
+- The strict "never longer" rule rejected every meaning fix of a wrong line (Euphoria 306, 327, 574, 580);
+  `meaning_fix` took Euphoria from 2.01 to 0.0.
+- Raw Flash translation, Euphoria: 0.0 (12.1). Opus medium as corrector fixes ~7 noticeable and adds ~8
+  (wrong idioms: «δε μου γεμίζει το μάτι», «Καλή μου τύχη»); sol high takes it to 7.0.
+- Judge caveat: sol is also the confirm judge, so a sol-corrected line may get a softer serious check. My own
+  read of the 4 unconfirmed Sonnet "serious" in ST S26d: 1 real omission (464), 1 doubtful (927), 2 fine slang.
+  Kumail's 11 noticeable include valid Greek slang the Sonnet auditor penalises («θα γαμάει», «φυτό» for nerd,
+  «έπινες» for smoking); about 4 are real.
+
+Verdict: S26d is the first free-translator config at 0 confirmed serious on all three films, with noticeable
+errors at or below the paid Lplot on Euphoria and ST. Next: new material (Wolf Man, The Housemaid).

@@ -264,3 +264,12 @@ def test_a_meaning_fix_may_grow_to_the_budget_with_retranslation_rules():
     assert not correct_translation(src, el, router(style), meaning_budgets={1: 68}).applied
     low = [dict(fix[0], rate="5")]
     assert not correct_translation(src, el, router(low), meaning_budgets={1: 68}).applied
+
+
+def test_a_short_meaning_fix_is_not_cut_by_min_keep():
+    src = [Cue(1, 0, 3000, "Yes.")]
+    el = [Cue(1, 0, 3000, "Ο κόσμος βγάζει τόσα λεφτά.")]
+    fix = [{"id": 1, "rx": "Ο κόσμος βγάζει τόσα λεφτά.", "sb": "Ναι.", "rate": 9, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), budgets={1: 40}, meaning_budgets={1: 51})
+    assert [a.cue for a in rep.applied] == [1]
+    assert not correct_translation(src, el, router(fix), budgets={1: 40}).applied  # MIN_KEEP still guards the rest

@@ -332,14 +332,15 @@ def correct_translation(
             allowed = _length(original[cid])
             if cid in problems:
                 allowed = max(allowed, budgets.get(cid, 0) if budgets else 0)
-            if meaning_budgets is not None and _is_meaning_fix(item):
+            meaning = meaning_budgets is not None and _is_meaning_fix(item)
+            if meaning:
                 allowed = max(allowed, int(meaning_budgets.get(cid, 0) * FIX_SLACK))
                 bad = check_retranslation(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
             else:
                 bad = check_change(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
             # E6: most losing corrections cut a line that already fit its budget down to a stub.
             fits = budgets is not None and _length(original[cid]) <= budgets.get(cid, 0)
-            if cid not in problems and fits and _length(new) < MIN_KEEP * _length(original[cid]):
+            if cid not in problems and not meaning and fits and _length(new) < MIN_KEEP * _length(original[cid]):
                 bad.append(f"cut too much ({_length(new)} < {MIN_KEEP:.0%} of {_length(original[cid])})")
             if bad:
                 rep.rejected.append((cid, "; ".join(bad)))

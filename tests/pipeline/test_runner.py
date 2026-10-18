@@ -698,7 +698,8 @@ def test_srt_mode_puts_captions_in_the_source_and_uses_harolds_prompts(tmp_path)
     assert rep["captions"]["before_translation"] and rep["captions"]["added"] == 1
     assert rep["translation"]["untranslated"] == []
     srt = (tmp_path / "out" / "Test.Film.2025" / "Test.Film.2025.el.srt").read_text(encoding="utf-8")
-    assert srt.rstrip().endswith("ΜΕΞΙΚΟ 1986")  # the correction stays, in capitals and "\n61\n" in srt
+    # The correction stays, in capitals.
+    assert srt.rstrip().endswith("ΜΕΞΙΚΟ 1986") and "\n61\n" in srt
     correction = [p for p in backend.prompts if p.startswith("You correct Greek subtitles")]
     assert correction and "«ελληνικό αυτί»" in correction[0]
     assert not [f for f in rep["flags"] if f["cue"] == 61]  # no rule QA on a caption's many-language source

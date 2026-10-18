@@ -234,3 +234,23 @@ def test_misplaced_text_found_by_its_anchor_is_asked_again_with_neighbours():
     tr = translate_cues_srt(src, MockBackend(replies=reply), chunk_size=12, anchor=True)
     assert len(calls) == 2 and [c.index for c in srt_in(calls[1])] == [3, 4, 5, 6, 7, 8, 9]
     assert [c.text for c in tr.cues] == EL
+
+
+def test_brackets_stay_when_anchors_are_off():
+    chunk = cues(1)
+    out, _ = parse_reply(chunk, reply_for(chunk, ["Κράτα ⟦x⟧ εδώ."]))
+    assert out == {1: "Κράτα ⟦x⟧ εδώ."}
+
+
+def test_anchor_mode_strips_only_line_opening_anchors():
+    chunk = [Cue(1, 0, 1000, "-Hi there.\n-Bye now.")]
+    reply = reply_for(chunk, ["⟦Hi there⟧ -Γεια σου.\n-⟦Bye now⟧ Κράτα ⟦x⟧ εδώ."])
+    out, problems = parse_reply(chunk, reply, anchor=True)
+    assert out == {1: "-Γεια σου.\n-Κράτα ⟦x⟧ εδώ."} and problems == []
+
+
+def test_mixed_reply_without_enough_anchors_still_strips_the_ones_given():
+    chunk = cues(3)
+    reply = reply_for(chunk, ["⟦Where were⟧ " + EL[0], EL[1], EL[2]])
+    out, problems = parse_reply(chunk, reply, anchor=True)
+    assert out == {1: EL[0], 2: EL[1], 3: EL[2]} and "anchors not checked" in problems[0]
