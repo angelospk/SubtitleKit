@@ -168,3 +168,99 @@ def test_other_languages_sentence_spans_neighbour_groups(tmp_path):
     assert other_languages(con, 2, sentence=True) == {"spa": full}
     assert other_languages(con, 3, sentence=True) == {"spa": "Siguiente."}
     con.close()
+
+
+def test_other_languages_turns_keeps_only_the_matching_speaker(tmp_path):
+    # EN puts the two speakers in two cues, the track in one dash cue: each EN cue sees only its own turn
+    ref = [C(1, 0, 2000, "Are you coming?"), C(2, 2000, 4000, "Yes.")]
+    spa = [C(1, 0, 4000, "-¿Vienes?\n-Sí.")]
+    con = build_db(str(tmp_path / "t.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0) == {"spa": "-¿Vienes? -Sí."}
+    assert other_languages(con, 0, turns=True) == {"spa": "¿Vienes?"}
+    assert other_languages(con, 1, turns=True) == {"spa": "Sí."}
+    con.close()
+
+
+def test_other_languages_turns_keeps_whole_text_when_counts_differ(tmp_path):
+    ref = [C(1, 0, 1500, "Are you coming?"), C(2, 1500, 3000, "Yes."), C(3, 3000, 4000, "Now.")]
+    spa = [C(1, 0, 4000, "-¿Vienes?\n-Sí, ahora.")]
+    con = build_db(str(tmp_path / "u.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0, turns=True) == {"spa": "-¿Vienes? -Sí, ahora."}
+    con.close()
+
+
+def test_other_languages_turns_with_sentence_extends_only_the_kept_side(tmp_path):
+    ref = [C(1, 0, 2000, "I think"), C(2, 2100, 4000, "You should go."), C(3, 4000, 6000, "No.")]
+    spa = [C(1, 0, 2000, "Creo"), C(2, 2100, 6000, "-Que deberías irte.\n-No.")]
+    con = build_db(str(tmp_path / "v.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 1, sentence=True, turns=True) == {"spa": "Creo / Que deberías irte."}
+    assert other_languages(con, 2, sentence=True, turns=True) == {"spa": "No."}
+    con.close()
+
+
+def test_other_languages_turns_needs_a_dash_dialogue(tmp_path):
+    # no dashes: the languages split one sentence at other points, so cue-by-cue pairing would cut it wrong
+    ref = [C(1, 0, 2000, "he travels far and long to the bustling"), C(2, 2000, 4000, "city of Vallaki."),
+           C(3, 5000, 6000, "Next.")]
+    spa = [C(1, 0, 3000, "Viaja muy lejos,"), C(2, 3000, 4000, "hasta la bulliciosa ciudad de Vallaki."),
+           C(3, 5000, 6000, "Siguiente.")]
+    con = build_db(str(tmp_path / "w.db"), "eng", ref, {"spa": spa})
+    whole = "Viaja muy lejos, / hasta la bulliciosa ciudad de Vallaki."
+    assert other_languages(con, 0) == {"spa": whole}
+    assert other_languages(con, 0, turns=True) == {"spa": whole}
+    con.close()
+
+
+def test_other_languages_turns_keeps_whole_text_for_a_sentence_that_goes_on(tmp_path):
+    # "-about the platform." goes on with the cue before; a reference dash cue is not cut either
+    ref = [C(1, 0, 2000, "It's a common misconception"), C(2, 2000, 4000, "-about the platform.\n-Right.")]
+    spa = [C(1, 0, 4000, "-Es un error común sobre la plataforma.\n-Oye...")]
+    con = build_db(str(tmp_path / "x.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 1, turns=True) == other_languages(con, 1)
+    ref = [C(1, 0, 2000, "Are you coming"), C(2, 2000, 4000, "today?")]
+    spa = [C(1, 0, 4000, "-¿Vienes\n-hoy?")]
+    con = build_db(str(tmp_path / "y.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0, turns=True) == other_languages(con, 0)
+    con.close()
+
+
+def test_other_languages_turns_keeps_whole_text_when_a_cue_does_not_end_its_sentence(tmp_path):
+    # "Did you see" goes on in "John yesterday?" although the next cue starts in upper case
+    ref = [C(1, 0, 2000, "Did you see"), C(2, 2000, 4000, "John yesterday?")]
+    spa = [C(1, 0, 4000, "-¿Viste a\n-John ayer?")]
+    con = build_db(str(tmp_path / "z1.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0, turns=True) == other_languages(con, 0)
+    con.close()
+
+
+def test_other_languages_turns_sees_an_ellipsis_behind_a_quote(tmp_path):
+    ref = [C(1, 0, 2000, "Are you coming?"), C(2, 2000, 4000, "Yes.")]
+    spa = [C(1, 0, 4000, '-¿Vienes?\n-"…Hoy?"')]
+    con = build_db(str(tmp_path / "z2.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0, turns=True) == other_languages(con, 0)
+    con.close()
+
+
+def test_other_languages_turns_keeps_whole_text_with_an_empty_turn(tmp_path):
+    ref = [C(1, 0, 2000, "Are you coming?"), C(2, 2000, 4000, "Yes.")]
+    spa = [C(1, 0, 4000, "-¿Vienes?\n-")]
+    con = build_db(str(tmp_path / "z3.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 1, turns=True) == other_languages(con, 1)
+    con.close()
+
+
+def test_other_languages_turns_middle_turn_and_forward_extension(tmp_path):
+    ref = [C(1, 0, 1000, "Who?"), C(2, 1000, 2000, "Me."), C(3, 2000, 3000, "Why?"), C(4, 3100, 5000, "Because")]
+    spa = [C(1, 0, 3000, "-¿Quién?\n-Yo.\n-¿Por qué?"), C(2, 3100, 5000, "Porque")]
+    con = build_db(str(tmp_path / "z4.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 1, sentence=True, turns=True) == {"spa": "Yo."}
+    assert other_languages(con, 2, turns=True) == {"spa": "¿Por qué?"}
+    con.close()
+
+
+def test_other_languages_turns_keeps_whole_text_after_a_trailing_ellipsis(tmp_path):
+    ref = [C(1, 0, 2000, "Did you see..."), C(2, 2000, 4000, "John yesterday?")]
+    spa = [C(1, 0, 4000, "-¿Viste a...\n-John ayer?")]
+    con = build_db(str(tmp_path / "z5.db"), "eng", ref, {"spa": spa})
+    assert other_languages(con, 0, turns=True) == other_languages(con, 0)
+    con.close()

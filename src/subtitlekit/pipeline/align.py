@@ -215,13 +215,52 @@ def _sentence_end(text: str) -> bool:
     return visible_text(text).rstrip().endswith(_SENTENCE_END)
 
 
-def other_languages(con: sqlite3.Connection, ref_pos: int, sentence: bool = False, reach: int = 2) -> Dict[str, str]:
+def _continues(turn: str) -> bool:
+    """A turn that starts in lower case or with an ellipsis (behind any opening quote) goes on with the
+    sentence of the cue before."""
+    head = turn.lstrip().lstrip("\"'«“‘„").lstrip()
+    return head.startswith(("...", "…")) or next((ch.islower() for ch in head if ch.isalpha()), False)
+
+
+def _ends_turn(turn: str) -> bool:
+    """A non-empty turn that ends its sentence; a trailing ellipsis may go on in the next cue."""
+    text = visible_text(turn).rstrip().rstrip("\"'»”’").rstrip()
+    return bool(text) and _sentence_end(text) and not text.endswith(("...", "…"))
+
+
+def _own_turns(con: sqlite3.Connection, lang: str, grp: int, ref_pos: int, parts: List[str]) -> Optional[List[int]]:
+    """Index of the track turn that belongs to reference cue ``ref_pos``, or None.
+
+    Only the plain case is cut: two or more reference cues of one turn each, which the track joins into
+    dash cue(s) with one turn per reference cue, every cue and turn is non-empty and ends its sentence
+    (not with an ellipsis), and no turn goes on with the sentence before. Any other shape (a reference
+    dash cue, different counts, a sentence split at other points) keeps the whole text: pairing turns
+    by count there gives the other speaker's line."""
+    rows = con.execute(
+        "SELECT g.pos, c.text FROM groups g JOIN tracks r ON r.is_ref=1 "
+        "JOIN cues c ON c.lang=r.lang AND c.pos=g.pos "
+        "WHERE g.lang=? AND g.grp=? AND g.side='ref' ORDER BY g.pos", (lang, grp)).fetchall()
+    ref_turns = [split_turns(text) for _, text in rows]
+    track_turns = [t for p in parts for t in split_turns(p)]
+    if (len(rows) < 2 or any(len(t) != 1 for t in ref_turns) or len(track_turns) != len(rows)
+            or not any(len(split_turns(p)) > 1 for p in parts)
+            or any(_continues(t[0]) for t in ref_turns) or any(_continues(t) for t in track_turns)
+            or not all(_ends_turn(t) for t in [r[0] for r in ref_turns] + track_turns)):
+        return None
+    return [k for k, (p, _) in enumerate(rows) if p == ref_pos]
+
+
+def other_languages(con: sqlite3.Connection, ref_pos: int, sentence: bool = False, reach: int = 2,
+                    turns: bool = False) -> Dict[str, str]:
     """Text of every synced track language aligned to reference cue ``ref_pos``.
 
     A track that could not be synced to the reference is skipped: its groups
     pair lines by accident. sentence: languages split a sentence at other
     points, so the text grows to up to ``reach`` neighbouring groups on each
-    side until it starts and ends at a sentence end."""
+    side until it starts and ends at a sentence end. turns: a dash cue of the
+    track that holds the turns of several reference cues gives only the turns
+    of ``ref_pos`` (when the turn counts match), so the model does not read
+    the other speaker's line as part of this one."""
     out: Dict[str, str] = {}
     for lang, grp in con.execute(
         "SELECT g.lang, g.grp FROM groups g JOIN tracks t ON t.lang=g.lang "
@@ -236,15 +275,21 @@ def other_languages(con: sqlite3.Connection, ref_pos: int, sentence: bool = Fals
         parts = texts(grp)
         if not parts:
             continue
+        back = fwd = True
+        own = _own_turns(con, lang, grp, ref_pos, parts) if turns else None
+        if own:
+            flat = [t for p in parts for t in split_turns(p)]
+            back, fwd = own[0] == 0, own[-1] == len(flat) - 1  # a cut side starts or ends another speaker
+            parts = [" ".join(flat[i] for i in own)]
         if sentence:
             lo = hi = grp
-            for _ in range(reach):  # backward: the previous group's text does not end a sentence
+            for _ in range(reach if back else 0):  # backward: the previous group's text does not end a sentence
                 prev = texts(lo - 1) if lo > 0 else []
                 if not prev or _sentence_end(prev[-1]):
                     break
                 lo -= 1
                 parts = prev + parts
-            for _ in range(reach):  # forward: this text does not end a sentence yet
+            for _ in range(reach if fwd else 0):  # forward: this text does not end a sentence yet
                 if _sentence_end(parts[-1]):
                     break
                 hi += 1
