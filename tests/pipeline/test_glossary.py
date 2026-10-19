@@ -166,3 +166,15 @@ def test_check_glossary_normalises_unicode_and_accepts_greek_inflection():
     ours = [Cue(1, 0, 1000, unicodedata.normalize("NFD", "Μάικ, το φωτός!")),
             Cue(2, 1000, 2000, "Ο Ανάποδος Κόσμος.")]
     assert check_glossary(source, ours, g) == []
+
+
+def test_validate_drops_masked_renderings():
+    # a model that censors its own output ("Κα-@@-τσινγκ") must not lock that form for every line
+    data = {"terms": [{"source": "Exit 8", "greek": "Έξοδος @@", "kind": "term"},
+                      {"source": "Walking Man", "greek": "Ο ***", "kind": "term"},
+                      {"source": "We have", "greek": "Γ*μώτο", "kind": "idiom"},
+                      {"source": "Jules", "greek": "Τζουλς", "kind": "name"},
+                      {"source": "is back", "greek": "Ξανά εδώ (100 #)", "kind": "idiom"}]}
+    g, problems = validate_glossary(data, src())
+    assert [t.source for t in g.terms] == ["Jules", "is back"]  # a lone mark outside a word is kept
+    assert sum("masked" in p for p in problems) == 3

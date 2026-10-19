@@ -18,6 +18,7 @@ _GREEK_LETTER = "Ͱ-Ͽἀ-῿"
 _GREEK_RE = re.compile(f"[{_GREEK_LETTER}]")
 _GREEK_WORD_RE = re.compile(f"[{_GREEK_LETTER}]+")
 _TIME_RE = re.compile(r"^(\d{1,2}):([0-5]\d):([0-5]\d)$")
+_MASK_RE = re.compile(r"@@|\*{2,}|#{2,}|(?<=\w)[*@#]+(?=\w)")  # a self-censored rendering ("Κα-@@-τσινγκ")
 
 
 def _line(value: Any, limit: int) -> str:
@@ -97,6 +98,7 @@ GLOSSARY_PROMPT = """You prepare a glossary for translating a film's subtitles i
 From the subtitle lines below, list every human name, nickname, place, organisation, invented term, recurring phrase (signs, rules, catchphrases) and idiom that a translator must render the same way every time.
 - Write every human name in {target} script by pronunciation (Jules → Τζουλς). Give places, terms and idioms their natural {target} rendering.
 - "source" must be copied exactly as it appears in the subtitles.
+- Do not lock a form that depends on who speaks or listens: a line whose {target} changes with gender or number (a greeting, "Welcome") is not a term, and a word for a person (a role, a job) takes that person's gender. Never mask a word: write swearing in full.
 - "note": a short explanation in {target} that helps the translation (who or what it is, the gender of a person, how it should sound). Take a person's gender from the plot's "Characters" list when it names them; otherwise give it only if the lines make it clear, never guess. Do not say whether a name should be kept.
 - "style": the film's vibe and register in 2-3 sentences, so the subtitler knows the tone.
 - "notes": up to 5 short instructions for the subtitler (for example phrases that must repeat identically).
@@ -179,6 +181,9 @@ def validate_glossary(
             kind = "term"
         if source_text is not None and not _occurs(source, source_text):
             problems.append(f"glossary: '{source}' not in source")
+            continue
+        if _MASK_RE.search(greek):
+            problems.append(f"glossary: '{source}' masked rendering")
             continue
         if kind in ("name", "place") and not _all_greek(greek):
             problems.append(f"glossary: '{source}' not in Greek script")
