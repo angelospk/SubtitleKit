@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from . import validators
-from .fixes import SOURCE_NEGATION_RE, check_translation, reflow_text
+from .fixes import check_translation, reflow_text, source_negations
 from .greek_style import STYLE_RULES_EL
 from .greek_vocab import VOCAB_EL
 from .prompts_el import STYLE_EL
@@ -194,7 +194,7 @@ def check_change(before: str, after: str, source: str, allowed_chars: int, known
     if sorted(validators.NUMBER_RE.findall(src_text)) == sorted(validators.NUMBER_RE.findall(visible_text(after))):
         bad = [b for b in bad if b != "numbers changed"]
     # The English regex only: other sources keep the strict rule.
-    if source_lang == "English" and negations(after) >= len(SOURCE_NEGATION_RE.findall(src_text)):
+    if source_lang == "English" and negations(after) >= source_negations(src_text):
         bad = [b for b in bad if b != "negation lost"]
     return bad
 

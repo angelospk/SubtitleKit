@@ -213,3 +213,18 @@ def test_qa_similar_lines_with_similar_sources_are_fine():
     el = [Cue(1, 0, 2000, "Σ' αγαπώ τόσο πολύ, Ρου."), Cue(2, 2000, 4000, "Σ' αγαπώ τόσο πολύ, Ρου!"),
           Cue(3, 4000, 6000, "Πρέπει να φύγουμε τώρα."), Cue(4, 6000, 8000, "Πρέπει να φύγουμε αμέσως.")]
     assert not [f for f in qa_translation(src, el, FixConfig()) if "repeats" in f.reason]
+
+
+def test_qa_negation_only_in_the_form_is_not_flagged():
+    src = [Cue(1, 0, 2000, "I can't help but laugh."), Cue(2, 2000, 4000, "She couldn't\nhelp but stare.")]
+    el = [Cue(1, 0, 2000, "Γελάω ασταμάτητα."), Cue(2, 2000, 4000, "Την κοίταζε επίμονα.")]
+    assert not [f for f in qa_translation(src, el, FixConfig()) if "negation" in f.reason]
+
+
+def test_source_negations_keeps_literal_uses():
+    from subtitlekit.pipeline.fixes import source_negations as n
+    assert n("But I can't help but be curious.") == 0
+    assert n("But I can't\nhelp but be curious.") == 0
+    for line in ("I can't help bring supplies.", "I can't help spring the trap.", "There is\nno wonder left.",
+                 "The ambulance can't wait.", "We can't wait. Leave now.", "I can't help you."):
+        assert n(line) == 1, line

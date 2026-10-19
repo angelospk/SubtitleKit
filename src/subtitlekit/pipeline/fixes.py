@@ -283,6 +283,16 @@ def check_translation(
 
 
 SOURCE_NEGATION_RE = re.compile(r"\b(not|no|never|nothing|nobody|none|neither|nor|cannot)\b|n't\b", re.I)
+# The negation is only in the form: "can't help but be curious" = «έχω τόση περιέργεια» (E27 Euphoria 60). Only
+# "help but": "can't help Xing", "can't wait", "no wonder" also have literal uses ("can't help spring the trap").
+NEGATION_IDIOM_RE = re.compile(r"\b(?:can(?:no|')t|could(?:n't|\s+not))\s+help\s+but\b", re.I)
+
+
+def source_negations(text: str) -> int:
+    """Negations in an English line that a translation must keep (form-only idioms left out)."""
+    return max(0, len(SOURCE_NEGATION_RE.findall(text)) - len(NEGATION_IDIOM_RE.findall(text)))
+
+
 GREEK_NEGATION_RE = re.compile(
     r"\b(δεν|δε|μην|μη|όχι|ποτέ|τίποτα|τίποτε|κανείς|κανένας|κανένα|καμία|καμιά|ούτε|χωρίς|ουδέποτε)\b", re.I)
 
@@ -324,7 +334,7 @@ def qa_translation(
             flags.append(Flag(t.index, "translation much shorter than source (omission?)", s.text, t.text, blocker=True))
         if sorted(NUMBER_RE.findall(visible_text(s.text))) != sorted(NUMBER_RE.findall(visible_text(t.text))):
             flags.append(Flag(t.index, "numbers differ from source", s.text, t.text, blocker=True))
-        if (target_lang == "el" and SOURCE_NEGATION_RE.search(visible_text(s.text))
+        if (target_lang == "el" and source_negations(visible_text(s.text))
                 and not GREEK_NEGATION_RE.search(visible_text(t.text))):
             flags.append(Flag(t.index, "negation in source, none in translation", s.text, t.text, blocker=True))
         if target_lang == "el":

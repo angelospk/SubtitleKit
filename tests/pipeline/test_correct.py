@@ -435,3 +435,18 @@ def test_genitive_allowance_follows_the_source():
                                   router([{"id": 1, "rx": "Όχι.", "sb": fix_text, "rate": 9, "type": "νόημα"}]),
                                   flags=flags, meaning_budgets={1: 50})
         assert ({c.index: c.text for c in rep.cues}[1] == fix_text) is kept, (en, rep.rejected)
+
+
+def test_a_negation_only_in_the_form_may_go():
+    # E27 S27b Euphoria 60: «Αλλά έχω τόση περιέργεια.» for "can't help but be curious" was rejected as "negation lost".
+    src = [Cue(60, 0, 2000, "But I can't help but be curious.")]
+    el = [Cue(60, 0, 2000, "Αλλά δεν μπορώ, αναρωτιέμαι.")]
+    fix = [{"id": 60, "rx": "δεν μπορώ, αναρωτιέμαι", "sb": "έχω τόση περιέργεια", "rate": 8, "type": "νόημα"}]
+    rep = correct_translation(src, el, router(fix), meaning_budgets={60: 40})
+    assert {c.index: c.text for c in rep.cues}[60] == "Αλλά έχω τόση περιέργεια.", rep.rejected
+    # a real negation is still kept
+    src2 = [Cue(1, 0, 2000, "I can't help you.")]
+    el2 = [Cue(1, 0, 2000, "Δεν μπορώ να σε βοηθήσω.")]
+    fix2 = [{"id": 1, "rx": "Δεν μπορώ να σε βοηθήσω.", "sb": "Θα σε βοηθήσω.", "rate": 8, "type": "νόημα"}]
+    rep2 = correct_translation(src2, el2, router(fix2), meaning_budgets={1: 40})
+    assert {c.index: c.text for c in rep2.cues}[1] == "Δεν μπορώ να σε βοηθήσω."
