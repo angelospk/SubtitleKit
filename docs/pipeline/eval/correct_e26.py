@@ -1,6 +1,6 @@
 """E26 A/B: only the correction pass, on the raw SRT-mode translation of a run, with another corrector.
 
-Usage: correct_e26.py <film>.<variant> <tag> <backend-json> [input-srt-name] [batch] [--context [--flags-only]]
+Usage: correct_e26.py <film>.<variant> <tag> <backend-json> [input-srt-name] [batch] [--context [--flags-only]] [--preaudit=<name>]
   backend-json: an llm config, e.g. '{"backend": "bridge", "bridge_model": "gpt-6.1-sol", "bridge_effort": "high"}'
 Reads out/<film>.<variant>/translation.el.srt (before any later pass), corrects it with Harold's Greek prompt and
 correction.meaning_fix as in cfg-S26b, then the same caption capitals and style stage as the run. Writes
@@ -45,7 +45,7 @@ def flagged_context(film: str, source, ours, out: str) -> dict:
 
 
 def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", batch: str = "300",
-         context: bool = False) -> None:
+         context: bool = False, preaudit: str = "") -> None:
     src_path = glob.glob(f"{E}/films/{variant}/*.eng.srt") or glob.glob(f"{E}/films/{variant}/*track3_[[]eng[]].srt")
     english, _ = prepare_source(load_srt(src_path[0]))
     raw = load_srt(f"{E}/out/{variant}/{name}")
@@ -55,6 +55,12 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", ba
     gpath = f"{E}/out/{variant}/glossary.json"
     glossary = load_glossary(gpath)[0] if os.path.exists(gpath) else None
     flags = qa_translation(source, ours, FixConfig())
+    if preaudit:  # E28: a pre-auditor's findings on the raw translation reach sol as problems, with its suggestion
+        with open(f"{E}/out/{variant}/preaudit-{preaudit}.json", encoding="utf-8") as fh:
+            found = json.load(fh)
+        ids = {g.index for g in ours}
+        flags += [Flag(int(c), f"reader: {i['kind']}: {i['why']} (e.g. «{i['better']}»)") for c, i in found.items()
+                  if int(c) in ids]
     if glossary:
         flags += [Flag(i, r) for i, r in check_glossary(source, ours, glossary)]
     backend = make_backend({"timeout_s": 2400, "cache_dir": None, **llm})
@@ -92,5 +98,6 @@ def main(variant: str, tag: str, llm: dict, name: str = "translation.el.srt", ba
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a not in ("--context", "--flags-only")]
-    main(args[0], args[1], json.loads(args[2]), *args[3:5], context="--context" in sys.argv)
+    pre = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--preaudit=")), "")
+    args = [a for a in sys.argv[1:] if a not in ("--context", "--flags-only") and not a.startswith("--preaudit=")]
+    main(args[0], args[1], json.loads(args[2]), *args[3:5], context="--context" in sys.argv, preaudit=pre)
