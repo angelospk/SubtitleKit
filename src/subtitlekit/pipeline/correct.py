@@ -66,6 +66,9 @@ HAROLD_EXTRA = """✓ αφαίρεση διπλών σημείων στίξης 
 PROMPTS = ("v1", "harold")
 # QA flags (fixes.qa_translation) that mean a line lost its content: its fix is a retranslation.
 OMISSION_FLAGS = ("much shorter than source", "repeats the previous translation")
+# E31: a line a reader (pre-audit) flagged may grow FIX_SLACK over its budget; most of its rejected fixes were
+# a few characters over 17 CPS.
+READER_FLAG = "reader:"
 
 # Targeted correction (E27): a first reader flagged hard lines; other-language subtitles of the same line come along.
 CONTEXT_NOTE = """Μερικά id έχουν και "check" (δύσκολο σημείο που σημείωσε πρώτος αναγνώστης: λογοπαίγνιο, αμφισημία, φύλο,
@@ -423,8 +426,10 @@ def correct_translation(
             # rules rejected its fix as "names added". Retranslation rules count against the source.
             omission = cid in problems and any(k in problems[cid] for k in OMISSION_FLAGS)
             meaning = meaning_budgets is not None and (_is_meaning_fix(item) or omission)
-            if meaning:
+            reader = meaning_budgets is not None and cid in problems and READER_FLAG in problems[cid]
+            if meaning or reader:
                 allowed = max(allowed, int(meaning_budgets.get(cid, 0) * FIX_SLACK))
+            if meaning:
                 bad = check_retranslation(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)
             else:
                 bad = check_change(original[cid], new, src_by_id[cid], allowed, known_names, source_lang)

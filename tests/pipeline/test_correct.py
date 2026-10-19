@@ -450,3 +450,17 @@ def test_a_negation_only_in_the_form_may_go():
     fix2 = [{"id": 1, "rx": "Δεν μπορώ να σε βοηθήσω.", "sb": "Θα σε βοηθήσω.", "rate": 8, "type": "νόημα"}]
     rep2 = correct_translation(src2, el2, router(fix2), meaning_budgets={1: 40})
     assert {c.index: c.text for c in rep2.cues}[1] == "Δεν μπορώ να σε βοηθήσω."
+
+
+def test_a_reader_flagged_fix_may_go_a_little_over_the_budget():
+    # E31 Housemaid: 15 of 20 rejected fixes of reader-flagged lines were 1-6 chars over the 17 CPS budget
+    # («Λατρεύω τη σάλτσα, γαμώτο.» 26 > 24).
+    src = [Cue(1, 0, 1500, "I fucking love gravy.")]
+    el = [Cue(1, 0, 1500, "Γαμώτο, λατρεύω σάλτσα.")]
+    fix = [{"id": 1, "rx": "Γαμώτο, λατρεύω σάλτσα.", "sb": "Λατρεύω τη σάλτσα, γαμώτο!", "rate": 6,
+            "type": "φυσικότητα"}]
+    reader = [Flag(1, "reader: unnatural: missing article (e.g. «Λατρεύω τη σάλτσα, γαμώτο.»)")]
+    assert not correct_translation(src, el, router(fix), meaning_budgets={1: 24}).applied
+    rep = correct_translation(src, el, router(fix), flags=reader, meaning_budgets={1: 24})
+    assert [a.cue for a in rep.applied] == [1]
+    assert not correct_translation(src, el, router(fix), flags=reader, meaning_budgets={1: 20}).applied  # 25 % max
