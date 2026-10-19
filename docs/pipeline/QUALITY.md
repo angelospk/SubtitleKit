@@ -756,3 +756,35 @@ cue, each English cue gets only its own turn ("What if it was a malfunction?" ->
 «Und wenn's eine Störung war?», not the line before). Only this plain case is cut (equal turn counts,
 every turn ends its sentence, no continuation); other shapes keep the whole text. It changes 80/706
 (Euphoria), 2/968 (Kumail), 52/1418 (ST) cues. Not yet used in a correction run.
+
+## S29-S32: a second review-and-fix round, new material, the script view (2026-10-19)
+
+Second round on the S28 output: a reviewer reads the corrected subtitles, Opus fixes the flagged lines
+(`correct_e26.py <film>.S26e _sNN <opus> ../<film>.S26e_s28/... --preaudit=<name>`; no Codex in the fix).
+Mean of 2 audits, serious / noticeable per hour:
+
+| film | S28 | S29 (Opus JSON review) | S31 (Opus script review of S29) | S32 (S31 + length slack) |
+|---|---|---|---|---|
+| Euphoria | 0.0 / 7.5 | 0.0 / 7.04 | **0.0 / 5.5** | |
+| Kumail | 0.0 / 9.0 | **0.0 / 5.3** | | |
+| ST | 0.0 / 8.6 | **0.0 / 5.9** | | |
+| Wolf Man (new) | 0.33 / 3.3 | **0.33 / 1.3** | | |
+| Housemaid (new) | 0.48 / 11.0 | 0.48 / 9.8 | **0.0 / 9.1** | 0.48 / 9.35 |
+
+Four of five films meet the goal (<= 1 serious, < 7 noticeable per hour). Housemaid has about 950 cues per
+hour (Euphoria 713); per 1,000 cues it is 9.6, near ST (8.5). A further round does not lower it (S32 = noise).
+
+E31, the script view (`pipeline/script_view.py`, Harold's idea): the reviewer reads running dialogue (one
+turn per line, a sentence over several cues on one line, a pause = a new scene, `[id]` markers, no timings)
+and answers `[id] sev | kind | why | better`. On the raw translations, Opus medium, 150 cues per call:
+113 flags and 37 known errors vs JSON 117 and 36. The known errors come from JSON audits, so this count
+favours JSON; what only the script review found is mostly gender / number from the lines around: Euphoria
+95 / 149 «κουριέρος» for a woman, 125 «Καλώς ήρθες» to two women, Kumail 499 «Αγάπη μου, όπως διατάξατε»,
+ST 516 «Κοίτα με» to the group, ST 294 «τέσσερις» for κουτσούβελα. With whole-film calls (600 cues) it
+reports fewer items (52, 28 known).
+
+Length slack (S32): 15 of 20 rejected fixes on reader-flagged Housemaid lines were 1-6 characters over the
+17 CPS budget; such a line may now grow FIX_SLACK (1.25) over it.
+
+Open: a human-marked file (`~/pipeline-demo/eval/human/Euphoria.S03E01.S26e.review.txt`, the raw Flash
+translation in script view) to measure the reviewers against a person instead of against each other.
