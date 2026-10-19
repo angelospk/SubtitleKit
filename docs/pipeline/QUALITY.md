@@ -697,3 +697,62 @@ Flash flagged 61 / 83 / 109 lines (mostly "hard", some wordplay, ambiguous, gend
 
 Verdict: big batches with the E27 code fixes are the best setup so far (ST meets the target: 0.0 / 5.9).
 Euphoria and Kumail are near it; their remaining serious errors are the blocked fixes above.
+
+## E28 result: a pre-auditor before sol (2026-10-19)
+
+The pre-auditor reads the raw Flash translation with the audit prompt (`eval/preaudit_e28.py`). Its items
+go to sol as "reader" problems with the suggested fix (`correct_e26.py --preaudit=opus`). Known errors =
+cues that both audits of some earlier run reported and that are still in the raw translation.
+
+| pre-auditor | Euphoria | Kumail | ST | flags (E/K/ST) |
+|---|---|---|---|---|
+| Opus 5.5 medium | 4/13 | 10/22 | 20/34 | 21/38/58 |
+| Flash high | 3/13 | 8/22 | 13/34 | 31/29/45 |
+| union | 5/14 | 11/23 | 22/44 | 40/55/75 |
+
+A/B, big batch, latest code, mean of 2 audits (serious / noticeable per hour):
+
+| run | Euphoria | Kumail | ST |
+|---|---|---|---|
+| S28 base (no pre-audit) | 0.0 / 6.5 | 1.06 / 13.8 | 0.0 / 7.6 |
+| S28 + Opus pre-audit | **0.0 / 7.5** | **0.0 / 9.0** | **0.0 / 8.6** |
+
+The pre-audit run is the first with 0 serious on all three films (the Kumail pun 96-97 and «Πίνατε» 58 no
+longer count as serious). Noticeable is not better: +1/h on Euphoria and ST, and Kumail's base value is
+noisy (7.45 vs 20.2 between its two audits). Same sol token cost as the base.
+The "2-3 alternatives for a human" part was not run.
+
+## E29 result: SubQ Snap decision model for gender / number / formality (2026-10-19)
+
+`eval/subq_e29.py`: SubQ Snap (`subq-snap-preview`, probabilities only) gets the plot, 6 English lines,
+the other-language lines and the Greek line, and answers choice questions (is the Greek right on
+gender / number / formality, who is addressed, speaker gender, formality, wordplay).
+- Known gender / number / formality errors (25) vs clean addressing lines (50): AUC 0.75; at p(wrong) > 0.5,
+  7/25 errors and 2/50 clean lines.
+- Every line of the S28 output (3,092 lines, 2.4M tokens, about $0.12): 72 flags, about 6-8 real.
+  With separate "English listeners" / "Greek person" questions and a confident mismatch (> 0.7): 23 flags,
+  1-2 real (ST 516). It does not know who speaks to whom in the scene ("Φύγε!" read as plural).
+Verdict: too many false flags for the pipeline; not used.
+
+## E30 result: gpt-5.6-luna (high, the bridge cap) as a judge (2026-10-19)
+
+`eval/luna_e30.py`: Luna rates every cue the two S28 audits reported plus 30 unreported cues per film,
+with the audit scale and 2 cues of context.
+
+| audits reported | n | Luna >= 2 | Luna = 3 |
+|---|---|---|---|
+| both | 24 | 11 | 3 |
+| one | 23 | 8 | 3 |
+| none | 90 | 8 | 1 |
+
+Luna agrees on the clear cases (Kumail 58 «Πίνατε», the pun 96-97, ST 1377 "Jeez yourself", 1392
+«μισομερίδα») and rejects most register / slang items (ST «φυτό», «χέστηκα», «Χέσε»). On Euphoria it flags
+7/30 unreported cues (some fair: «κουριέρος», «πακέταρα»). It is a different judge, not a more exact one.
+
+## Turn-level other-language text (2026-10-19)
+
+`other_languages(..., turns=True)`: when the other language joins several one-turn English cues into a dash
+cue, each English cue gets only its own turn ("What if it was a malfunction?" -> only
+«Und wenn's eine Störung war?», not the line before). Only this plain case is cut (equal turn counts,
+every turn ends its sentence, no continuation); other shapes keep the whole text. It changes 80/706
+(Euphoria), 2/968 (Kumail), 52/1418 (ST) cues. Not yet used in a correction run.
