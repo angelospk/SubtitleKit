@@ -293,6 +293,51 @@ def source_negations(text: str) -> int:
     return max(0, len(SOURCE_NEGATION_RE.findall(text)) - len(NEGATION_IDIOM_RE.findall(text)))
 
 
+# Harold's red flags (2026-10-19, Euphoria review): each one is a line the corrector should rewrite.
+# Greek is matched accent- and case-folded (_fold): «ΕΛΑ» = «Έλα».
+_W = r"[^\W\d_]"
+# "fucking X" -> «γαμημένο X» / «Κα-γαμημένο-τσινγκ»: an anglicism before another word; «..., γαμώτο» instead
+FUCKING_EL_RE = re.compile(rf"(?<!{_W})γαμημεν(?!ε(?!{_W})){_W}*(?=[\s-]+{_W})")  # not the vocative «Γαμημένε»
+LIKE_EN_RE = re.compile(r"\blike\b", re.I)
+# filler «φάση»; «αυτή η φάση» / «τη φάση» is the noun
+PHASE_EL_RE = re.compile(rf"(?<!{_W})(?:σε\s+φαση(?!{_W})|(?<!η )(?<!τη )(?<!την )φαση\s*[,:«]|,\s*φαση(?!{_W}))")
+HEY_EN_RE = re.compile(r"^\W*(?:hey|hi|hello|yo)\b", re.I)
+ELA_EL_RE = re.compile(rf"^\W*ελα(?!{_W})")  # "hey" -> «Έλα»: only on the phone
+# «Σ' το 'πε αυτό;», «Το σκέφτεσαι σοβαρά αυτό;»: a clitic «το» doubled by «αυτό» at the end («Κράτα αυτό.» is fine)
+# A clitic «το» follows a particle or pronoun, or opens the line before a verb; «Το παιδί» is an article.
+_CLITIC = (rf"(?:(?<!{_W})(?:να|θα|δε|δεν|μη|μην|ας|μου|σου|του|της|μας|σας|τους|σ'|μ')\s*(?:το|τ')(?!{_W})"
+           rf"|^\W*(?:το|τ')\s+{_W}*(?:ω|εις|ει|ουμε|ετε|ουν|ες|ε|α|εσαι|εται|ομαι)(?!{_W}))")
+AFTO_END_RE = re.compile(rf"{_CLITIC}[^.!?;]*(?<={_W})\s+αυτο\s*[;.!?]*\s*$")
+RED_FLAGS = (
+    (lambda en, el: FUCKING_EL_RE.search(el),
+     "anglicism «γαμημένο»: put «, γαμώτο» at the end or use another Greek curse"),
+    (lambda en, el: PHASE_EL_RE.search(el) and LIKE_EN_RE.search(en),
+     "«φάση» for 'like' sounds fake: «ξέρεις», or drop it"),
+    (lambda en, el: ELA_EL_RE.search(el) and HEY_EN_RE.search(en),
+     "«Έλα» for 'hey' fits only on the phone: «Γεια», «Ε!», «Να σου πω», or drop it"),
+    (lambda en, el: AFTO_END_RE.search(el),
+     "«το ... αυτό» doubled: the «αυτό» at the end reads as machine translation; drop it"),
+)
+
+
+def _fold(text: str) -> str:
+    """Accent- and case-folded, one line, typographic apostrophes as "'"."""
+    text = " ".join(text.replace("’", "'").replace("‘", "'").split())
+    return "".join(ch for ch in unicodedata.normalize("NFD", text) if not unicodedata.combining(ch)).lower()
+
+
+def _red_flags(en_text: str, el_text: str) -> List[str]:
+    """Reasons for Harold's red flags; dash dialogue is checked speaker by speaker when both sides match."""
+    en_turns, el_turns = _speaker_lines(en_text), _speaker_lines(el_text)
+    pairs = list(zip(en_turns, el_turns)) if len(en_turns) == len(el_turns) else [(en_text, el_text)]
+    return [reason for hit, reason in RED_FLAGS if any(hit(visible_text(a), _fold(visible_text(b))) for a, b in pairs)]
+
+
+def _speaker_lines(text: str) -> List[str]:
+    lines = [ln.strip() for ln in visible_text(text).split("\n") if ln.strip()]
+    return lines if len(lines) > 1 and all(ln.startswith(("-", "–", "—")) for ln in lines) else [text]
+
+
 GREEK_NEGATION_RE = re.compile(
     r"\b(δεν|δε|μην|μη|όχι|ποτέ|τίποτα|τίποτε|κανείς|κανένας|κανένα|καμία|καμιά|ούτε|χωρίς|ουδέποτε)\b", re.I)
 
@@ -347,6 +392,7 @@ def qa_translation(
             # placeholder the translator left, and visible_text() would hide it.
             if re.search(r"@@|[{}<>\[\]]", _ASS_RE.sub("", _FORMAT_RE.sub("", t.text))):
                 flags.append(Flag(t.index, "placeholder or markup left in the text", s.text, t.text, blocker=True))
+        flags += [Flag(t.index, reason, s.text, t.text) for reason in _red_flags(s.text, t.text)]
         if prev is not None and s.text != prev_src.text and _repeats(prev_src.text, s.text, prev.text, t.text):
             flags.append(Flag(t.index, "repeats the previous translation", s.text, t.text, blocker=True))
         prev, prev_src = t, s

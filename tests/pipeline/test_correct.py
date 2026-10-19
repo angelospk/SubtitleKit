@@ -464,3 +464,15 @@ def test_a_reader_flagged_fix_may_go_a_little_over_the_budget():
     rep = correct_translation(src, el, router(fix), flags=reader, meaning_budgets={1: 24})
     assert [a.cue for a in rep.applied] == [1]
     assert not correct_translation(src, el, router(fix), flags=reader, meaning_budgets={1: 20}).applied  # 25 % max
+
+
+def test_style_rules_carry_harolds_red_flags():
+    # Harold 2026-10-19: «Σε φάση» and «Έλα!» came from our own rule list; «γαμημένο X» and a filler «αυτό»
+    # read as machine translation.
+    from subtitlekit.pipeline.glossary import GLOSSARY_PROMPT
+    from subtitlekit.pipeline.prompts_el import STYLE_EL
+
+    assert "Σε φάση" not in STYLE_EL.split("ΠΟΤΕ «φάση»")[0]
+    assert "ΠΟΤΕ «φάση»" in STYLE_EL and "«Έλα» μόνο στο τηλέφωνο" in STYLE_EL
+    assert "«, γαμώτο»" in STYLE_EL and "«αυτό»" in STYLE_EL
+    assert "Characters" in GLOSSARY_PROMPT

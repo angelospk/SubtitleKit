@@ -228,3 +228,42 @@ def test_source_negations_keeps_literal_uses():
     for line in ("I can't help bring supplies.", "I can't help spring the trap.", "There is\nno wonder left.",
                  "The ambulance can't wait.", "We can't wait. Leave now.", "I can't help you."):
         assert n(line) == 1, line
+
+
+def test_qa_translation_flags_harold_red_flags():
+    # Harold 2026-10-19 (Euphoria review): «γαμημένο» before a word is an anglicism, «φάση» for "like" sounds
+    # fake, «Έλα» for "hey" fits only on the phone.
+    src = [Cue(1, 0, 1000, "Ka-motherfucking-ching."), Cue(2, 2000, 3000, "It was, like, crazy."),
+           Cue(3, 4000, 5000, "Hey, Gillie."), Cue(4, 6000, 7000, "Come on, let's go."),
+           Cue(5, 8000, 9000, "Damn it.")]
+    tr = [Cue(1, 0, 1000, "Κα-γαμημένο-τσινγκ."), Cue(2, 2000, 3000, "Ήταν, φάση, τρελό."),
+          Cue(3, 4000, 5000, "Έλα, Τζίλι."), Cue(4, 6000, 7000, "Έλα, πάμε."), Cue(5, 8000, 9000, "Γαμώτο.")]
+    reasons = {f.cue: f.reason for f in qa_translation(src, tr, CFG)}
+    assert "γαμημένο" in reasons[1] and "φάση" in reasons[2] and "Έλα" in reasons[3]
+    assert 4 not in reasons and 5 not in reasons  # "come on" is «Έλα»; «Γαμώτο» is fine
+
+
+def test_red_flags_skip_literal_uses_and_check_each_speaker():
+    src = [Cue(1, 0, 1000, "I like this phase."), Cue(2, 2000, 3000, "He's unloved."),
+           Cue(3, 4000, 5000, "You fucker!"), Cue(4, 6000, 7000, "-What?\n-Hey, Mike."),
+           Cue(5, 8000, 9000, "Are you really considering this?"), Cue(6, 10000, 11000, "This is good."),
+           Cue(7, 12000, 13000, "HEY, MIKE!"), Cue(8, 14000, 15000, "Hold this.")]
+    tr = [Cue(1, 0, 1000, "Μου αρέσει αυτή η φάση."), Cue(2, 2000, 3000, "Είναι αγαμημένος."),
+          Cue(3, 4000, 5000, "Γαμημένε!"), Cue(4, 6000, 7000, "-Τι;\n-Έλα, Μάικ."),
+          Cue(5, 8000, 9000, "Το σκέφτεσαι σοβαρά αυτό;"), Cue(6, 10000, 11000, "Αυτό είναι καλό."),
+          Cue(7, 12000, 13000, "ΕΛΑ, ΜΑΙΚ!"), Cue(8, 14000, 15000, "Κράτα αυτό.")]
+    reasons = {f.cue: f.reason for f in qa_translation(src, tr, CFG)}
+    assert 1 not in reasons and 2 not in reasons and 3 not in reasons and 6 not in reasons and 8 not in reasons
+    assert "Έλα" in reasons[4] and "Έλα" in reasons[7] and "αυτό" in reasons[5]
+
+
+def test_red_flags_second_review_round():
+    src = [Cue(1, 0, 1000, "The kid holds this."), Cue(2, 2000, 3000, "Are you really\nconsidering this?"),
+           Cue(3, 4000, 5000, "Fucking Mike!"), Cue(4, 6000, 7000, "I like this phase, but no."),
+           Cue(5, 8000, 9000, "She told you that?")]
+    tr = [Cue(1, 0, 1000, "Το παιδί κρατά αυτό."), Cue(2, 2000, 3000, "Το σκέφτεσαι\nσοβαρά αυτό;"),
+          Cue(3, 4000, 5000, "Γαμημένε Μάικ!"), Cue(4, 6000, 7000, "Μου αρέσει αυτή η φάση, αλλά όχι."),
+          Cue(5, 8000, 9000, "Σ’ το ’πε αυτό;")]
+    reasons = {f.cue: f.reason for f in qa_translation(src, tr, CFG)}
+    assert 1 not in reasons and 3 not in reasons and 4 not in reasons
+    assert "αυτό" in reasons[2] and "αυτό" in reasons[5]

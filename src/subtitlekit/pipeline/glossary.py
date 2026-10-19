@@ -97,7 +97,7 @@ GLOSSARY_PROMPT = """You prepare a glossary for translating a film's subtitles i
 From the subtitle lines below, list every human name, nickname, place, organisation, invented term, recurring phrase (signs, rules, catchphrases) and idiom that a translator must render the same way every time.
 - Write every human name in {target} script by pronunciation (Jules → Τζουλς). Give places, terms and idioms their natural {target} rendering.
 - "source" must be copied exactly as it appears in the subtitles.
-- "note": a short explanation in {target} that helps the translation (who or what it is, the gender of a person if it is clear, how it should sound). Do not say whether a name should be kept.
+- "note": a short explanation in {target} that helps the translation (who or what it is, the gender of a person, how it should sound). Take a person's gender from the plot's "Characters" list when it names them; otherwise give it only if the lines make it clear, never guess. Do not say whether a name should be kept.
 - "style": the film's vibe and register in 2-3 sentences, so the subtitler knows the tone.
 - "notes": up to 5 short instructions for the subtitler (for example phrases that must repeat identically).
 - "scenes": a compressed scene map with times taken from the lines.

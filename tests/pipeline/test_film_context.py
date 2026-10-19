@@ -198,3 +198,28 @@ def test_rejected_reply_is_evicted_from_the_cache():
     backend.forget = forgotten.append
     fetch_plot(FilmMeta(title="X"), backend)
     assert forgotten == backend.prompts
+
+
+def test_fetch_plot_adds_characters_with_gender_from_the_cast():
+    # Harold 2026-10-19: the glossary guessed «Ali: γυναίκα» from the subtitles; the cast list knows he is a man.
+    reply = dict(PLOT_REPLY, characters=[
+        {"name": "Ali", "gender": "male", "who": "Rue's sponsor"},
+        {"name": "Rue Bennett", "gender": "female", "who": "a drug courier"},
+        {"name": "Gillie", "gender": "unknown", "who": ""},
+        {"name": "", "gender": "male"}, "junk", {"name": "Nate", "gender": "robot"},
+    ])
+    ctx, problems = fetch_plot(FilmMeta(title="X"), MockBackend(replies=[json.dumps(reply)]))
+    assert "Characters (cast list):\n- Ali: male, Rue's sponsor\n- Rue Bennett: female, a drug courier" in ctx.text
+    assert "Gillie" not in ctx.text and "Nate" not in ctx.text  # unknown or bad gender is left out
+
+
+def test_fetch_plot_without_characters_keeps_the_plot():
+    ctx, _ = fetch_plot(FilmMeta(title="X"), MockBackend(replies=[json.dumps(PLOT_REPLY)]))
+    assert "Characters" not in ctx.text
+
+
+def test_fetch_plot_keeps_plot_and_cast_within_max_chars():
+    cast = [{"name": f"Person {i}", "gender": "male", "who": "a long description of the role"} for i in range(80)]
+    reply = dict(PLOT_REPLY, plot="word " * 400, characters=cast)
+    ctx, _ = fetch_plot(FilmMeta(title="X"), MockBackend(replies=[json.dumps(reply)]), max_chars=500)
+    assert len(ctx.text) <= 500 and "Characters (cast list):" in ctx.text

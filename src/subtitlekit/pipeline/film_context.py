@@ -22,7 +22,11 @@ Search the web: Wikipedia first, then TMDB, IMDb or the broadcaster. Use only a 
 (same title, year, season and episode). Never invent or guess a plot.
 Return ONLY a JSON object, no commentary:
 {{"found": true, "source_url": "<URL of the page you used>", "summary": "<2-3 sentences: genre, tone, setting>",
-"plot": "<the plot in English, at most {words} words>"}}
+"plot": "<the plot in English, at most {words} words>",
+"characters": [{{"name": "<the name as people say it in the film>", "gender": "male|female|nonbinary",
+"who": "<max 8 words: role, relation to the main characters>"}}]}}
+List in "characters" the named characters of the cast list (Wikipedia, IMDb or TMDB) with the gender the cast
+list or the plot states; leave out a character whose gender you do not know.
 If you cannot find this exact film or episode, return {{"found": false}}.
 Film (JSON data):
 {film}"""
@@ -86,8 +90,30 @@ def fetch_plot(
         return None, [f"film_context: {problem}"]
     url, summary, plot = data["source_url"].strip(), data.get("summary"), data["plot"]
     parts = [s.strip() for s in (summary if isinstance(summary, str) else "", plot) if s.strip()]
-    text, problems = _cut("\n\n".join(parts), max_chars)
-    return FilmContext(text, "llm", url), problems
+    cast = _characters(data.get("characters"), max_chars // 3)
+    text, problems = _cut("\n\n".join(parts), max_chars - len(cast))
+    return FilmContext(text + cast, "llm", url), problems
+
+
+GENDERS = ("male", "female", "nonbinary")
+
+
+def _characters(items: Any, max_chars: int) -> str:
+    """Harold 2026-10-19: the glossary guessed genders from the subtitles («Ali: γυναίκα»); the cast list
+    gives them. A character with no name or an unknown gender is left out; the block stays within max_chars."""
+    rows = []
+    for c in items if isinstance(items, list) else []:
+        if not isinstance(c, dict):
+            continue
+        name, gender, who = (str(c.get(k) or "").strip() for k in ("name", "gender", "who"))
+        if name and gender in GENDERS:
+            rows.append(f"- {name}: {gender}" + (f", {who}" if who else ""))
+    head, out = "\n\nCharacters (cast list):", ""
+    for row in rows:  # the cast takes at most a third of the context; the plot keeps the rest
+        if len(head) + len(out) + 1 + len(row) > max_chars:
+            break
+        out += "\n" + row
+    return head + out if out else ""
 
 
 def load_plot(film_dir: str, max_chars: int = 6000) -> Tuple[Optional[FilmContext], List[str]]:
