@@ -1,7 +1,8 @@
 """E28 step 1: a pre-auditor reads the raw Flash translation before correction; how many known errors does it find?
 
-Usage: preaudit_e28.py <film>.<variant> <name> <backend-json>
-Runs audit.audit_cues (the audit prompt) on out/<variant>/translation.el.srt with the given backend and writes
+Usage: preaudit_e28.py <film>.<variant> <name> <backend-json> [input-srt]
+Runs audit.audit_cues (the audit prompt) on out/<variant>/<input-srt> (default translation.el.srt; E29 reads a
+corrected output, e.g. ../<variant>_s28/<variant>_s28.el.srt) with the given backend and writes
 out/<variant>/preaudit-<name>.json. Recall: the share of "known errors" it reports, where a known error is a cue
 that both audits of some later run (compare/audit-<variant>_*.json) reported. Precision is not measured here: a
 flag on a line sol would fix anyway costs little.
@@ -35,10 +36,10 @@ def known_errors(variant: str) -> set:
     return set(seen)
 
 
-def main(variant: str, name: str, llm: dict) -> None:
+def main(variant: str, name: str, llm: dict, srt: str = "translation.el.srt") -> None:
     src_path = glob.glob(f"{E}/films/{variant}/*.eng.srt") or glob.glob(f"{E}/films/{variant}/*track3_[[]eng[]].srt")
     english, _ = prepare_source(load_srt(src_path[0]))
-    raw = load_srt(f"{E}/out/{variant}/translation.el.srt")
+    raw = load_srt(f"{E}/out/{variant}/{srt}")
     aligned = align_source(raw, english)
     keep = [(s, g) for s, g in zip(aligned, raw) if s.text]
     rep = audit_cues([s for s, _ in keep], [g for _, g in keep], make_backend({"timeout_s": 2400, "cache_dir": None, **llm}))
@@ -52,4 +53,4 @@ def main(variant: str, name: str, llm: dict) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]))
+    main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), *sys.argv[4:5])
