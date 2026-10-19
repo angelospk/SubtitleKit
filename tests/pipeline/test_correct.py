@@ -476,3 +476,5 @@ def test_style_rules_carry_harolds_red_flags():
     assert "ΠΟΤΕ «φάση»" in STYLE_EL and "«Έλα» μόνο στο τηλέφωνο" in STYLE_EL
     assert "«, γαμώτο»" in STYLE_EL and "«αυτό»" in STYLE_EL
     assert "Characters" in GLOSSARY_PROMPT
+    # Harold 2026-10-19 (Housemaid): the "γαμώτο" rule bred «κωλόδοντο», «κωλοτέρας», «Μακριά…, γαμώ το!»
+    assert "«ρημάδι" in STYLE_EL and "«κωλο-»" in STYLE_EL and "the fuck" in STYLE_EL and "Στο διάολο" in STYLE_EL
