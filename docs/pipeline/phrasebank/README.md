@@ -33,7 +33,7 @@ $PB os-fetch --imdb tt... --title "..."   # download pro Greek + matching Englis
 |---|---|---|
 | Unit | aligned cue pair (EN cue group ↔ EL cue group, ≤ 2 cues per side; dash dialogues split into turns) | gives retrieval-augmented few-shot / translation memory; a cue is what we translate |
 | Source | OPUS OpenSubtitles v2024, `raw/{en,el}.zip` read member by member with HTTP range requests | no key, no 7-40 GB download; one title costs ~1-3 MB |
-| Greek version | every Greek version of a title (up to 8) is scored; the first professional *aligned* one wins, else the best aligned | OPUS pairs only one Greek file per title, often a fan sub |
+| Greek version | every Greek version of a title (up to 12) is scored; the first professional *aligned* one wins, else the best aligned | OPUS pairs only one Greek file per title, often a fan sub |
 | Alignment | `pipeline.align.sync_track` + `align_groups` (time overlap after resync); a version is rejected when resync is not confident or the median `|log(len el / len en)|` > 0.4 | caught a wrong-cut version (EN "Smart." ↔ unrelated Greek) |
 | Embedding | EmbeddingGemma 300M, ONNX int8 (`onnx-community/embeddinggemma-300m-ONNX`, not gated), in process, MRL 768 → 256 | Ollama's copy: ~100 ms per query, 98 texts/s; ONNX: 74 ms, 171 texts/s, same top-1 on a 20-idiom EN→EL test |
 | Prefixes | query `task: search result \| query: `, document `title: none \| text: ` (model card); intent goes in the query as `<intent> \| <line>` | Ollama's template adds no prefix |
@@ -67,3 +67,13 @@ Needed from Harold: an API key (opensubtitles.com → Profile → API consumers 
 `~/.config/opensubtitles/api_key` (or env `OPENSUBTITLES_API_KEY`), and for downloads a username/password
 in env `OPENSUBTITLES_USER` / `OPENSUBTITLES_PASSWORD` (the free account allows a small number of
 downloads per day). Never put them in the repo.
+
+## Current build (2026-10-20)
+
+- 129 titles (70 movies + 59 episodes of 30 series), 116,439 pairs. Greek labels: 30 `professional`,
+  74 `unknown`, 25 `amateur` (amateur kept only when no better aligned version existed).
+- 842 expressions from DeepSeek Flash workers (28 batches; every entry checked by `validate`).
+- Warm `bench` on CPU, all three tables (EN pairs, EL pairs, expressions), 49 lines × 3: p50 174 ms,
+  p95 183 ms. About 80 ms is the query embedding, about 48 ms each pair-table KNN, 0.3 ms expressions.
+  (The `ms` in `eval_hits.json` includes 2-3 embeddings per line, so it is higher.)
+- Eval and the recommendation on when to use it: `EVAL.md` (`eval_phrasebank.py`, then `make_eval_md.py`).

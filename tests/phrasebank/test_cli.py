@@ -123,3 +123,12 @@ def test_extract_check_rejects_an_empty_result(tmp_path, capsys):
     res = tmp_path / "res.json"
     res.write_text("[]", encoding="utf-8")
     assert cli.main(["extract-check", "--batch", str(batch), str(res)]) == 1
+
+
+def test_extract_prepare_label_filter(tmp_path, fake_embedder):
+    db = seed(tmp_path, fake_embedder)  # one professional title
+    out_dir = tmp_path / "b"
+    assert cli.main(["extract-prepare", "--db", db, "--out", str(out_dir), "--label", "unknown"]) == 0
+    assert not list(out_dir.glob("batch-*.jsonl"))
+    assert cli.main(["extract-prepare", "--db", db, "--out", str(out_dir), "--label", "professional"]) == 0
+    assert len(list(out_dir.glob("batch-*.jsonl"))) == 1

@@ -155,7 +155,7 @@ class Store:
 
     def iter_pairs(self, unsent: bool = False) -> Iterator[Dict[str, Any]]:
         """Yield pairs ordered by id, with their title when known."""
-        sql = ("SELECT p.id, p.en, p.el, p.imdb, p.start_ms, p.end_ms, t.title "
+        sql = ("SELECT p.id, p.en, p.el, p.imdb, p.start_ms, p.end_ms, t.title, t.pro_label "
                "FROM pairs p LEFT JOIN titles t ON t.imdb = p.imdb")
         if unsent:
             sql += " WHERE p.sent IS NULL"

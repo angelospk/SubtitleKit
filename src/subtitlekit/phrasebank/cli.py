@@ -121,6 +121,8 @@ def cmd_extract_prepare(args: argparse.Namespace) -> int:
     for p in store.iter_pairs(unsent=True):
         if len(candidates) >= limit:
             break
+        if args.label and p["pro_label"] != args.label:
+            continue
         if is_candidate(p["en"], p["el"]) and (not args.per_title or per_title[p["imdb"]] < args.per_title):
             per_title[p["imdb"]] += 1
             candidates.append(p)
@@ -333,6 +335,8 @@ def build_parser() -> argparse.ArgumentParser:
     ep.add_argument("--batch-size", type=int, default=150)
     ep.add_argument("--max-batches", type=int, default=1000)
     ep.add_argument("--per-title", type=int, default=0, help="at most N candidates per title (0 = no cap)")
+    ep.add_argument("--label", default="", choices=["", "professional", "unknown", "amateur"],
+                    help="only titles with this pro label")
     ep.set_defaults(func=cmd_extract_prepare)
 
     el = sub.add_parser("extract-load", parents=[common], help="load extraction results")
