@@ -114,3 +114,12 @@ def test_extract_prepare_per_title_cap(tmp_path, fake_embedder, monkeypatch):
     assert cli.main(["extract-prepare", "--db", db, "--out", str(out_dir), "--per-title", "1"]) == 0
     rows = [json.loads(l) for l in (out_dir / "batch-0001.jsonl").read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
+
+
+def test_extract_check_rejects_an_empty_result(tmp_path, capsys):
+    batch = tmp_path / "batch-0001.jsonl"
+    batch.write_text(json.dumps({"id": 5, "en": "Fuck off!", "el": "Άντε γαμήσου!"}, ensure_ascii=False) + "\n",
+                     encoding="utf-8")
+    res = tmp_path / "res.json"
+    res.write_text("[]", encoding="utf-8")
+    assert cli.main(["extract-check", "--batch", str(batch), str(res)]) == 1

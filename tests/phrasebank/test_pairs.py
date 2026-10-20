@@ -56,3 +56,19 @@ def test_pair_is_a_dataclass():
 def test_make_pairs_drops_empty_english():
     pairs, _ = make_pairs([C(1, 1000, 2000, "-")], [C(1, 1000, 2000, "Ναι.")])
     assert pairs == []
+
+
+def test_turn_split_needs_dash_dialogue_on_both_sides():
+    # Two plain cues against two plain cues: the Greek may reorder across cues, keep the group whole.
+    en = [C(1, 1000, 2000, "I'd like"), C(2, 2000, 3000, "to go.")]
+    el = [C(1, 1000, 2000, "Εντάξει,"), C(2, 2000, 3000, "θα πάω.")]
+    pairs, _ = make_pairs(en, el)
+    assert [(p.en, p.el) for p in pairs] == [("I'd like to go.", "Εντάξει, θα πάω.")]
+
+
+def test_turn_split_ignores_a_plain_cue_next_to_a_dash_cue():
+    en = [C(1, 1000, 2000, "I'd like to go."), C(2, 2000, 3000, "-Okay.")]
+    el = [C(1, 1000, 3000, "-Θα ήθελα να πάω.\n-Εντάξει.")]
+    pairs, _ = make_pairs(en, el)
+    assert [(p.en, p.el) for p in pairs] == [("I'd like to go. Okay.", "Θα ήθελα να πάω. Εντάξει.")] or \
+        [(p.en, p.el) for p in pairs] == [("I'd like to go. -Okay.", "-Θα ήθελα να πάω. -Εντάξει.")]

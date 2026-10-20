@@ -67,3 +67,43 @@ def test_iter_pairs_skips_already_sent(tmp_path, fake_embedder):
     rows = list(st.iter_pairs(unsent=True))
     assert [r["id"] for r in rows] == ids[2:]
     assert set(rows[0]) >= {"id", "en", "el", "imdb", "title"}
+
+
+def test_add_title_pairs_is_atomic(tmp_path, fake_embedder):
+    import numpy as np
+    import pytest
+
+    st = Store(str(tmp_path / "pb.sqlite"), dims=fake_embedder.dims)
+    ps = [Pair("a b", "α β", 1, 2), Pair("c d", "γ δ", 3, 4)]
+    bad = np.zeros((1, fake_embedder.dims), dtype=np.float32)  # one vector for two pairs
+    with pytest.raises(Exception):
+        st.add_title_pairs(title(), ps, bad, bad)
+    assert not st.has_title("tt0000001") and st.stats()["pairs"] == 0
+    ids = st.add_title_pairs(title(), ps, fake_embedder.embed(["a b", "c d"]), fake_embedder.embed(["α β", "γ δ"]))
+    assert len(ids) == 2 and st.has_title("tt0000001")
+
+
+def test_second_writer_waits_for_the_lock(tmp_path, fake_embedder):
+    import threading
+    import time
+
+    p = str(tmp_path / "pb.sqlite")
+    Store(p, dims=fake_embedder.dims).close()
+    locked = threading.Event()
+
+    def hold():
+        a = Store(p, dims=fake_embedder.dims)
+        a.conn.execute("BEGIN IMMEDIATE")
+        a.conn.execute("INSERT INTO meta(key, value) VALUES ('x', '1')")
+        locked.set()
+        time.sleep(6)  # longer than sqlite3's default 5 s busy timeout
+        a.conn.commit()
+        a.close()
+
+    t = threading.Thread(target=hold)
+    t.start()
+    locked.wait()
+    b = Store(p, dims=fake_embedder.dims)
+    b.add_title(title())  # must wait, not raise "database is locked"
+    t.join()
+    assert b.has_title("tt0000001")

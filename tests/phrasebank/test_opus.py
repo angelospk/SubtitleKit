@@ -145,3 +145,39 @@ def test_select_titles_mixes_movies_and_series():
     dirs = [d.dir for d in got]
     assert dirs[:2] == ["1000002", "1000001"]  # movies by votes, old and low-score ones dropped
     assert dirs[2:] == ["2000011_2000000_1_1", "2000012_2000000_1_2"]  # top series, first episodes
+
+
+def test_parse_raw_xml_keeps_text_beside_tags():
+    xml = ('<document><s id="1"><time id="T1S" value="00:00:01,000" />Goodbye.<time id="T1E" value="00:00:02,000" />'
+           '</s>\n<s id="2"><time id="T2S" value="00:00:03,000" />\nTom &amp; Jerry\n'
+           '<time id="T2E" value="00:00:04,000" /></s></document>')
+    assert [c.text for c in parse_raw_xml(xml)] == ["Goodbye.", "Tom & Jerry"]
+    xml = ('<document><s id="1"><time id="T1S" value="00:00:01,000" />Hi.</s><s id="2">Goodbye.'
+           '<time id="T1E" value="00:00:02,000" /></s></document>')
+    assert [c.text for c in parse_raw_xml(xml)] == ["Hi. Goodbye."]
+
+
+def test_remote_zip_refuses_oversized_members():
+    import pytest
+
+    from subtitlekit.phrasebank import opus
+
+    raw, index = _local_zip({"big.xml": b"a" * 5000})
+    rz = RemoteZip(index, lambda s, n: raw[s:s + n])
+    old = opus.MAX_MEMBER_BYTES
+    opus.MAX_MEMBER_BYTES = 1000
+    try:
+        with pytest.raises(ValueError):
+            rz.read("big.xml")
+    finally:
+        opus.MAX_MEMBER_BYTES = old
+
+
+def test_remote_zip_detects_truncated_data():
+    import pytest
+
+    raw, index = _local_zip({"a.xml": "Γεια σου".encode() * 50})
+    off, size, kind = index["a.xml"]
+    rz = RemoteZip({"a.xml": (off, size, kind)}, lambda s, n: raw[s:s + max(0, n - 5)] if n > 30 else raw[s:s + n])
+    with pytest.raises(ValueError):
+        rz.read("a.xml")

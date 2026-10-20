@@ -63,3 +63,12 @@ def test_is_candidate():
     assert not is_candidate("The company was founded in 1998 by three engineers from the north of the country",
                             "Η εταιρεία ιδρύθηκε το 1998 από τρεις μηχανικούς από τον βορρά της χώρας")
     assert not is_candidate("Paris.", "Παρίσι.")  # one-word name
+
+
+def test_load_results_single_jsonl_object(tmp_path):
+    a = tmp_path / "a.jsonl"
+    a.write_text(json.dumps(entry()) + "\n", encoding="utf-8")
+    assert load_results(str(a)) == [entry()]
+    b = tmp_path / "b.json"
+    b.write_text(json.dumps({"expressions": [entry()]}), encoding="utf-8")
+    assert load_results(str(b)) == [entry()]
