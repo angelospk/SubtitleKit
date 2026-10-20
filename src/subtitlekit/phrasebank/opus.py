@@ -15,6 +15,9 @@ from ..pipeline.srt import Cue
 
 _TIME_RE = re.compile(r'<time\s+id="[^"]*?\d([SE])"\s+value="([^"]+)"\s*/?>')
 _LINKGRP_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
+_CDATA_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.S)
+_INLINE_TAG_RE = re.compile(r"</?(?:i|b|u|font)\b[^>]*>", re.I)
+_TAG_RE = re.compile(r"<[^>]+>")
 MAX_MEMBER_BYTES = 50_000_000
 
 
@@ -44,7 +47,9 @@ def parse_raw_xml(xml: str) -> List[Cue]:
     pos = 0
     for m in _TIME_RE.finditer(body):
         for raw in body[pos:m.start()].split("\n"):
-            line = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw))).strip()
+            raw = _CDATA_RE.sub(lambda m: html.escape(m.group(1), quote=False), raw)
+            raw = _INLINE_TAG_RE.sub("", raw)
+            line = re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub(" ", raw))).strip()
             if line and start is not None:
                 lines.append(line)
         pos = m.end()
@@ -138,6 +143,13 @@ class RemoteZip:
             raise ValueError(f"not a local file header: {key}")
         name_len = int.from_bytes(header[26:28], "little")
         extra_len = int.from_bytes(header[28:30], "little")
+        flags = int.from_bytes(header[6:8], "little")
+        data_descriptor = bool(flags & 0x08)
+        crc = int.from_bytes(header[14:18], "little")
+        csize = int.from_bytes(header[18:22], "little")
+        usize = int.from_bytes(header[22:26], "little")
+        if not data_descriptor and csize != size:
+            raise ValueError(f"member size mismatch: {key} ({size} indexed, {csize} in header)")
         tail_len = name_len + extra_len + size
         tail = self.read_range(offset + 30, tail_len)
         if len(tail) < tail_len:
@@ -150,10 +162,18 @@ class RemoteZip:
                 raise ValueError(f"member too large: {key}")
             if not obj.eof:
                 raise ValueError(f"truncated deflate stream: {key}")
-            return out
-        if compress_type == 0:
-            return data
-        raise ValueError(f"unsupported compression type {compress_type}")
+            if obj.unused_data:
+                raise ValueError(f"trailing data after deflate stream: {key}")
+        elif compress_type == 0:
+            out = data
+        else:
+            raise ValueError(f"unsupported compression type {compress_type}")
+        if not data_descriptor:
+            if len(out) != usize:
+                raise ValueError(f"member length mismatch: {key} ({len(out)} != {usize})")
+            if zlib.crc32(out) != crc:
+                raise ValueError(f"member CRC mismatch: {key}")
+        return out
 
     def versions(self, directory: str) -> List[str]:
         """Member names (without the prefix) that live in ``directory``."""

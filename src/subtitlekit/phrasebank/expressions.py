@@ -122,20 +122,27 @@ def load_results(path: str) -> List[Dict[str, Any]]:
     if not body:
         return []
     if body.startswith("["):
-        return json.loads(body)
-    if body.startswith("{"):
+        result = json.loads(body)
+    elif body.startswith("{"):
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
-            pass  # a JSONL file whose first line is a bare object
+            result = None  # a JSONL file whose first line is a bare object
         else:
-            if isinstance(data, dict):
-                if isinstance(data.get("expressions"), list):
-                    return data["expressions"]
-                return [data]
-    out: List[Dict[str, Any]] = []
-    for line in body.splitlines():
-        line = line.strip()
-        if line:
-            out.append(json.loads(line))
-    return out
+            if isinstance(data, dict) and isinstance(data.get("expressions"), list):
+                result = data["expressions"]
+            elif isinstance(data, dict):
+                result = [data]
+            else:
+                result = data
+    else:
+        result = None
+    if result is None:
+        result = []
+        for line in body.splitlines():
+            line = line.strip()
+            if line:
+                result.append(json.loads(line))
+    if not isinstance(result, list) or not all(isinstance(item, dict) for item in result):
+        raise ValueError("results must be a list of objects")
+    return result

@@ -12,6 +12,7 @@ skipped-if-missing model test). Data (never in git): `~/phrasebank-data/`.
 ## Commands
 
 ```bash
+uv pip install -e ".[phrasebank]"     # sqlite-vec, onnxruntime, tokenizers
 PB=".venv/bin/python -m subtitlekit.phrasebank"
 $PB prepare                      # OPUS alignment headers, IMDb tables, archive indexes (~1.1 GB, once)
 $PB ingest-opus --movies 70 --series 25 --per-series 2    # fetch, align, embed, store (incremental)

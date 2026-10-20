@@ -152,7 +152,12 @@ def cmd_extract_load(args: argparse.Namespace) -> int:
     reasons: List[str] = []
     accepted = total = 0
     for path in args.files:
-        entries = load_results(path)
+        try:
+            entries = load_results(path)
+        except (OSError, ValueError) as exc:
+            print(f"cannot read {path}: {exc}")
+            store.close()
+            return 1
         total += len(entries)
         rows, docs = [], []
         for entry in entries:
