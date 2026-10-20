@@ -48,38 +48,56 @@ OPUS v2024 keeps no release name, uploader or trusted flag (checked: the raw XML
 language, duration, encoding and conversion counts; the alignment file has a document score). So the
 Greek text itself is scored (`pro.score_greek`), first and last 10 cues only:
 
-- +3 a retail credit with a real name: `Υποτιτλισμός:` / `Απόδοση διαλόγων:` / `Μετάφραση:` … followed by
-  2-3 capitalised words, no digits (e.g. «Υποτιτλισμός: Γιώργος Λυκούδης»);
+- +3 a retail credit with a real name: `Υποτιτλισμός:` / `Απόδοση διαλόγων:` / `Μετάφραση:` … (accents
+  optional, any case) followed by 2-3 Greek-script words, capitalised or all caps, no digits (e.g.
+  «Υποτιτλισμός: Γιώργος Λυκούδης», «ΑΠΟΔΟΣΗ ΔΙΑΛΟΓΩΝ: ΤΣΟΥΤΣΟΥ ΕΛΙΝΑ»). A Latin name («Μετάφραση: Calamity
+  Jane») or a fan word in the name («ΟΜΑΔΑ ΣΥΓΧΡΟΝΙΣΜΟΥ») is a fan credit;
 - +3 a studio card («ΜΙΑ ΠΡΩΤΟΤΥΠΗ ΣΕΙΡΑ ΤΟΥ NETFLIX», SDI Media, Iyuno, …);
 - −3 a fan marker: nickname with digits (marios2016), ♥ ♫, sync/repair/ripped, συγχρονισμός, subs/team/ομάδα,
   URLs, @, «Να είστε καλά», a credit label followed by a non-name;
+- −3 OCR damage: 2 % or more of the Greek words (whole file) carry Latin letters («μπoρoύσε» with a
+  Latin `o`), as a fan OCR of a DVD subtitle leaves them;
 - +1 timings snapped to video frames, −1 timings on 10 ms steps.
+
+Text is NFC-normalised before these checks.
 
 Label: `amateur` if any fan marker, `professional` if the score is ≥ 3, else `unknown` (no fan marks, no
 credit).
 
 **Only `professional` is stored.** `Store` refuses any other title, `ingest-opus` skips titles without a
-professional aligned version, and `ingest-srt` / `os-fetch` refuse a Greek file with a fan marker even when
-the release metadata says professional. `prune` deletes older non-professional titles with their pairs,
+professional aligned version, and `ingest-srt` refuses a Greek file with a fan marker even when the release
+metadata says professional. `os-fetch` trusts no metadata: the Greek text decides. `prune` deletes older non-professional titles with their pairs,
 vectors and expressions (2026-10-20: 99 titles, 89,023 pairs, 573 expressions removed; backup
 `~/phrasebank-data/phrasebank.before-prune-2026-10-20.sqlite`).
 
-## OpenSubtitles API path (ready, gated on a key)
+## OpenSubtitles API path
 
 `opensubs.py` + `os-search` / `os-fetch`: search by IMDb id and language, keep items that are not
 AI/machine translated and not CAM/TS, and that come from a trusted uploader, a high uploader rank, or a
-retail/web release name (WEB-DL, NF, AMZN, DSNP, HMAX, ATVP, BluRay…). `os-fetch` downloads the most
-downloaded professional Greek file and the English file of the same release, then `ingest-srt`.
+retail/web release name (WEB-DL, NF, AMZN, DSNP, HMAX, ATVP, BluRay…). That is only a candidate filter:
+most popular "BluRay" Greek files are fan subs synced to a rip. `os-fetch` downloads Greek candidates one by
+one (streaming releases first, then trusted uploaders, then most downloaded; `--max-greek`, default 3) and
+keeps the first that `score_greek` labels `professional`. Only then it downloads English (the Greek file's
+release first; `--max-english`, default 3) and moves on to the next English file when the pair does not
+align (`AlignmentError`: another cut, a double episode). No English candidate: no Greek download either.
 
 Needed from Harold: an API key (opensubtitles.com → Profile → API consumers → new consumer), written to
 `~/.config/opensubtitles/api_key` (or env `OPENSUBTITLES_API_KEY`), and for downloads a username/password
-in env `OPENSUBTITLES_USER` / `OPENSUBTITLES_PASSWORD` (the free account allows a small number of
-downloads per day). Never put them in the repo.
+in env `OPENSUBTITLES_USER` / `OPENSUBTITLES_PASSWORD`. Harold keeps all three in
+`~/.config/opensubtitles/.env` (load with `set -a; . ~/.config/opensubtitles/.env; set +a`). His account
+allows 300 downloads per day; a title costs 2 to 5. Each `os-fetch` logs in once; run a batch with a few
+seconds between calls (the login endpoint answered 429 to back-to-back calls). Never put them in the repo.
 
 ## Current build (2026-10-20)
 
-- After `prune`: 30 `professional` titles (14 movies + 16 episodes of 8 series), 27,416 pairs, 297
-  expressions. Before it: 129 titles, 116,439 pairs, 870 expressions (74 `unknown`, 25 `amateur` titles).
+- 96 `professional` titles (24 movies + 72 episodes of 17 series), 70,806 pairs, 288 expressions.
+  2026-10-20 OpenSubtitles batch added sarcastic comedies: Deadpool (Disney+), Zombieland 1-2, Guardians of
+  the Galaxy, Game Night, Bullet Train, Glass Onion, Red Notice, The Adam Project, Murder Mystery, Don't Look
+  Up, and episodes of Fleabag, Sex Education, The Office, Dead to Me, What We Do in the Shadows, Ted Lasso,
+  Russian Doll, The Good Place, BoJack Horseman. The new expressions are not extracted yet.
+- After the first `prune`: 30 titles, 27,416 pairs, 297 expressions. Before it: 129 titles, 116,439 pairs,
+  870 expressions (74 `unknown`, 25 `amateur` titles). Two more titles (Imitation Game, Jojo Rabbit) left
+  when Latin pseudonyms stopped counting as credits.
 - Expressions come from DeepSeek Flash workers (every entry checked by `validate`).
 - `EVAL.md` and the latency numbers below ran on the 129-title build, before `prune`.
 - Warm `bench` on CPU, all three tables (EN pairs, EL pairs, expressions), 49 lines × 3: p50 174 ms,
