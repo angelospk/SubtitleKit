@@ -164,3 +164,94 @@ def test_prune_command_keeps_only_professional_titles(tmp_path, fake_embedder, c
     assert json.loads(capsys.readouterr().out) == {"titles": 1, "pairs": 1, "expressions": 0}
     s = Store(db).stats()
     assert s["by_pro_label"] == {"professional": 1} and s["pairs"] == 3
+
+
+def _srt(lines):
+    return "".join(f"{i}\n00:00:{i:02d},123 --> 00:00:{i:02d},877\n{text}\n\n"
+                   for i, text in enumerate(lines, 1)).encode("utf-8")
+
+
+class FakeOpenSubtitles:
+    """Search results per language, SRT bytes per file id, and a log of every download."""
+
+    def __init__(self, el, en, files):
+        self.results = {"el": el, "en": en}
+        self.files = files
+        self.downloads = []
+
+    def search_professional(self, imdb, language="el"):
+        return self.results[language]
+
+    def download(self, file_id):
+        self.downloads.append(file_id)
+        return self.files[file_id]
+
+
+def test_os_fetch_never_takes_greek_without_a_professional_credit(tmp_path, monkeypatch, capsys):
+    plain = _srt(["Γεια σου.", "Τι κάνεις;"])
+    fan = _srt(["Συγχρονισμός: marios2016", "Γεια σου."])
+    el = [{"file_id": n, "release": f"X.2016.BluRay.{n}", "download_count": 100 - n, "reasons": ["retail"]}
+          for n in (1, 2, 3, 4)]
+    en = [{"file_id": 9, "release": "X.2016.BluRay.1", "download_count": 5, "reasons": ["retail"]}]
+    fake = FakeOpenSubtitles(el, en, {1: fan, 2: plain, 3: plain, 4: plain, 9: plain})
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    db = str(tmp_path / "pb.sqlite")
+    assert cli.main(["os-fetch", "--db", db, "--data", str(tmp_path / "d"), "--imdb", "tt1234567",
+                     "--title", "X"]) == 1
+    assert fake.downloads == [1, 2, 3]  # most downloaded first, at most 3 Greek tries, never the English file
+    assert "professional credit" in capsys.readouterr().err
+    assert not Store(db).has_title("tt1234567")
+
+
+def test_os_fetch_takes_the_first_greek_file_with_a_credit(tmp_path, monkeypatch):
+    import subtitlekit.phrasebank.ingest as ingest
+
+    plain = _srt(["Γεια σου.", "Τι κάνεις;"])
+    credited = _srt(["Γεια σου.", "Τι κάνεις;", "Μετάφραση: Μαρία Παπαδάκη"])
+    el = [{"file_id": 1, "release": "X.2016.BluRay", "download_count": 90, "reasons": ["retail"]},
+          {"file_id": 2, "release": "X.2016.BluRay.REMUX", "download_count": 10, "reasons": ["retail"]}]
+    en = [{"file_id": 8, "release": "X.2016.BluRay", "download_count": 50, "reasons": ["retail"]},
+          {"file_id": 9, "release": "X.2016.BluRay.REMUX", "download_count": 5, "reasons": ["retail"]}]
+    fake = FakeOpenSubtitles(el, en, {1: plain, 2: credited, 8: plain, 9: plain})
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    monkeypatch.setattr(cli, "make_embedder", lambda args: None)
+    calls = []
+    monkeypatch.setattr(ingest, "ingest_srt", lambda store, emb, en_path, el_path, **kw: calls.append(
+        (en_path, el_path, kw)) or 2)
+    assert cli.main(["os-fetch", "--db", str(tmp_path / "pb.sqlite"), "--data", str(tmp_path / "d"),
+                     "--imdb", "tt1234567", "--title", "X"]) == 0
+    assert fake.downloads == [1, 2, 9]  # English of the same release as the credited Greek file
+    en_path, el_path, kw = calls[0]
+    assert el_path.endswith("el-2.srt") and en_path.endswith("en-9.srt")
+    assert kw.get("pro_label", "") == ""  # the Greek text decides, not the release name
+
+
+def test_os_fetch_tries_streaming_releases_then_trusted_uploaders_first(tmp_path, monkeypatch):
+    plain = _srt(["Γεια σου.", "Τι κάνεις;"])
+    el = [{"file_id": 1, "release": "X.2016.1080p.BluRay.x264-SPARKS", "download_count": 9000, "reasons": ["retail"]},
+          {"file_id": 2, "release": "X.2016.720p.BluRay", "download_count": 50, "reasons": ["trusted uploader"]},
+          {"file_id": 3, "release": "X.2016.1080p.NF.WEB-DL.DDP5.1", "download_count": 10, "reasons": ["retail"]}]
+    en = [{"file_id": 9, "release": "X.2016.BluRay", "download_count": 5, "reasons": ["retail"]}]
+    fake = FakeOpenSubtitles(el, en, {1: plain, 2: plain, 3: plain, 9: plain})
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    assert cli.main(["os-fetch", "--db", str(tmp_path / "pb.sqlite"), "--data", str(tmp_path / "d"),
+                     "--imdb", "tt1234567", "--title", "X"]) == 1
+    assert fake.downloads == [3, 2, 1]
+
+
+def test_os_fetch_downloads_nothing_without_an_english_candidate(tmp_path, monkeypatch, capsys):
+    el = [{"file_id": 1, "release": "X.2016.NF.WEB-DL", "download_count": 5, "reasons": ["retail"]}]
+    fake = FakeOpenSubtitles(el, [], {1: _srt(["Γεια σου."])})
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    assert cli.main(["os-fetch", "--db", str(tmp_path / "pb.sqlite"), "--data", str(tmp_path / "d"),
+                     "--imdb", "tt1234567", "--title", "X"]) == 1
+    assert fake.downloads == []
+    assert "English" in capsys.readouterr().err
+
+
+def test_os_fetch_rejects_a_max_greek_below_one():
+    import pytest
+
+    for bad in ("0", "-1"):
+        with pytest.raises(SystemExit):
+            cli.build_parser().parse_args(["os-fetch", "--imdb", "tt1", "--title", "X", "--max-greek", bad])

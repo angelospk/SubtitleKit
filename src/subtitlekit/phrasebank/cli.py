@@ -252,6 +252,22 @@ def pick_release(el: List[Dict[str, Any]], en: List[Dict[str, Any]]):
     return best_el, max(same or en, key=lambda r: r.get("download_count") or 0)
 
 
+STREAM_RE = re.compile(r"\b(?:NF|DSNP|AMZN|ATVP|HMAX|MAX|HULU|WEB-?DL|WEBRip)\b", re.IGNORECASE)
+
+
+def _positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
+    return value
+
+
+def _greek_try_order(r: Dict[str, Any]):
+    """Streaming releases first (official subtitles), then trusted uploaders, then the most downloaded."""
+    trusted = any("trusted" in s or "uploader rank" in s for s in r.get("reasons", []))
+    return (not STREAM_RE.search(r.get("release") or ""), not trusted, -(r.get("download_count") or 0))
+
+
 def _client_or_none():
     from .opensubs import OpenSubtitlesClient, load_key
 
@@ -277,22 +293,44 @@ def cmd_os_fetch(args: argparse.Namespace) -> int:
         print(f"{args.imdb} is already stored", file=sys.stderr)
         store.close()
         return 0
-    best_el, best_en = pick_release(client.search_professional(args.imdb, "el"),
-                                    client.search_professional(args.imdb, "en"))
-    if not best_el or not best_en:
-        print(f"no professional {'Greek' if not best_el else 'English'} subtitle for {args.imdb}", file=sys.stderr)
+    from ..pipeline.srt import load_srt
+    from .pro import score_greek
+
+    el = client.search_professional(args.imdb, "el")
+    en = client.search_professional(args.imdb, "en")
+    if not en:  # before any Greek download: no pair is possible
+        print(f"no professional English subtitle for {args.imdb}", file=sys.stderr)
         store.close()
         return 1
     folder = Path(os.path.expanduser(args.data)) / "os" / args.imdb
     folder.mkdir(parents=True, exist_ok=True)
-    paths = {}
-    for lang, item in (("el", best_el), ("en", best_en)):
-        paths[lang] = folder / f"{lang}-{item['file_id']}.srt"
-        if not paths[lang].exists():
-            paths[lang].write_bytes(client.download(item["file_id"]))
+    best_el = None
+    for item in sorted(el, key=_greek_try_order)[:args.max_greek]:
+        path = folder / f"el-{item['file_id']}.srt"
+        if not path.exists():
+            path.write_bytes(client.download(item["file_id"]))
+        verdict = score_greek(load_srt(str(path)))
+        if verdict.label != "professional":
+            print(f"el-{item['file_id']}: {verdict.label}", file=sys.stderr)
+            continue
+        best_el = item
+        break
+    if best_el is None:
+        print(f"no Greek subtitle with a professional credit for {args.imdb}", file=sys.stderr)
+        store.close()
+        return 1
+    best_el, best_en = pick_release([best_el], en)
+    if not best_en:
+        print(f"no professional English subtitle for {args.imdb}", file=sys.stderr)
+        store.close()
+        return 1
+    paths = {"el": folder / f"el-{best_el['file_id']}.srt"}
+    paths["en"] = folder / f"en-{best_en['file_id']}.srt"
+    if not paths["en"].exists():
+        paths["en"].write_bytes(client.download(best_en["file_id"]))
     reasons = [f"OpenSubtitles: {r}" for r in best_el.get("reasons", [])] + [f"release {best_el.get('release')}"]
     n = ingest_srt(store, make_embedder(args), str(paths["en"]), str(paths["el"]), imdb=args.imdb,
-                   title=args.title, kind=args.kind, pro_label="professional", pro_reasons=reasons)
+                   title=args.title, kind=args.kind, pro_reasons=reasons)
     print(json.dumps({"imdb": args.imdb, "pairs": n, "el": best_el, "en": best_en}, ensure_ascii=False))
     store.close()
     return 0
@@ -400,6 +438,7 @@ def build_parser() -> argparse.ArgumentParser:
     of.add_argument("--title", required=True)
     of.add_argument("--kind", default="movie", choices=["movie", "episode"])
     of.add_argument("--data", default=DEFAULT_DATA)
+    of.add_argument("--max-greek", type=_positive_int, default=3, help="at most N Greek candidates to try")
     of.set_defaults(func=cmd_os_fetch)
 
     os_ = sub.add_parser("os-search", parents=[common], help="search OpenSubtitles")

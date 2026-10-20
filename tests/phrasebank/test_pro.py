@@ -59,3 +59,50 @@ def test_credits_only_count_at_the_edges():
     cues = body(80)
     cues[40] = Cue(41, cues[40].start_ms, cues[40].end_ms, "Υποτιτλισμός: Γιώργος Λυκούδης")
     assert score_greek(cues).label == "unknown"
+
+
+def test_all_caps_greek_credit_name_is_professional():
+    v = score_greek(with_edges(body(), tail=["ΑΠΟΔΟΣΗ ΔΙΑΛΟΓΩΝ: ΤΣΟΥΤΣΟΥ ΕΛΙΝΑ"]))
+    assert v.label == "professional"
+    assert any("ΤΣΟΥΤΣΟΥ ΕΛΙΝΑ" in r for r in v.reasons)
+
+
+def ocr(cues, every=1):
+    # Latin o, M and v inside Greek words, as an OCR of a DVD subtitle leaves them.
+    return [Cue(c.index, c.start_ms, c.end_ms, "Θα μπoρoύσε o Mελ Γκίμπσov.") if i % every == 0 else c
+            for i, c in enumerate(cues)]
+
+
+def test_ocr_latin_letters_inside_greek_words_are_amateur_even_with_a_credit():
+    v = score_greek(with_edges(ocr(body()), tail=["Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης"]))
+    assert v.label == "amateur"
+    assert any("mixed" in r for r in v.reasons)
+
+
+def test_a_few_mixed_script_words_do_not_veto_a_credit():
+    v = score_greek(with_edges(ocr(body(200), every=200), tail=["Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης"]))
+    assert v.label == "professional"
+
+
+def test_a_fan_word_in_the_credit_name_vetoes_the_credit():
+    v = score_greek(with_edges(body(), tail=["Μετάφραση: ΟΜΑΔΑ ΣΥΓΧΡΟΝΙΣΜΟΥ"]))
+    assert v.label == "amateur"
+
+
+def test_ocr_check_gives_the_same_verdict_for_decomposed_accents():
+    import unicodedata
+
+    def damaged(form):
+        return [Cue(c.index, c.start_ms, c.end_ms, unicodedata.normalize(form, "Είσαι καλόs; Πολύ καλόs."))
+                for c in body()]
+
+    nfc = score_greek(with_edges(damaged("NFC"), tail=["Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης"]))
+    nfd = score_greek(with_edges(damaged("NFD"), tail=["Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης"]))
+    assert nfc.label == nfd.label == "amateur"
+
+
+def test_a_decomposed_credit_line_still_counts():
+    import unicodedata
+
+    v = score_greek(with_edges(body(), tail=[unicodedata.normalize("NFD", "Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης")]))
+    assert v.label == "professional"
