@@ -185,3 +185,132 @@ def test_prune_waits_for_a_concurrent_writer(tmp_path, fake_embedder):
     assert st.prune_non_professional() == {"titles": 1, "pairs": 1, "expressions": 1}
     t.join()
     assert st.conn.execute("SELECT COUNT(*) FROM expressions").fetchone()[0] == 0
+
+
+def _archive_with_one_expression(path, emb):
+    st = Store(path, dims=emb.dims)
+    st.add_title(title())
+    st.add_title(title("tt0000002", title="No expressions"))
+    st.add_pairs("tt0000002", [Pair("Hello there.", "Γεια σου.", 1, 2)], emb.embed(["Hello there."]),
+                 emb.embed(["Γεια σου."]))  # first, so the kept pair's id is not 1: renumbering would show
+    ps = [Pair("Kiss my ass.", "Άντε χέσου.", 1, 2), Pair("Open the door.", "Άνοιξε την πόρτα.", 3, 4)]
+    a, b = st.add_pairs("tt0000001", ps, emb.embed([p.en for p in ps]), emb.embed([p.el for p in ps]))
+    row = {"pair_id": a, "el": "Άντε χέσου", "en_trigger": "Kiss my ass", "function": "dismissal",
+           "register": "vulgar", "gist": "rude dismissal", "source": "batch-1"}
+    st.add_expressions([row], emb.embed(["dismissal rude dismissal"]))
+    st.close()
+    return a, b
+
+
+def test_publish_keeps_only_titles_and_pairs_that_carry_an_expression(tmp_path, fake_embedder):
+    from subtitlekit.phrasebank.store import publish
+
+    archive, live = str(tmp_path / "archive.sqlite"), str(tmp_path / "live.sqlite")
+    a, b = _archive_with_one_expression(archive, fake_embedder)
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    st = Store(live)
+    assert st.stats()["titles"] == 1 and st.has_title("tt0000001") and not st.has_title("tt0000002")
+    assert st.get_pair(a)["el"] == "Άντε χέσου." and st.get_pair(b) is None  # ids are kept
+    hits = st.search("pair_en", fake_embedder.embed(["Open the door."])[0], k=5)
+    assert [h["id"] for h in hits] == [a]  # the vectors of dropped pairs are gone too
+    assert [h["id"] for h in st.search("pair_el", fake_embedder.embed(["Άντε χέσου."])[0], k=5)] == [a]
+    expr = st.search("expr", fake_embedder.embed(["dismissal rude dismissal"])[0], k=1)
+    assert expr[0]["el"] == "Άντε χέσου" and expr[0]["example_en"] == "Kiss my ass."
+    st.close()
+    assert Store(archive).stats()["pairs"] == 3  # the archive is not touched
+
+
+def test_publish_replaces_the_previous_live_file(tmp_path, fake_embedder):
+    from subtitlekit.phrasebank.store import publish
+
+    archive, live = str(tmp_path / "archive.sqlite"), str(tmp_path / "live.sqlite")
+    _archive_with_one_expression(archive, fake_embedder)
+    stale = Store(live, dims=fake_embedder.dims)
+    stale.add_title(title("tt0000009", title="Stale"))
+    stale.close()
+    publish(archive, live)
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    st = Store(live)
+    assert not st.has_title("tt0000009")
+    st.close()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["archive.sqlite", "live.sqlite"]  # no temp files left
+
+
+def test_publish_refuses_to_overwrite_the_archive(tmp_path, fake_embedder):
+    import pytest
+    from subtitlekit.phrasebank.store import publish
+
+    archive = str(tmp_path / "archive.sqlite")
+    _archive_with_one_expression(archive, fake_embedder)
+    (tmp_path / "link.sqlite").symlink_to(archive)
+    for live in (archive, str(tmp_path / "." / "archive.sqlite"), str(tmp_path / "link.sqlite")):
+        with pytest.raises(ValueError):
+            publish(archive, live)
+    assert Store(archive).stats()["pairs"] == 3
+
+
+def test_publish_failure_keeps_the_old_live_file_and_leaves_no_temp_file(tmp_path, fake_embedder, monkeypatch):
+    import pytest
+    from subtitlekit.phrasebank import store as store_mod
+
+    archive, live = str(tmp_path / "archive.sqlite"), str(tmp_path / "live.sqlite")
+    _archive_with_one_expression(archive, fake_embedder)
+    old = Store(live, dims=fake_embedder.dims)
+    old.add_title(title("tt0000009", title="Old live"))
+    old.close()
+
+    def boom(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(store_mod.os, "replace", boom)
+    with pytest.raises(OSError):
+        store_mod.publish(archive, live)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["archive.sqlite", "live.sqlite"]
+    assert Store(live).has_title("tt0000009")
+
+
+def test_publish_skips_titles_that_are_not_professional(tmp_path, fake_embedder):
+    from subtitlekit.phrasebank.store import publish
+
+    archive, live = str(tmp_path / "archive.sqlite"), str(tmp_path / "live.sqlite")
+    _archive_with_one_expression(archive, fake_embedder)
+    st = Store(archive)
+    with st.conn:  # a legacy row written before the professional-only rule
+        st.conn.execute("INSERT INTO titles(imdb, kind, title, pro_label) VALUES ('tt0000005', 'movie', 'Fan', 'unknown')")
+    pid = st.add_pairs("tt0000005", [Pair("Get lost.", "Χάσου.", 1, 2)], fake_embedder.embed(["Get lost."]),
+                       fake_embedder.embed(["Χάσου."]))[0]
+    st.add_expressions([{"pair_id": pid, "el": "Χάσου", "en_trigger": "Get lost", "function": "dismissal",
+                         "register": "colloquial", "gist": "go away", "source": "old"}],
+                       fake_embedder.embed(["dismissal go away"]))
+    st.close()
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    assert not Store(live).has_title("tt0000005")
+
+
+def test_a_failed_store_init_closes_its_connection(tmp_path, monkeypatch):
+    import sqlite3
+
+    import pytest
+    from subtitlekit.phrasebank import store as store_mod
+
+    closed = []
+
+    class Conn(sqlite3.Connection):
+        def close(self):
+            closed.append(True)
+            super().close()
+
+    real_connect = sqlite3.connect
+    monkeypatch.setattr(store_mod.sqlite3, "connect", lambda *a, **kw: real_connect(*a, factory=Conn, **kw))
+    with pytest.raises(ValueError):
+        Store(str(tmp_path / "new.sqlite"))  # a new database needs dims
+    assert closed == [True]
+
+
+def test_publish_needs_an_existing_archive(tmp_path):
+    import pytest
+    from subtitlekit.phrasebank.store import publish
+
+    with pytest.raises(FileNotFoundError):
+        publish(str(tmp_path / "missing.sqlite"), str(tmp_path / "live.sqlite"))
+    assert list(tmp_path.iterdir()) == []

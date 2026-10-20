@@ -123,7 +123,8 @@ def load_imdb(data_dir: str, wanted: Set[str]) -> Tuple[Dict[str, dict], Dict[st
         for row in csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE):
             if row[0] in wanted:
                 year = int(row[5]) if row[5].isdigit() else None
-                basics[row[0]] = {"type": row[1], "title": row[2], "year": year}
+                genres = [] if row[8] == "\\N" else row[8].split(",")
+                basics[row[0]] = {"type": row[1], "title": row[2], "year": year, "genres": genres}
     votes: Dict[str, int] = {}
     with gzip.open(os.path.join(data_dir, "imdb", "title.ratings.tsv.gz"), "rt", encoding="utf-8") as f:
         for row in csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE):
@@ -192,7 +193,7 @@ def title_row(dp: DocPair, basics: Dict[str, dict], el_doc: str, verdict) -> dic
 
 
 def ingest_opus(store, embedder, data_dir: str, n_movies: int, n_series: int, per_series: int,
-                min_year: int, min_votes: int, workers: int = 4, log=sys.stderr) -> dict:
+                min_year: int, min_votes: int, workers: int = 4, log=sys.stderr, genre: str = "") -> dict:
     """Select titles, fetch and align them, embed both sides and store them. Skips titles already stored."""
     opus = os.path.join(data_dir, "opus")
     docpairs = load_docpairs(os.path.join(opus, "linkgrps.txt"))
@@ -202,7 +203,7 @@ def ingest_opus(store, embedder, data_dir: str, n_movies: int, n_series: int, pe
         wanted.update(x for x in (d["imdb"], d["parent"]) if x)
     basics, votes = load_imdb(data_dir, wanted)
     chosen = select_titles(docpairs, basics, votes, n_movies=n_movies, n_series=n_series, per_series=per_series,
-                           min_year=min_year, min_votes=min_votes)
+                           min_year=min_year, min_votes=min_votes, genre=genre)
     todo = [dp for dp in chosen if not store.has_title(parse_doc_dir(dp.dir)["imdb"])]
     print(f"selected {len(chosen)} titles, {len(todo)} new", file=log)
     el_zip = RemoteZip(load_index(os.path.join(opus, "el.raw.index.tsv.gz")), http_range_reader(f"{OPUS}/raw/el.zip"),

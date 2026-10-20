@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 
 DEFAULT_DATA = "~/phrasebank-data"
-DEFAULT_DB = "~/phrasebank-data/phrasebank.sqlite"
+DEFAULT_DB = "~/phrasebank-data/phrasebank.sqlite"  # live: expressions and their pairs only (see publish)
+DEFAULT_ARCHIVE = "~/phrasebank-data/phrasebank-archive.sqlite"  # every ingested pair, for extraction
 DEFAULT_MODEL = "~/phrasebank-data/models/embeddinggemma"
 DEFAULT_KEY_FILE = "~/.config/opensubtitles/api_key"
 
@@ -111,6 +112,14 @@ def cmd_prune(args: argparse.Namespace) -> int:
     print(json.dumps(result))
     store.conn.execute("VACUUM")
     store.close()
+    return 0
+
+
+def cmd_publish(args: argparse.Namespace) -> int:
+    """Rebuild the live database from the archive with only the expressions and their pairs."""
+    from .store import publish
+
+    print(json.dumps(publish(os.path.expanduser(args.archive), os.path.expanduser(args.db))))
     return 0
 
 
@@ -235,7 +244,7 @@ def cmd_ingest_opus(args: argparse.Namespace) -> int:
     store = Store(os.path.expanduser(args.db), dims=args.dims)
     done = ingest_opus(store, make_embedder(args), os.path.expanduser(args.data), n_movies=args.movies,
                        n_series=args.series, per_series=args.per_series, min_year=args.min_year,
-                       min_votes=args.min_votes, workers=args.workers)
+                       min_votes=args.min_votes, workers=args.workers, genre=args.genre)
     print(json.dumps({**done, "stats": store.stats()}, ensure_ascii=False))
     store.close()
     return 0
@@ -364,8 +373,8 @@ def cmd_os_search(args: argparse.Namespace) -> int:
     return 0
 
 
-def _common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--db", default=DEFAULT_DB, help="phrase bank sqlite path")
+def _common(parser: argparse.ArgumentParser, db: str = DEFAULT_DB) -> None:
+    parser.add_argument("--db", default=db, help="phrase bank sqlite path")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="embedding model directory")
     parser.add_argument("--dims", type=int, default=256, help="embedding dimensions")
 
@@ -374,6 +383,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Argument parser with one subparser per command."""
     common = argparse.ArgumentParser(add_help=False)
     _common(common)
+    archived = argparse.ArgumentParser(add_help=False)  # own --db action: set_defaults would leak via parents
+    _common(archived, db=DEFAULT_ARCHIVE)
     parser = argparse.ArgumentParser(prog="python -m subtitlekit.phrasebank")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -395,11 +406,15 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("stats", parents=[common], help="database counts")
     s.set_defaults(func=cmd_stats)
 
-    pn = sub.add_parser("prune", parents=[common],
+    pn = sub.add_parser("prune", parents=[archived],
                         help="delete titles that are not professional, with their pairs, vectors and expressions")
     pn.set_defaults(func=cmd_prune)
 
-    ep = sub.add_parser("extract-prepare", parents=[common], help="write extraction batches")
+    pb = sub.add_parser("publish", parents=[common], help="rebuild the live db (--db) from the archive")
+    pb.add_argument("--archive", default=DEFAULT_ARCHIVE)
+    pb.set_defaults(func=cmd_publish)
+
+    ep = sub.add_parser("extract-prepare", parents=[archived], help="write extraction batches")
     ep.add_argument("--out", required=True)
     ep.add_argument("--batch-size", type=int, default=150)
     ep.add_argument("--max-batches", type=int, default=1000)
@@ -408,7 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="only titles with this pro label")
     ep.set_defaults(func=cmd_extract_prepare)
 
-    el = sub.add_parser("extract-load", parents=[common], help="load extraction results")
+    el = sub.add_parser("extract-load", parents=[archived], help="load extraction results")
     el.add_argument("files", nargs="+")
     el.set_defaults(func=cmd_extract_load)
 
@@ -421,7 +436,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--data", default=DEFAULT_DATA)
     pr.set_defaults(func=cmd_prepare)
 
-    io_ = sub.add_parser("ingest-opus", parents=[common], help="fetch, align, embed and store OPUS titles")
+    io_ = sub.add_parser("ingest-opus", parents=[archived], help="fetch, align, embed and store OPUS titles")
     io_.add_argument("--data", default=DEFAULT_DATA)
     io_.add_argument("--movies", type=int, default=70)
     io_.add_argument("--series", type=int, default=25)
@@ -429,9 +444,10 @@ def build_parser() -> argparse.ArgumentParser:
     io_.add_argument("--min-year", type=int, default=2008)
     io_.add_argument("--min-votes", type=int, default=20000)
     io_.add_argument("--workers", type=int, default=4)
+    io_.add_argument("--genre", default="", help="only titles of this IMDb genre, e.g. Comedy")
     io_.set_defaults(func=cmd_ingest_opus)
 
-    isr = sub.add_parser("ingest-srt", parents=[common], help="align and store a local English/Greek SRT pair")
+    isr = sub.add_parser("ingest-srt", parents=[archived], help="align and store a local English/Greek SRT pair")
     isr.add_argument("--en", required=True)
     isr.add_argument("--el", required=True)
     isr.add_argument("--imdb", required=True)
@@ -440,7 +456,7 @@ def build_parser() -> argparse.ArgumentParser:
     isr.add_argument("--pro-label", default="", choices=["", "professional", "unknown", "amateur"])
     isr.set_defaults(func=cmd_ingest_srt)
 
-    of = sub.add_parser("os-fetch", parents=[common], help="download a professional pair from OpenSubtitles (API key)")
+    of = sub.add_parser("os-fetch", parents=[archived], help="download a professional pair from OpenSubtitles (API key)")
     of.add_argument("--imdb", required=True)
     of.add_argument("--title", required=True)
     of.add_argument("--kind", default="movie", choices=["movie", "episode"])

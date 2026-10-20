@@ -28,12 +28,16 @@ class Store:
         if parent:
             os.makedirs(parent, exist_ok=True)
         self.conn = sqlite3.connect(self.path, timeout=60)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.enable_load_extension(True)
-        sqlite_vec.load(self.conn)
-        self.conn.enable_load_extension(False)
-        self.dims = self._init_dims(dims)
-        self._create_tables()
+        try:
+            self.conn.row_factory = sqlite3.Row
+            self.conn.enable_load_extension(True)
+            sqlite_vec.load(self.conn)
+            self.conn.enable_load_extension(False)
+            self.dims = self._init_dims(dims)
+            self._create_tables()
+        except BaseException:
+            self.conn.close()
+            raise
 
     def _init_dims(self, dims: Optional[int]) -> int:
         self.conn.execute("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)")
@@ -268,3 +272,79 @@ class Store:
     def close(self) -> None:
         """Close the connection."""
         self.conn.close()
+
+
+def _chunks(ids: Sequence[int], size: int = 900) -> Iterator[Sequence[int]]:
+    for start in range(0, len(ids), size):
+        yield ids[start:start + size]
+
+
+def publish(archive_path: str, live_path: str) -> Dict[str, int]:
+    """Rebuild the live database from the archive: only the expressions, their pairs, titles and vectors.
+
+    The archive keeps every aligned pair for later extraction; the live file holds nothing else, so routine lines
+    never compete with the curated ones at query time. Only professional titles are copied. The new file is
+    written beside the old one and swapped in; on any failure the old live file stays and the temp file goes.
+    """
+    archive_path, live_path = os.path.expanduser(archive_path), os.path.expanduser(live_path)
+    if not os.path.isfile(archive_path):  # Store() would create an empty archive
+        raise FileNotFoundError(f"no archive at {archive_path}")
+    if os.path.realpath(archive_path) == os.path.realpath(live_path):
+        raise ValueError(f"publish would overwrite the archive {archive_path}")
+    tmp = f"{live_path}.publish-{os.getpid()}"
+    temp_files = (tmp, f"{tmp}-journal", f"{tmp}-wal", f"{tmp}-shm")
+
+    def remove_temp() -> None:
+        for path in temp_files:
+            if os.path.exists(path):
+                os.remove(path)
+
+    remove_temp()
+    src = dst = None
+    try:
+        src = Store(archive_path)
+        dst = Store(tmp, dims=src.dims)
+        s = src.conn
+        s.execute("BEGIN")  # one consistent snapshot while a writer may be ingesting
+        exprs = [dict(r) for r in s.execute(
+            "SELECT * FROM expressions WHERE pair_id IN (SELECT p.id FROM pairs p JOIN titles t ON t.imdb = p.imdb"
+            " WHERE t.pro_label = 'professional') ORDER BY id")]
+        pair_ids = sorted({e["pair_id"] for e in exprs})
+        expr_ids = [e["id"] for e in exprs]
+
+        def rows(sql: str, ids: Sequence[Any]) -> List[Dict[str, Any]]:
+            return [dict(r) for chunk in _chunks(ids)
+                    for r in s.execute(sql.format(marks=",".join("?" * len(chunk))), chunk)]
+
+        pairs = rows("SELECT * FROM pairs WHERE id IN ({marks})", pair_ids)
+        titles = rows("SELECT * FROM titles WHERE imdb IN ({marks})", sorted({p["imdb"] for p in pairs}))
+        vecs = {table: rows(f"SELECT id, embedding FROM {table} WHERE id IN ({{marks}})", ids)
+                for table, ids in (("vec_pair_en", pair_ids), ("vec_pair_el", pair_ids), ("vec_expr", expr_ids))}
+        s.rollback()
+
+        def insert(table: str, items: Sequence[Dict[str, Any]]) -> None:
+            for r in items:
+                dst.conn.execute(f"INSERT INTO {table}({','.join(r)}) VALUES ({','.join('?' * len(r))})",
+                                 tuple(r.values()))
+
+        with dst.conn:
+            insert("titles", titles)
+            insert("pairs", pairs)
+            insert("expressions", exprs)
+            for table, items in vecs.items():
+                insert(table, items)
+        dst.close()
+        dst = None
+        os.replace(tmp, live_path)
+    except BaseException:
+        if dst is not None:
+            dst.close()
+            dst = None
+        remove_temp()
+        raise
+    finally:
+        if src is not None:
+            src.close()
+        if dst is not None:
+            dst.close()
+    return {"titles": len(titles), "pairs": len(pairs), "expressions": len(exprs)}

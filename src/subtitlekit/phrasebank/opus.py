@@ -233,8 +233,13 @@ def select_titles(
     min_year: int,
     min_score: float = 0.5,
     min_votes: int = 1000,
+    genre: str = "",
 ) -> List[DocPair]:
-    """Well-voted movies and first episodes of well-voted series, movies first."""
+    """Well-voted movies and first episodes of well-voted series, movies first; only ``genre`` when given."""
+
+    def wanted_genre(base: Dict) -> bool:
+        return not genre or genre.casefold() in (g.casefold() for g in base.get("genres") or [])
+
     movies: List[DocPair] = []
     series: Dict[str, List[Tuple[DocPair, Dict[str, object]]]] = {}
     for pair in pairs:
@@ -252,7 +257,7 @@ def select_titles(
         base = basics.get(str(imdb))
         if not base or base.get("type") not in ("movie", "tvMovie"):
             continue
-        if (base.get("year") or 0) < min_year or votes.get(str(imdb), 0) < min_votes:
+        if (base.get("year") or 0) < min_year or votes.get(str(imdb), 0) < min_votes or not wanted_genre(base):
             continue
         movies.append(pair)
 
@@ -262,7 +267,7 @@ def select_titles(
     chosen: List[Tuple[int, List[DocPair]]] = []
     for parent, items in series.items():
         base = basics.get(parent)
-        if not base or (base.get("year") or 0) < min_year or votes.get(parent, 0) < min_votes:
+        if not base or (base.get("year") or 0) < min_year or votes.get(parent, 0) < min_votes or not wanted_genre(base):
             continue
         items.sort(key=lambda pi: (pi[1]["season"] or 0, pi[1]["episode"] or 0))
         chosen.append((votes.get(parent, 0), [p for p, _ in items[:per_series]]))

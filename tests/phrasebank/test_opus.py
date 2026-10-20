@@ -218,3 +218,43 @@ def test_remote_zip_rejects_trailing_data_after_deflate():
     grown = {"a.xml": (off, size + 4, kind)}  # 4 bytes past the deflate stream are read as member data
     with pytest.raises(ValueError):
         RemoteZip(grown, lambda s, n: raw[s:s + n]).read("a.xml")
+
+
+def test_select_titles_keeps_only_the_wanted_genre():
+    pairs = [
+        DocPair(0.9, "2019", "1000001", "el/2019/1000001/1.xml", "en/2019/1000001/2.xml"),
+        DocPair(0.9, "2020", "1000002", "el/2020/1000002/1.xml", "en/2020/1000002/2.xml"),
+        DocPair(0.9, "2021", "2000011_2000000_1_1", "el/2021/a/1.xml", "en/2021/a/2.xml"),
+        DocPair(0.9, "2022", "3000011_3000000_2_1", "el/2022/d/1.xml", "en/2022/d/2.xml"),
+    ]
+    basics = {
+        "tt1000001": {"type": "movie", "title": "Funny", "year": 2019, "genres": ["Action", "Comedy"]},
+        "tt1000002": {"type": "movie", "title": "Grim", "year": 2020, "genres": ["Drama"]},
+        "tt2000000": {"type": "tvSeries", "title": "Sitcom", "year": 2019, "genres": ["Comedy"]},
+        "tt3000000": {"type": "tvSeries", "title": "Crime", "year": 2022},  # no genres known
+    }
+    votes = {k: 5000 for k in basics}
+    got = select_titles(pairs, basics, votes, n_movies=5, n_series=5, per_series=2, min_year=2010,
+                        min_votes=500, genre="comedy")
+    assert [d.dir for d in got] == ["1000001", "2000011_2000000_1_1"]
+    # No genre: nothing is filtered out.
+    assert len(select_titles(pairs, basics, votes, n_movies=5, n_series=5, per_series=2, min_year=2010,
+                             min_votes=500)) == 4
+
+
+def test_load_imdb_reads_genres(tmp_path):
+    import gzip
+
+    from subtitlekit.phrasebank.ingest import load_imdb
+
+    (tmp_path / "imdb").mkdir()
+    with gzip.open(tmp_path / "imdb" / "title.basics.tsv.gz", "wt", encoding="utf-8") as f:
+        f.write("tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres\n")
+        f.write("tt1\tmovie\tFunny\tFunny\t0\t2019\t\\N\t90\tAction,Comedy\n")
+        f.write("tt2\tmovie\tPlain\tPlain\t0\t2019\t\\N\t90\t\\N\n")
+    with gzip.open(tmp_path / "imdb" / "title.ratings.tsv.gz", "wt", encoding="utf-8") as f:
+        f.write("tconst\taverageRating\tnumVotes\ntt1\t7.0\t1234\n")
+    basics, votes = load_imdb(str(tmp_path), {"tt1", "tt2"})
+    assert basics["tt1"]["genres"] == ["Action", "Comedy"]
+    assert basics["tt2"]["genres"] == []
+    assert votes == {"tt1": 1234}

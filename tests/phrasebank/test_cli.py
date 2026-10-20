@@ -300,3 +300,21 @@ def test_os_fetch_stops_after_max_english_misaligned_files(tmp_path, monkeypatch
                      "--imdb", "tt1234567", "--title", "X", "--max-english", "2"]) == 1
     assert fake.downloads == [1, 7, 8]
     assert "align" in capsys.readouterr().err
+
+
+def test_ingest_and_extract_commands_default_to_the_archive():
+    parser = cli.build_parser()
+    for argv in (["os-fetch", "--imdb", "tt1", "--title", "X"], ["ingest-opus"],
+                 ["ingest-srt", "--en", "a", "--el", "b", "--imdb", "tt1", "--title", "X"],
+                 ["extract-prepare", "--out", "o"], ["extract-load", "r.json"], ["prune"]):
+        assert parser.parse_args(argv).db == cli.DEFAULT_ARCHIVE, argv
+    for argv in (["query", "x"], ["stats"]):
+        assert parser.parse_args(argv).db == cli.DEFAULT_DB, argv
+
+
+def test_publish_command_writes_the_live_db(tmp_path, fake_embedder, capsys):
+    archive = seed(tmp_path, fake_embedder)  # three pairs, no expressions
+    live = str(tmp_path / "live.sqlite")
+    assert cli.main(["publish", "--archive", archive, "--db", live]) == 0
+    assert json.loads(capsys.readouterr().out) == {"titles": 0, "pairs": 0, "expressions": 0}
+    assert Store(live).stats()["pairs"] == 0
