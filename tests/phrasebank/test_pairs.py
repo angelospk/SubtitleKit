@@ -1,0 +1,53 @@
+from subtitlekit.phrasebank.pairs import Pair, make_pairs
+from subtitlekit.pipeline.srt import Cue
+
+
+def C(i, s, e, t):
+    return Cue(i, s, e, t)
+
+
+EN = [
+    C(1, 1000, 3000, "Downloaded from YTS.MX"),
+    C(2, 5000, 7000, "Get out of here."),
+    C(3, 8000, 10000, "- Where are they?\n- Where are what?"),
+    C(4, 11000, 12000, "Come on,"),
+    C(5, 12100, 13500, "you have to see this."),
+    C(6, 20000, 22000, "We should go."),
+    C(7, 22100, 24000, "Now."),
+    C(8, 24100, 26000, "Before they come back."),
+]
+EL = [
+    C(1, 5000, 7000, "Φύγε από 'δω."),
+    C(2, 8000, 10000, "-Πού είναι;\n-Ποια;"),
+    C(3, 11000, 13500, "Έλα, πρέπει να το δεις αυτό."),
+    C(4, 20000, 26000, "Πρέπει να φύγουμε τώρα, πριν γυρίσουν."),
+]
+
+
+def test_make_pairs_aligns_groups_and_splits_turns():
+    pairs, info = make_pairs(EN, EL)
+    got = [(p.en, p.el) for p in pairs]
+    assert ("Get out of here.", "Φύγε από 'δω.") in got
+    # Dash dialogue with the same number of turns on both sides: one pair per turn, dashes stripped.
+    assert ("Where are they?", "Πού είναι;") in got
+    assert ("Where are what?", "Ποια;") in got
+    # 2 English cues : 1 Greek cue is kept, joined with a space.
+    assert ("Come on, you have to see this.", "Έλα, πρέπει να το δεις αυτό.") in got
+    # 3 English cues in one group is over max_cues=2: dropped.
+    assert not any("Before they come back" in en for en, _ in got)
+    # Credits never become pairs.
+    assert not any("YTS" in en for en, _ in got)
+    assert info["pairs"] == len(pairs)
+    p = next(p for p in pairs if p.en == "Get out of here.")
+    assert (p.start_ms, p.end_ms) == (5000, 7000)
+
+
+def test_make_pairs_drops_untranslated_and_duplicates():
+    en = [C(1, 1000, 2000, "OK."), C(2, 3000, 4000, "OK."), C(3, 5000, 6000, "Paris")]
+    el = [C(1, 1000, 2000, "Εντάξει."), C(2, 3000, 4000, "Εντάξει."), C(3, 5000, 6000, "Paris")]
+    pairs, _ = make_pairs(en, el)
+    assert [(p.en, p.el) for p in pairs] == [("OK.", "Εντάξει.")]
+
+
+def test_pair_is_a_dataclass():
+    assert Pair("a", "β", 1, 2).el == "β"
