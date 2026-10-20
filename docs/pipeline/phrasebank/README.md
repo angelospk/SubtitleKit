@@ -20,6 +20,7 @@ $PB query "I'll be watching." --intent "veiled threat"    # top-3 pairs (EN side
 $PB query "Πού είναι ποια;" --side el                     # natural Greek near our Greek line
 $PB bench --queries lines.txt -n 3                         # warm latency p50/p95
 $PB stats
+$PB prune                         # delete titles that are not professional (then VACUUM)
 $PB extract-prepare --out ~/phrasebank-data/extract --batch-size 120 --per-title 120
 $PB extract-check --batch batch-0001.jsonl result-0001.json   # what a worker runs on its own output
 $PB extract-load ~/phrasebank-data/extract/result-*.json       # validate + embed + store expressions
@@ -34,7 +35,7 @@ $PB os-fetch --imdb tt... --title "..."   # download pro Greek + matching Englis
 |---|---|---|
 | Unit | aligned cue pair (EN cue group ↔ EL cue group, ≤ 2 cues per side; dash dialogues split into turns) | gives retrieval-augmented few-shot / translation memory; a cue is what we translate |
 | Source | OPUS OpenSubtitles v2024, `raw/{en,el}.zip` read member by member with HTTP range requests | no key, no 7-40 GB download; one title costs ~1-3 MB |
-| Greek version | every Greek version of a title (up to 12) is scored; the first professional *aligned* one wins, else the best aligned | OPUS pairs only one Greek file per title, often a fan sub |
+| Greek version | every Greek version of a title (up to 12) is scored; the first professional *aligned* one wins; a title with none is skipped | OPUS pairs only one Greek file per title, often a fan sub |
 | Alignment | `pipeline.align.sync_track` + `align_groups` (time overlap after resync); a version is rejected when resync is not confident or the median `|log(len el / len en)|` > 0.4 | caught a wrong-cut version (EN "Smart." ↔ unrelated Greek) |
 | Embedding | EmbeddingGemma 300M, ONNX int8 (`onnx-community/embeddinggemma-300m-ONNX`, not gated), in process, MRL 768 → 256 | Ollama's copy: ~100 ms per query, 98 texts/s; ONNX: 74 ms, 171 texts/s, same top-1 on a 20-idiom EN→EL test |
 | Prefixes | query `task: search result \| query: `, document `title: none \| text: ` (model card); intent goes in the query as `<intent> \| <line>` | Ollama's template adds no prefix |
@@ -54,8 +55,14 @@ Greek text itself is scored (`pro.score_greek`), first and last 10 cues only:
   URLs, @, «Να είστε καλά», a credit label followed by a non-name;
 - +1 timings snapped to video frames, −1 timings on 10 ms steps.
 
-Label: `amateur` if any fan marker, `professional` if the score is ≥ 3, else `unknown` (best available:
-no fan marks, no credit; many retail DVD/Blu-ray Greek tracks have no credit line).
+Label: `amateur` if any fan marker, `professional` if the score is ≥ 3, else `unknown` (no fan marks, no
+credit).
+
+**Only `professional` is stored.** `Store` refuses any other title, `ingest-opus` skips titles without a
+professional aligned version, and `ingest-srt` / `os-fetch` refuse a Greek file with a fan marker even when
+the release metadata says professional. `prune` deletes older non-professional titles with their pairs,
+vectors and expressions (2026-10-20: 99 titles, 89,023 pairs, 573 expressions removed; backup
+`~/phrasebank-data/phrasebank.before-prune-2026-10-20.sqlite`).
 
 ## OpenSubtitles API path (ready, gated on a key)
 
@@ -71,9 +78,10 @@ downloads per day). Never put them in the repo.
 
 ## Current build (2026-10-20)
 
-- 129 titles (70 movies + 59 episodes of 30 series), 116,439 pairs. Greek labels: 30 `professional`,
-  74 `unknown`, 25 `amateur` (amateur kept only when no better aligned version existed).
-- 870 expressions from DeepSeek Flash workers (29 batches; every entry checked by `validate`). `EVAL.md` ran on the first 842.
+- After `prune`: 30 `professional` titles (14 movies + 16 episodes of 8 series), 27,416 pairs, 297
+  expressions. Before it: 129 titles, 116,439 pairs, 870 expressions (74 `unknown`, 25 `amateur` titles).
+- Expressions come from DeepSeek Flash workers (every entry checked by `validate`).
+- `EVAL.md` and the latency numbers below ran on the 129-title build, before `prune`.
 - Warm `bench` on CPU, all three tables (EN pairs, EL pairs, expressions), 49 lines × 3: p50 174 ms,
   p95 183 ms. About 80 ms is the query embedding, about 48 ms each pair-table KNN, 0.3 ms expressions.
   (The `ms` in `eval_hits.json` includes 2-3 embeddings per line, so it is higher.)

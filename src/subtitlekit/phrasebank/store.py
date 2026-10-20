@@ -76,6 +76,8 @@ class Store:
 
     # -- titles -----------------------------------------------------------
     def _insert_title(self, title: Dict[str, Any]) -> None:
+        if title.get("pro_label") != "professional":
+            raise ValueError(f"{title.get('imdb')} is not professional ({title.get('pro_label')!r})")
         row = {
             "imdb": title.get("imdb"), "kind": title.get("kind"), "title": title.get("title"),
             "year": title.get("year"), "series": title.get("series"), "season": title.get("season"),
@@ -100,6 +102,33 @@ class Store:
     def has_title(self, imdb: str) -> bool:
         """True when the title is already stored."""
         return self.conn.execute("SELECT 1 FROM titles WHERE imdb = ?", (imdb,)).fetchone() is not None
+
+    def prune_non_professional(self) -> Dict[str, Any]:
+        """Delete every title that is not professional, with its pairs, vectors and expressions."""
+        with self.conn:
+            self.conn.execute("BEGIN IMMEDIATE")  # take the write lock before reading the ids
+            titles = self.conn.execute(
+                "SELECT COUNT(*) FROM titles WHERE pro_label IS NOT 'professional'").fetchone()[0]
+            pairs = [r[0] for r in self.conn.execute(
+                "SELECT id FROM pairs WHERE imdb IN "
+                "(SELECT imdb FROM titles WHERE pro_label IS NOT 'professional')")]
+            expressions = [r[0] for r in self.conn.execute(
+                "SELECT id FROM expressions WHERE pair_id IN "
+                "(SELECT id FROM pairs WHERE imdb IN "
+                "(SELECT imdb FROM titles WHERE pro_label IS NOT 'professional'))")]
+            self._delete_ids("vec_pair_en", pairs)
+            self._delete_ids("vec_pair_el", pairs)
+            self._delete_ids("vec_expr", expressions)
+            self._delete_ids("expressions", expressions)
+            self._delete_ids("pairs", pairs)
+            self.conn.execute("DELETE FROM titles WHERE pro_label IS NOT 'professional'")
+        return {"titles": titles, "pairs": len(pairs), "expressions": len(expressions)}
+
+    def _delete_ids(self, table: str, ids: Sequence[int]) -> None:
+        for start in range(0, len(ids), 900):
+            chunk = ids[start:start + 900]
+            marks = ",".join("?" * len(chunk))
+            self.conn.execute(f"DELETE FROM {table} WHERE id IN ({marks})", chunk)
 
     # -- pairs ------------------------------------------------------------
     def _insert_pairs(self, imdb: str, pairs: Sequence[Any], en_vecs: np.ndarray,

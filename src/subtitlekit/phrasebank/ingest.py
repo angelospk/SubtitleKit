@@ -33,7 +33,6 @@ from .pro import score_greek
 OPUS = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2024"
 IMDB = "https://datasets.imdbws.com"
 PREFIX = "OpenSubtitles/raw/"
-LABEL_RANK = {"professional": 2, "unknown": 1, "amateur": 0}
 MAX_VERSIONS = 12
 MIN_PAIRS = 80
 MAX_LOG_RATIO = 0.4
@@ -146,10 +145,10 @@ def alignment_ok(pairs, info) -> bool:
 
 
 def fetch_title(el_zip: RemoteZip, en_zip: RemoteZip, dp: DocPair):
-    """Network part for one title: the English document, then the best aligned Greek version.
+    """Network part for one title: the English document, then the first aligned professional Greek version.
 
-    Versions are tried with the OPUS pair first; the first professional aligned version wins, else the
-    aligned version with the best (label, score). Up to MAX_VERSIONS versions are read.
+    Versions are tried with the OPUS pair first; a version whose text is not professional is skipped
+    before alignment. Up to MAX_VERSIONS versions are read.
     """
     try:
         en_cues = parse_raw_xml(en_zip.read(dp.en_doc).decode("utf-8", "replace"))
@@ -166,17 +165,16 @@ def fetch_title(el_zip: RemoteZip, en_zip: RemoteZip, dp: DocPair):
         if len(cues) < 100:
             continue
         v = score_greek(cues)
-        if best and (LABEL_RANK[v.label], v.score) <= best[0]:
-            continue  # cannot beat the current choice: skip the alignment work
+        if v.label != "professional":
+            continue
         pairs, info = make_pairs(en_cues, cues)
         if not alignment_ok(pairs, info):
             continue
-        best = ((LABEL_RANK[v.label], v.score), {"el_doc": name, "verdict": v, "pairs": pairs, "info": info})
-        if v.label == "professional":
-            break
+        best = {"el_doc": name, "verdict": v, "pairs": pairs, "info": info}
+        break
     if not best:
         return dp, None
-    return dp, dict(best[1], versions=seen)
+    return dp, dict(best, versions=seen)
 
 
 def title_row(dp: DocPair, basics: Dict[str, dict], el_doc: str, verdict) -> dict:
@@ -245,7 +243,8 @@ def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: st
                pro_label: str = "", pro_reasons=()) -> int:
     """Align and store one local English/Greek SRT pair (e.g. from the OpenSubtitles API); return the pair count.
 
-    ``pro_label`` overrides the text-based verdict when the caller knows better (release metadata).
+    ``pro_label`` overrides the text-based verdict when the caller knows better (release metadata), but an
+    amateur verdict or any other non-professional final label is refused before embedding.
     """
     from ..pipeline.srt import load_srt
 
@@ -255,8 +254,13 @@ def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: st
     if not alignment_ok(pairs, info):
         raise ValueError(f"{el_path} does not align with {en_path} ({len(pairs)} pairs, sync {info['sync']})")
     verdict = score_greek(el_cues)
+    if verdict.label == "amateur":
+        raise ValueError(f"{el_path} looks fan-made ({verdict.score:g})")
+    label = pro_label or verdict.label
+    if label != "professional":
+        raise ValueError(f"{el_path} is not professional ({label})")
     row = {"imdb": imdb, "kind": kind, "title": title, "year": None, "series": None, "season": None,
-           "episode": None, "el_doc": el_path, "en_doc": en_path, "pro_label": pro_label or verdict.label,
+           "episode": None, "el_doc": el_path, "en_doc": en_path, "pro_label": label,
            "pro_score": verdict.score, "pro_reasons": list(pro_reasons) + verdict.reasons}
     en_vecs = embedder.embed([doc_text(p.en) for p in pairs])
     el_vecs = embedder.embed([doc_text(p.el) for p in pairs])

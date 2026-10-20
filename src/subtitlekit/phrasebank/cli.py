@@ -104,6 +104,16 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prune(args: argparse.Namespace) -> int:
+    """Delete titles that are not professional, with their pairs, vectors and expressions."""
+    store = _open_store(args)
+    result = store.prune_non_professional()
+    print(json.dumps(result))
+    store.conn.execute("VACUUM")
+    store.close()
+    return 0
+
+
 def cmd_extract_prepare(args: argparse.Namespace) -> int:
     from .expressions import is_candidate
 
@@ -339,6 +349,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("stats", parents=[common], help="database counts")
     s.set_defaults(func=cmd_stats)
+
+    pn = sub.add_parser("prune", parents=[common],
+                        help="delete titles that are not professional, with their pairs, vectors and expressions")
+    pn.set_defaults(func=cmd_prune)
 
     ep = sub.add_parser("extract-prepare", parents=[common], help="write extraction batches")
     ep.add_argument("--out", required=True)

@@ -140,7 +140,7 @@ def test_os_fetch_skips_a_stored_title_before_any_download(tmp_path, monkeypatch
     db = str(tmp_path / "pb.sqlite")
     st = Store(db, dims=256)
     st.add_title({"imdb": "tt1234567", "kind": "movie", "title": "X", "year": None, "series": None, "season": None,
-                  "episode": None, "el_doc": "", "en_doc": "", "pro_label": "unknown", "pro_score": 0,
+                  "episode": None, "el_doc": "", "en_doc": "", "pro_label": "professional", "pro_score": 4,
                   "pro_reasons": []})
     st.close()
 
@@ -151,3 +151,16 @@ def test_os_fetch_skips_a_stored_title_before_any_download(tmp_path, monkeypatch
     monkeypatch.setattr(cli, "_client_or_none", lambda: NoCalls())
     assert cli.main(["os-fetch", "--db", db, "--imdb", "tt1234567", "--title", "X"]) == 0
     assert "already stored" in capsys.readouterr().err
+
+
+def test_prune_command_keeps_only_professional_titles(tmp_path, fake_embedder, capsys):
+    db = seed(tmp_path, fake_embedder)
+    st = Store(db)
+    with st.conn:
+        st.conn.execute("INSERT INTO titles(imdb, kind, title, pro_label) VALUES ('tt2', 'movie', 'Fan', 'amateur')")
+    st.add_pairs("tt2", [Pair("Hi.", "Γεια.", 1, 2)], fake_embedder.embed(["Hi."]), fake_embedder.embed(["Γεια."]))
+    st.close()
+    assert cli.main(["prune", "--db", db]) == 0
+    assert json.loads(capsys.readouterr().out) == {"titles": 1, "pairs": 1, "expressions": 0}
+    s = Store(db).stats()
+    assert s["by_pro_label"] == {"professional": 1} and s["pairs"] == 3
