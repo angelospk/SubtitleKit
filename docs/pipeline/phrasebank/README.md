@@ -9,6 +9,21 @@ decision (see `EVAL.md`).
 Code: `src/subtitlekit/phrasebank/`. Tests: `tests/phrasebank/` (no network, no model needed except one
 skipped-if-missing model test). Data (never in git): `~/phrasebank-data/`.
 
+## Two databases: archive and live
+
+- `phrasebank-archive.sqlite` keeps every ingested professional pair. `ingest-opus`, `ingest-srt`,
+  `os-fetch`, `extract-prepare`, `extract-load` and `prune` use it by default.
+- `phrasebank.sqlite` (live; `query`, `bench`, `stats` by default) holds only the curated expressions, the
+  pairs they cite, their titles and vectors. Harold's rule (2026-10-20): routine lines («Ναι.», «Εντάξει.»,
+  literal renderings) must not compete with idiomatic ones at query time.
+- `publish` rebuilds the live file from one archive snapshot (temp file, then atomic replace). Run it after
+  every `extract-load`. It refuses a missing archive and a live path that aliases the archive.
+- Migration (done 2026-10-20): the old single `phrasebank.sqlite` was renamed to `phrasebank-archive.sqlite`,
+  then `publish` wrote the new live file. Backup of the old file: `phrasebank.before-expressions-only-2026-10-20.sqlite`.
+- Extraction is strict since 2026-10-20 (brief: `~/phrasebank-data/extract2/BRIEF-strict.md`): keep Greek only
+  when a word-for-word translation would not give it and it still sounds native. The 288 older expressions were
+  judged again with this rule: 163 kept, 125 dropped (literal renderings, single neutral words, plain commands).
+
 ## Commands
 
 ```bash
@@ -16,6 +31,7 @@ uv pip install -e ".[phrasebank]"     # sqlite-vec, onnxruntime, tokenizers
 PB=".venv/bin/python -m subtitlekit.phrasebank"
 $PB prepare                      # OPUS alignment headers, IMDb tables, archive indexes (~1.1 GB, once)
 $PB ingest-opus --movies 70 --series 25 --per-series 2    # fetch, align, embed, store (incremental)
+$PB ingest-opus --genre Comedy --movies 150 --series 40 --per-series 3 --min-year 2000   # one IMDb genre
 $PB query "I'll be watching." --intent "veiled threat"    # top-3 pairs (EN side, EL side) + expressions
 $PB query "Πού είναι ποια;" --side el                     # natural Greek near our Greek line
 $PB bench --queries lines.txt -n 3                         # warm latency p50/p95
@@ -23,7 +39,8 @@ $PB stats
 $PB prune                         # delete titles that are not professional (then VACUUM)
 $PB extract-prepare --out ~/phrasebank-data/extract --batch-size 120 --per-title 120
 $PB extract-check --batch batch-0001.jsonl result-0001.json   # what a worker runs on its own output
-$PB extract-load ~/phrasebank-data/extract/result-*.json       # validate + embed + store expressions
+$PB extract-load ~/phrasebank-data/extract/result-*.json       # validate + embed + store expressions (archive)
+$PB publish                       # live db := expressions + their pairs, from the archive
 $PB ingest-srt --en EN.srt --el EL.srt --imdb tt... --title "..."   # any local aligned pair
 $PB os-search --imdb tt...       # OpenSubtitles API (needs a key, see below)
 $PB os-fetch --imdb tt... --title "..."   # download pro Greek + matching English, then ingest
@@ -90,14 +107,14 @@ seconds between calls (the login endpoint answered 429 to back-to-back calls). N
 
 ## Current build (2026-10-20)
 
-- 96 `professional` titles (24 movies + 72 episodes of 17 series), 70,806 pairs, 288 expressions.
-  2026-10-20 OpenSubtitles batch added sarcastic comedies: Deadpool (Disney+), Zombieland 1-2, Guardians of
-  the Galaxy, Game Night, Bullet Train, Glass Onion, Red Notice, The Adam Project, Murder Mystery, Don't Look
-  Up, and episodes of Fleabag, Sex Education, The Office, Dead to Me, What We Do in the Shadows, Ted Lasso,
-  Russian Doll, The Good Place, BoJack Horseman. The new expressions are not extracted yet.
-- After the first `prune`: 30 titles, 27,416 pairs, 297 expressions. Before it: 129 titles, 116,439 pairs,
-  870 expressions (74 `unknown`, 25 `amateur` titles). Two more titles (Imitation Game, Jojo Rabbit) left
-  when Latin pseudonyms stopped counting as credits.
+- Archive: 160 `professional` titles (41 movies + 119 episodes), 116,001 pairs. Sources: OPUS (popular titles,
+  then `--genre Comedy`: 37 more, 205 skipped for lack of a professional Greek version) and the OpenSubtitles API
+  (sarcastic comedies: Deadpool, Zombieland 1-2, Game Night, Glass Onion, Fleabag, Sex Education, The Office, What
+  We Do in the Shadows, Ted Lasso, …). A nightly job (`nightshift later`, 03:15) keeps fetching.
+- Live: 163 expressions, 158 pairs, 29 titles (3.3 MB). Only about 1.4 % of the archive pairs have been through
+  extraction so far; the strict extraction continues from the archive.
+- Before the archive split: 30 titles after the first `prune` (129 before it: 74 `unknown`, 25 `amateur`). Two
+  titles (Imitation Game, Jojo Rabbit) left when Latin pseudonyms stopped counting as credits.
 - Expressions come from DeepSeek Flash workers (every entry checked by `validate`).
 - `EVAL.md` and the latency numbers below ran on the 129-title build, before `prune`.
 - Warm `bench` on CPU, all three tables (EN pairs, EL pairs, expressions), 49 lines × 3: p50 174 ms,
