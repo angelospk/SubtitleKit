@@ -34,7 +34,7 @@ OPUS = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2024"
 IMDB = "https://datasets.imdbws.com"
 PREFIX = "OpenSubtitles/raw/"
 LABEL_RANK = {"professional": 2, "unknown": 1, "amateur": 0}
-MAX_VERSIONS = 8
+MAX_VERSIONS = 12
 MIN_PAIRS = 80
 MAX_LOG_RATIO = 0.4
 
@@ -224,8 +224,7 @@ def ingest_opus(store, embedder, data_dir: str, n_movies: int, n_series: int, pe
             en_vecs = embedder.embed([doc_text(p.en) for p in pairs])
             el_vecs = embedder.embed([doc_text(p.el) for p in pairs])
             row = title_row(dp, basics, res["el_doc"], res["verdict"])
-            store.add_title(row)
-            store.add_pairs(row["imdb"], pairs, en_vecs, el_vecs)
+            store.add_title_pairs(row, pairs, en_vecs, el_vecs)
             done["titles"] += 1
             done["pairs"] += len(pairs)
             print(f"ok {row['title']} ({row['imdb']}): {row['pro_label']} {row['pro_score']:g}, "
@@ -259,6 +258,5 @@ def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: st
            "pro_score": verdict.score, "pro_reasons": list(pro_reasons) + verdict.reasons}
     en_vecs = embedder.embed([doc_text(p.en) for p in pairs])
     el_vecs = embedder.embed([doc_text(p.el) for p in pairs])
-    store.add_title(row)
-    store.add_pairs(imdb, pairs, en_vecs, el_vecs)
+    store.add_title_pairs(row, pairs, en_vecs, el_vecs)
     return len(pairs)

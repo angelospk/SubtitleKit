@@ -29,6 +29,10 @@ def _group_text(cues: Sequence[Cue]) -> str:
     return " ".join(_flat(c.text) for c in cues)
 
 
+def _dash_lines(cue: Cue) -> int:
+    return sum(1 for line in cue.text.split("\n") if line.strip().startswith(("-", "–", "—")))
+
+
 def make_pairs(
     en_cues: Sequence[Cue],
     el_cues: Sequence[Cue],
@@ -52,7 +56,10 @@ def make_pairs(
 
         start_ms = min(c.start_ms for c in en_group)
         end_ms = max(c.end_ms for c in en_group)
-        turns = turn_pairs(en_group, el_group)
+        turns = None
+        if (len(en_group) == 1 and len(el_group) == 1
+                and _dash_lines(en_group[0]) >= 2 and _dash_lines(el_group[0]) >= 2):
+            turns = turn_pairs(en_group, el_group)
         if turns and len(turns) > 1:
             candidates = turns
         else:

@@ -188,6 +188,10 @@ def cmd_extract_check(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         print(f"cannot read {args.result}: {exc}")
         return 1
+    if not entries:
+        print("valid 0 invalid 0")
+        print("  no entries")
+        return 1
     bad = []
     for pos, entry in enumerate(entries, 1):
         pair = pairs.get(entry.get("pair_id")) if isinstance(entry, dict) else None

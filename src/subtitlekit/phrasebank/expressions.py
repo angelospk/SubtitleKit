@@ -126,10 +126,13 @@ def load_results(path: str) -> List[Dict[str, Any]]:
     if body.startswith("{"):
         try:
             data = json.loads(body)
-            if isinstance(data, dict):
-                return data.get("expressions", [])
         except json.JSONDecodeError:
             pass  # a JSONL file whose first line is a bare object
+        else:
+            if isinstance(data, dict):
+                if isinstance(data.get("expressions"), list):
+                    return data["expressions"]
+                return [data]
     out: List[Dict[str, Any]] = []
     for line in body.splitlines():
         line = line.strip()

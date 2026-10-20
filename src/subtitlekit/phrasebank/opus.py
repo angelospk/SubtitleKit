@@ -15,6 +15,7 @@ from ..pipeline.srt import Cue
 
 _TIME_RE = re.compile(r'<time\s+id="[^"]*?\d([SE])"\s+value="([^"]+)"\s*/?>')
 _LINKGRP_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
+MAX_MEMBER_BYTES = 50_000_000
 
 
 def _to_ms(value: str) -> int:
@@ -43,9 +44,9 @@ def parse_raw_xml(xml: str) -> List[Cue]:
     pos = 0
     for m in _TIME_RE.finditer(body):
         for raw in body[pos:m.start()].split("\n"):
-            line = raw.strip()
-            if line and not line.startswith("<") and start is not None:
-                lines.append(html.unescape(line))
+            line = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw))).strip()
+            if line and start is not None:
+                lines.append(line)
         pos = m.end()
         kind, value = m.group(1), m.group(2)
         if kind == "S":
@@ -128,14 +129,28 @@ class RemoteZip:
     def read(self, name: str) -> bytes:
         key = self._key(name)
         offset, size, compress_type = self.index[key]
+        if size > MAX_MEMBER_BYTES:
+            raise ValueError(f"member too large: {key} ({size} bytes)")
         header = self.read_range(offset, 30)
+        if len(header) < 30:
+            raise ValueError(f"truncated local file header: {key}")
         if header[:4] != b"PK\x03\x04":
             raise ValueError(f"not a local file header: {key}")
         name_len = int.from_bytes(header[26:28], "little")
         extra_len = int.from_bytes(header[28:30], "little")
-        data = self.read_range(offset + 30 + name_len + extra_len, size)
+        tail_len = name_len + extra_len + size
+        tail = self.read_range(offset + 30, tail_len)
+        if len(tail) < tail_len:
+            raise ValueError(f"truncated member data: {key}")
+        data = tail[name_len + extra_len:]
         if compress_type == 8:
-            return zlib.decompress(data, -15)
+            obj = zlib.decompressobj(-15)
+            out = obj.decompress(data, MAX_MEMBER_BYTES)
+            if obj.unconsumed_tail:
+                raise ValueError(f"member too large: {key}")
+            if not obj.eof:
+                raise ValueError(f"truncated deflate stream: {key}")
+            return out
         if compress_type == 0:
             return data
         raise ValueError(f"unsupported compression type {compress_type}")

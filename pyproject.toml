@@ -46,6 +46,11 @@ dev = [
 ui = [
     "ipywidgets>=8.0.0",  # For Colab UI
 ]
+phrasebank = [
+    "sqlite-vec>=0.1.6",
+    "onnxruntime>=1.17",
+    "tokenizers>=0.15",
+]
 
 [project.urls]
 Homepage = "https://github.com/angelospk/subtitlekit"

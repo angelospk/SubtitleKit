@@ -61,7 +61,7 @@ def test_make_pairs_drops_empty_english():
 def test_turn_split_needs_dash_dialogue_on_both_sides():
     # Two plain cues against two plain cues: the Greek may reorder across cues, keep the group whole.
     en = [C(1, 1000, 2000, "I'd like"), C(2, 2000, 3000, "to go.")]
-    el = [C(1, 1000, 2000, "Εντάξει,"), C(2, 2000, 3000, "θα πάω.")]
+    el = [C(1, 1000, 2500, "Εντάξει,"), C(2, 2500, 3000, "θα πάω.")]  # overlaps both: one 2:2 group
     pairs, _ = make_pairs(en, el)
     assert [(p.en, p.el) for p in pairs] == [("I'd like to go.", "Εντάξει, θα πάω.")]
 

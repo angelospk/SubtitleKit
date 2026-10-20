@@ -27,7 +27,7 @@ class Store:
         parent = os.path.dirname(self.path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, timeout=60)
         self.conn.row_factory = sqlite3.Row
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
@@ -75,8 +75,7 @@ class Store:
             )
 
     # -- titles -----------------------------------------------------------
-    def add_title(self, title: Dict[str, Any]) -> None:
-        """Insert or replace one title row."""
+    def _insert_title(self, title: Dict[str, Any]) -> None:
         row = {
             "imdb": title.get("imdb"), "kind": title.get("kind"), "title": title.get("title"),
             "year": title.get("year"), "series": title.get("series"), "season": title.get("season"),
@@ -84,40 +83,59 @@ class Store:
             "pro_label": title.get("pro_label"), "pro_score": title.get("pro_score"),
             "pro_reasons": json.dumps(title.get("pro_reasons") or [], ensure_ascii=False),
         }
+        self.conn.execute(
+            """INSERT OR REPLACE INTO titles
+               (imdb, kind, title, year, series, season, episode, el_doc, en_doc,
+                pro_label, pro_score, pro_reasons)
+               VALUES (:imdb, :kind, :title, :year, :series, :season, :episode, :el_doc,
+                       :en_doc, :pro_label, :pro_score, :pro_reasons)""",
+            row,
+        )
+
+    def add_title(self, title: Dict[str, Any]) -> None:
+        """Insert or replace one title row."""
         with self.conn:
-            self.conn.execute(
-                """INSERT OR REPLACE INTO titles
-                   (imdb, kind, title, year, series, season, episode, el_doc, en_doc,
-                    pro_label, pro_score, pro_reasons)
-                   VALUES (:imdb, :kind, :title, :year, :series, :season, :episode, :el_doc,
-                           :en_doc, :pro_label, :pro_score, :pro_reasons)""",
-                row,
-            )
+            self._insert_title(title)
 
     def has_title(self, imdb: str) -> bool:
         """True when the title is already stored."""
         return self.conn.execute("SELECT 1 FROM titles WHERE imdb = ?", (imdb,)).fetchone() is not None
 
     # -- pairs ------------------------------------------------------------
+    def _insert_pairs(self, imdb: str, pairs: Sequence[Any], en_vecs: np.ndarray,
+                      el_vecs: np.ndarray) -> List[int]:
+        ids: List[int] = []
+        for i, p in enumerate(pairs):
+            cur = self.conn.execute(
+                "INSERT INTO pairs(imdb, en, el, start_ms, end_ms, sent) VALUES (?, ?, ?, ?, ?, NULL)",
+                (imdb, p.en, p.el, p.start_ms, p.end_ms),
+            )
+            pid = int(cur.lastrowid)
+            self.conn.execute("INSERT INTO vec_pair_en(id, embedding) VALUES (?, ?)",
+                              (pid, en_vecs[i].tobytes()))
+            self.conn.execute("INSERT INTO vec_pair_el(id, embedding) VALUES (?, ?)",
+                              (pid, el_vecs[i].tobytes()))
+            ids.append(pid)
+        return ids
+
     def add_pairs(self, imdb: str, pairs: Sequence[Any], en_vecs: np.ndarray,
                   el_vecs: np.ndarray) -> List[int]:
         """Insert pairs and both vectors in one transaction; return the new ids."""
         en_vecs = np.asarray(en_vecs, dtype=np.float32)
         el_vecs = np.asarray(el_vecs, dtype=np.float32)
-        ids: List[int] = []
         with self.conn:
-            for i, p in enumerate(pairs):
-                cur = self.conn.execute(
-                    "INSERT INTO pairs(imdb, en, el, start_ms, end_ms, sent) VALUES (?, ?, ?, ?, ?, NULL)",
-                    (imdb, p.en, p.el, p.start_ms, p.end_ms),
-                )
-                pid = int(cur.lastrowid)
-                self.conn.execute("INSERT INTO vec_pair_en(id, embedding) VALUES (?, ?)",
-                                  (pid, en_vecs[i].tobytes()))
-                self.conn.execute("INSERT INTO vec_pair_el(id, embedding) VALUES (?, ?)",
-                                  (pid, el_vecs[i].tobytes()))
-                ids.append(pid)
-        return ids
+            return self._insert_pairs(imdb, pairs, en_vecs, el_vecs)
+
+    def add_title_pairs(self, title: Dict[str, Any], pairs: Sequence[Any], en_vecs: np.ndarray,
+                        el_vecs: np.ndarray) -> List[int]:
+        """Insert a title, its pairs, and their vectors in one transaction."""
+        en_vecs = np.asarray(en_vecs, dtype=np.float32)
+        el_vecs = np.asarray(el_vecs, dtype=np.float32)
+        if not (len(en_vecs) == len(el_vecs) == len(pairs)):
+            raise ValueError("en_vecs, el_vecs and pairs must have the same length")
+        with self.conn:
+            self._insert_title(title)
+            return self._insert_pairs(title.get("imdb"), pairs, en_vecs, el_vecs)
 
     def get_pair(self, pair_id: int) -> Optional[Dict[str, Any]]:
         """One pair by id, or None."""
