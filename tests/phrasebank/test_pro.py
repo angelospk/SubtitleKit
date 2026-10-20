@@ -106,3 +106,8 @@ def test_a_decomposed_credit_line_still_counts():
 
     v = score_greek(with_edges(body(), tail=[unicodedata.normalize("NFD", "Απόδοση διαλόγων: Φίλιππος Ηρακλειώτης")]))
     assert v.label == "professional"
+
+
+def test_a_latin_pseudonym_in_a_greek_credit_is_amateur():
+    v = score_greek(with_edges(body(), tail=["<i>Μετάφραση: Calamity Jane</i>"]))
+    assert v.label == "amateur"

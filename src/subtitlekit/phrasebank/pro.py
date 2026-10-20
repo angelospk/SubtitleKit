@@ -17,7 +17,8 @@ _GU = "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΆΈΉΊΌΎΏΪΫ"
 _GL = "αβγδεζηθικλμνξοπρστυφχψωάέήίόύώϊϋΐΰς"
 _GREEK_RE = re.compile(rf"[{_GU}{_GL}]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
-_NAME_WORD = rf"(?:[{_GU}]{{2,}}|[{_GU}][{_GL}']*|[A-Z][a-z]+)"
+# Greek script only: retail translators sign in Greek, fan subbers often use Latin pseudonyms.
+_NAME_WORD = rf"(?:[{_GU}]{{2,}}|[{_GU}][{_GL}']*)"
 _NAME_RE = re.compile(rf"^{_NAME_WORD}(?: {_NAME_WORD}){{1,2}}$")
 
 
