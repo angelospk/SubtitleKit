@@ -259,10 +259,19 @@ def cmd_os_fetch(args: argparse.Namespace) -> int:
     client = _client_or_none()
     if client is None:
         return 2
+    from .ingest import ingest_srt
+    from .store import Store
+
+    store = Store(os.path.expanduser(args.db), dims=args.dims)
+    if store.has_title(args.imdb):  # before any download: the API allows few per day
+        print(f"{args.imdb} is already stored", file=sys.stderr)
+        store.close()
+        return 0
     best_el, best_en = pick_release(client.search_professional(args.imdb, "el"),
                                     client.search_professional(args.imdb, "en"))
     if not best_el or not best_en:
         print(f"no professional {'Greek' if not best_el else 'English'} subtitle for {args.imdb}", file=sys.stderr)
+        store.close()
         return 1
     folder = Path(os.path.expanduser(args.data)) / "os" / args.imdb
     folder.mkdir(parents=True, exist_ok=True)
@@ -271,10 +280,6 @@ def cmd_os_fetch(args: argparse.Namespace) -> int:
         paths[lang] = folder / f"{lang}-{item['file_id']}.srt"
         if not paths[lang].exists():
             paths[lang].write_bytes(client.download(item["file_id"]))
-    from .ingest import ingest_srt
-    from .store import Store
-
-    store = Store(os.path.expanduser(args.db), dims=args.dims)
     reasons = [f"OpenSubtitles: {r}" for r in best_el.get("reasons", [])] + [f"release {best_el.get('release')}"]
     n = ingest_srt(store, make_embedder(args), str(paths["en"]), str(paths["el"]), imdb=args.imdb,
                    title=args.title, kind=args.kind, pro_label="professional", pro_reasons=reasons)

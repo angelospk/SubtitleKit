@@ -120,3 +120,18 @@ def test_ingest_srt_refuses_a_misaligned_pair(tmp_path, fake_embedder):
     with pytest.raises(ValueError):
         ingest_srt(st, fake_embedder, str(tmp_path / "en.srt"), str(tmp_path / "el.srt"), imdb="tt1", title="x")
     assert st.stats()["titles"] == 0
+
+
+def test_ingest_srt_refuses_a_stored_title(tmp_path, fake_embedder):
+    import pytest
+
+    from subtitlekit.phrasebank.ingest import ingest_srt
+    from subtitlekit.phrasebank.store import Store
+
+    (tmp_path / "en.srt").write_text(srt(TIMES, EN), encoding="utf-8")
+    (tmp_path / "el.srt").write_text(srt(TIMES, EL), encoding="utf-8")
+    st = Store(str(tmp_path / "pb.sqlite"), dims=fake_embedder.dims)
+    n = ingest_srt(st, fake_embedder, str(tmp_path / "en.srt"), str(tmp_path / "el.srt"), imdb="tt7", title="x")
+    with pytest.raises(ValueError):
+        ingest_srt(st, fake_embedder, str(tmp_path / "en.srt"), str(tmp_path / "el.srt"), imdb="tt7", title="x")
+    assert st.stats()["pairs"] == n

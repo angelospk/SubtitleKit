@@ -249,6 +249,8 @@ def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: st
     """
     from ..pipeline.srt import load_srt
 
+    if store.has_title(imdb):
+        raise ValueError(f"{imdb} is already stored")
     pairs, info = make_pairs(load_srt(en_path), (el_cues := load_srt(el_path)))
     if not alignment_ok(pairs, info):
         raise ValueError(f"{el_path} does not align with {en_path} ({len(pairs)} pairs, sync {info['sync']})")

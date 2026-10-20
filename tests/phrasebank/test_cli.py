@@ -132,3 +132,22 @@ def test_extract_prepare_label_filter(tmp_path, fake_embedder):
     assert not list(out_dir.glob("batch-*.jsonl"))
     assert cli.main(["extract-prepare", "--db", db, "--out", str(out_dir), "--label", "professional"]) == 0
     assert len(list(out_dir.glob("batch-*.jsonl"))) == 1
+
+
+def test_os_fetch_skips_a_stored_title_before_any_download(tmp_path, monkeypatch, capsys):
+    from subtitlekit.phrasebank.store import Store
+
+    db = str(tmp_path / "pb.sqlite")
+    st = Store(db, dims=256)
+    st.add_title({"imdb": "tt1234567", "kind": "movie", "title": "X", "year": None, "series": None, "season": None,
+                  "episode": None, "el_doc": "", "en_doc": "", "pro_label": "unknown", "pro_score": 0,
+                  "pro_reasons": []})
+    st.close()
+
+    class NoCalls:
+        def __getattr__(self, name):
+            raise AssertionError(f"API called: {name}")
+
+    monkeypatch.setattr(cli, "_client_or_none", lambda: NoCalls())
+    assert cli.main(["os-fetch", "--db", db, "--imdb", "tt1234567", "--title", "X"]) == 0
+    assert "already stored" in capsys.readouterr().err
