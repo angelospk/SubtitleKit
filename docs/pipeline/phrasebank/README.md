@@ -73,7 +73,7 @@ downloads per day). Never put them in the repo.
 
 - 129 titles (70 movies + 59 episodes of 30 series), 116,439 pairs. Greek labels: 30 `professional`,
   74 `unknown`, 25 `amateur` (amateur kept only when no better aligned version existed).
-- 842 expressions from DeepSeek Flash workers (28 batches; every entry checked by `validate`).
+- 870 expressions from DeepSeek Flash workers (29 batches; every entry checked by `validate`). `EVAL.md` ran on the first 842.
 - Warm `bench` on CPU, all three tables (EN pairs, EL pairs, expressions), 49 lines × 3: p50 174 ms,
   p95 183 ms. About 80 ms is the query embedding, about 48 ms each pair-table KNN, 0.3 ms expressions.
   (The `ms` in `eval_hits.json` includes 2-3 embeddings per line, so it is higher.)
