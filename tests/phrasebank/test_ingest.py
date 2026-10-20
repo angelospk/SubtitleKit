@@ -160,3 +160,27 @@ def test_ingest_srt_refuses_greek_that_is_not_professional(tmp_path, fake_embedd
         ingest_srt(st, fake_embedder, str(tmp_path / "en.srt"), str(tmp_path / "el.srt"), imdb="tt2", title="x",
                    pro_label="professional")
     assert st.stats()["titles"] == 0 and fake_embedder.calls == []
+
+
+def test_ingest_srt_raises_alignment_error_for_a_different_programme(tmp_path, fake_embedder):
+    import pytest
+    from subtitlekit.phrasebank.ingest import AlignmentError, ingest_srt
+    from subtitlekit.phrasebank.store import Store
+
+    def srt(path, texts, step_ms):
+        def ts(ms):
+            return f"{ms // 3_600_000:02d}:{ms // 60_000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+        path.write_text("".join(f"{i}\n{ts(i * step_ms)} --> {ts(i * step_ms + 1500)}\n{t}\n\n"
+                                for i, t in enumerate(texts, 1)), encoding="utf-8")
+        return str(path)
+
+    n = 120
+    en = srt(tmp_path / "en.srt", [f"Line number {i} is here." for i in range(n)], 3137)
+    el = srt(tmp_path / "el.srt", [f"Η γραμμή {i} είναι εδώ." for i in range(n)], 3137)
+    other = srt(tmp_path / "other.srt", [f"Η γραμμή {i} είναι εδώ." for i in range(n)], 7411)
+    store = Store(str(tmp_path / "pb.sqlite"), dims=fake_embedder.dims)
+    # Control: the same timings align and are stored.
+    assert ingest_srt(store, fake_embedder, en, el, imdb="tt1", title="X", pro_label="professional") >= 80
+    with pytest.raises(AlignmentError):
+        ingest_srt(store, fake_embedder, en, other, imdb="tt2", title="Y", pro_label="professional")
+    assert issubclass(AlignmentError, ValueError)

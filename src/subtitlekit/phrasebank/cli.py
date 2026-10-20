@@ -285,7 +285,7 @@ def cmd_os_fetch(args: argparse.Namespace) -> int:
     client = _client_or_none()
     if client is None:
         return 2
-    from .ingest import ingest_srt
+    from .ingest import AlignmentError, ingest_srt
     from .store import Store
 
     store = Store(os.path.expanduser(args.db), dims=args.dims)
@@ -319,21 +319,28 @@ def cmd_os_fetch(args: argparse.Namespace) -> int:
         print(f"no Greek subtitle with a professional credit for {args.imdb}", file=sys.stderr)
         store.close()
         return 1
-    best_el, best_en = pick_release([best_el], en)
-    if not best_en:
-        print(f"no professional English subtitle for {args.imdb}", file=sys.stderr)
-        store.close()
-        return 1
-    paths = {"el": folder / f"el-{best_el['file_id']}.srt"}
-    paths["en"] = folder / f"en-{best_en['file_id']}.srt"
-    if not paths["en"].exists():
-        paths["en"].write_bytes(client.download(best_en["file_id"]))
+    el_path = folder / f"el-{best_el['file_id']}.srt"
     reasons = [f"OpenSubtitles: {r}" for r in best_el.get("reasons", [])] + [f"release {best_el.get('release')}"]
-    n = ingest_srt(store, make_embedder(args), str(paths["en"]), str(paths["el"]), imdb=args.imdb,
-                   title=args.title, kind=args.kind, pro_reasons=reasons)
-    print(json.dumps({"imdb": args.imdb, "pairs": n, "el": best_el, "en": best_en}, ensure_ascii=False))
+    release = (best_el.get("release") or "").casefold()
+    embedder = make_embedder(args)
+    # The Greek file's own release first: another cut or a double episode does not align.
+    for best_en in sorted(en, key=lambda r: ((r.get("release") or "").casefold() != release,
+                                             _greek_try_order(r)))[:args.max_english]:
+        en_path = folder / f"en-{best_en['file_id']}.srt"
+        if not en_path.exists():
+            en_path.write_bytes(client.download(best_en["file_id"]))
+        try:
+            n = ingest_srt(store, embedder, str(en_path), str(el_path), imdb=args.imdb,
+                           title=args.title, kind=args.kind, pro_reasons=reasons)
+        except AlignmentError as err:
+            print(f"en-{best_en['file_id']}: {err}", file=sys.stderr)
+            continue
+        print(json.dumps({"imdb": args.imdb, "pairs": n, "el": best_el, "en": best_en}, ensure_ascii=False))
+        store.close()
+        return 0
+    print(f"no English subtitle aligns with the Greek one for {args.imdb}", file=sys.stderr)
     store.close()
-    return 0
+    return 1
 
 
 def cmd_ingest_srt(args: argparse.Namespace) -> int:
@@ -439,6 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
     of.add_argument("--kind", default="movie", choices=["movie", "episode"])
     of.add_argument("--data", default=DEFAULT_DATA)
     of.add_argument("--max-greek", type=_positive_int, default=3, help="at most N Greek candidates to try")
+    of.add_argument("--max-english", type=_positive_int, default=3, help="at most N English candidates to try")
     of.set_defaults(func=cmd_os_fetch)
 
     os_ = sub.add_parser("os-search", parents=[common], help="search OpenSubtitles")

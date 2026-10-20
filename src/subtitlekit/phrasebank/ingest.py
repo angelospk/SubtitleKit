@@ -239,6 +239,10 @@ def _safe_fetch(el_zip, en_zip, dp, log):
 
 
 
+class AlignmentError(ValueError):
+    """The Greek and English files are not the same cut of the same programme."""
+
+
 def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: str, kind: str = "movie",
                pro_label: str = "", pro_reasons=()) -> int:
     """Align and store one local English/Greek SRT pair (e.g. from the OpenSubtitles API); return the pair count.
@@ -252,7 +256,7 @@ def ingest_srt(store, embedder, en_path: str, el_path: str, imdb: str, title: st
         raise ValueError(f"{imdb} is already stored")
     pairs, info = make_pairs(load_srt(en_path), (el_cues := load_srt(el_path)))
     if not alignment_ok(pairs, info):
-        raise ValueError(f"{el_path} does not align with {en_path} ({len(pairs)} pairs, sync {info['sync']})")
+        raise AlignmentError(f"{el_path} does not align with {en_path} ({len(pairs)} pairs, sync {info['sync']})")
     verdict = score_greek(el_cues)
     if verdict.label == "amateur":
         raise ValueError(f"{el_path} looks fan-made ({verdict.score:g})")

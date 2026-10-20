@@ -255,3 +255,48 @@ def test_os_fetch_rejects_a_max_greek_below_one():
     for bad in ("0", "-1"):
         with pytest.raises(SystemExit):
             cli.build_parser().parse_args(["os-fetch", "--imdb", "tt1", "--title", "X", "--max-greek", bad])
+
+
+def _credited_greek_and_english(en_ids):
+    credited = _srt(["Γεια σου.", "Τι κάνεις;", "Μετάφραση: Μαρία Παπαδάκη"])
+    el = [{"file_id": 1, "release": "X.S01E01.NF.WEB-DL", "download_count": 9, "reasons": ["retail"]}]
+    en = [{"file_id": n, "release": "X.S01E01.NF.WEB-DL" if n == en_ids[0] else f"X.S01E01.other{n}",
+           "download_count": 100 - n, "reasons": ["retail"]} for n in en_ids]
+    return el, en, {1: credited, **{n: _srt(["Hello."]) for n in en_ids}}
+
+
+def test_os_fetch_tries_the_next_english_file_when_alignment_fails(tmp_path, monkeypatch):
+    import subtitlekit.phrasebank.ingest as ingest
+
+    el, en, files = _credited_greek_and_english([8, 9])
+    fake = FakeOpenSubtitles(el, en, files)
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    monkeypatch.setattr(cli, "make_embedder", lambda args: None)
+
+    def fake_ingest(store, emb, en_path, el_path, **kw):
+        if en_path.endswith("en-8.srt"):
+            raise ingest.AlignmentError("does not align")
+        return 5
+
+    monkeypatch.setattr(ingest, "ingest_srt", fake_ingest)
+    assert cli.main(["os-fetch", "--db", str(tmp_path / "pb.sqlite"), "--data", str(tmp_path / "d"),
+                     "--imdb", "tt1234567", "--title", "X", "--kind", "episode"]) == 0
+    assert fake.downloads == [1, 8, 9]  # the same release first
+
+
+def test_os_fetch_stops_after_max_english_misaligned_files(tmp_path, monkeypatch, capsys):
+    import subtitlekit.phrasebank.ingest as ingest
+
+    el, en, files = _credited_greek_and_english([7, 8, 9])
+    fake = FakeOpenSubtitles(el, en, files)
+    monkeypatch.setattr(cli, "_client_or_none", lambda: fake)
+    monkeypatch.setattr(cli, "make_embedder", lambda args: None)
+
+    def misaligned(*a, **kw):
+        raise ingest.AlignmentError("does not align")
+
+    monkeypatch.setattr(ingest, "ingest_srt", misaligned)
+    assert cli.main(["os-fetch", "--db", str(tmp_path / "pb.sqlite"), "--data", str(tmp_path / "d"),
+                     "--imdb", "tt1234567", "--title", "X", "--max-english", "2"]) == 1
+    assert fake.downloads == [1, 7, 8]
+    assert "align" in capsys.readouterr().err
