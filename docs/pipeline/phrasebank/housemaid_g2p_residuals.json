@@ -1,0 +1,404 @@
+[
+ {
+  "cue": 1747,
+  "hits": 4,
+  "max_sev": 3,
+  "confirmed": 3,
+  "kind": "joke",
+  "en": "You know, the teapot.",
+  "el": "Ξέρεις, με την τσαγιέρα.",
+  "better": [
+   "Κι αν γλυκάνω το παιχνίδι; Ξέρεις, σαν την τσαγιέρα.",
+   "Κι αν γλυκάνω το παιχνίδι; Ξέρεις, σαν την τσαγιέρα.",
+   "Κι αν γλυκάνω το παιχνίδι; Ξέρεις, με την τσαγιέρα.",
+   "Κι αν γλυκάνω λίγο το παιχνίδι; Ξέρεις, με την τσαγιέρα."
+  ],
+  "why": "Pun 'sweeten the pot' / teapot is lost; 'βάλω κι άλλα στο τραπέζι' has no tea link."
+ },
+ {
+  "cue": 620,
+  "hits": 4,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "God, and how about those roots?",
+  "el": "Θεέ μου, και τι λες γι' αυτή τη ρίζα;",
+  "better": [
+   "Θεέ μου, και οι ρίζες της; Τι λες;",
+   "Θεέ μου, και οι ρίζες της τι λες;",
+   "Θεέ μου, και οι ρίζες της τι λες;",
+   "Θεέ μου, κι οι ρίζες της; Τι να λέμε."
+  ],
+  "why": "«Τη ρίζα» στον ενικό ακούγεται λάθος· τα μαλλιά έχουν «ρίζες» (ξεβαμμένες)."
+ },
+ {
+  "cue": 1347,
+  "hits": 4,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "but your roots are making a break for it.",
+  "el": "αλλά η ρίζα σου έχει αρχίσει / να φαίνεται.",
+  "better": [
+   "αλλά τα ριζάρια σου πάνε να ξεμυτίσουν.",
+   "αλλά τα ριζάκια σου ξεμυτίζουν.",
+   "αλλά οι ρίζες σου / ξεπρόβαλαν για τα καλά.",
+   "αλλά οι ρίζες σου έχουν αρχίσει να φαίνονται."
+  ],
+  "why": "«Η ρίζα σου» στον ενικό ακούγεται παράξενα για τα μαλλιά· χάνεται και το παιγνιώδες «το σκάνε»."
+ },
+ {
+  "cue": 1382,
+  "hits": 4,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "meaning",
+  "en": "Andy, it's locked.",
+  "el": "Άντι, είναι κλειδωμένα.",
+  "better": [
+   "Άντι, είναι κλειδωμένο.",
+   "Άντι, είναι κλειδωμένο.",
+   "Άντι, είναι κλειδωμένο.",
+   "Άντι, είναι κλειδωμένο."
+  ],
+  "why": "Η πόρτα/το δωμάτιο είναι κλειδωμένο· το «κλειδωμένα» στον πληθυντικό μπερδεύει."
+ },
+ {
+  "cue": 1535,
+  "hits": 4,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I think that would only make things worse for me.",
+  "el": "Νομίζω πως αυτό μόνο χειρότερα / θα κάνει τα πράγματα για μένα.",
+  "better": [
+   "Νομίζω ότι θα χειροτέρευε μόνο τα πράγματα για μένα.",
+   "Νομίζω ότι θα χειροτέρευε μόνο τα πράγματα για μένα.",
+   "Νομίζω ότι θα χειροτέρευε μόνο τα πράγματα για μένα.",
+   "Νομίζω ότι θα χειροτέρευε τα πράγματα για μένα."
+  ],
+  "why": "Awkward, calque-like word order; doesn't sound like natural Greek speech."
+ },
+ {
+  "cue": 1057,
+  "hits": 3,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "meaning",
+  "en": "But I don't really eat meat.",
+  "el": "Αλλά δεν τρώω και πολύ κρέας.",
+  "better": [
+   "Αλλά δεν τρώω κρέας, ουσιαστικά.",
+   "Αλλά κρέας δεν τρώω σχεδόν ποτέ.",
+   "Αλλά κρέας δεν τρώω ουσιαστικά."
+  ],
+  "why": "\"Δεν τρώω και πολύ κρέας\" means she eats little meat, not that she doesn't eat it."
+ },
+ {
+  "cue": 1618,
+  "hits": 3,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I'll be watching.",
+  "el": "Θα βλέπω.",
+  "better": [
+   "Θα σε παρακολουθώ.",
+   "Θα σε παρακολουθώ.",
+   "Θα σε παρακολουθώ."
+  ],
+  "why": "«Θα βλέπω» sounds unnatural; the line is a menacing warning."
+ },
+ {
+  "cue": 1805,
+  "hits": 3,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "...should've seen the look on the Frenchmen's faces when 23 rampaged...",
+  "el": "<i>...έπρεπε να βλέπατε τα μούτρα</i> / <i>των Γάλλων όταν 23 μαινόμενοι...</i>",
+  "better": [
+   "<i>...να είχατε δει τα μούτρα</i> / <i>των Γάλλων όταν 23 μαινόμενοι...</i>",
+   "<i>...έπρεπε να είχατε δει τα μούτρα</i> / <i>των Γάλλων όταν 23 μαινόμενοι...</i>",
+   "<i>...έπρεπε να είχατε δει τα μούτρα</i> / <i>των Γάλλων όταν 23 μαινόμενοι...</i>"
+  ],
+  "why": "«έπρεπε να βλέπατε» is ungrammatical; it should be «έπρεπε να είχατε δει»."
+ },
+ {
+  "cue": 242,
+  "hits": 2,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "- Where are they? - Where are what?",
+  "el": "-Πού είναι; / -Πού είναι ποια;",
+  "better": [
+   "-Πού είναι; / -Τι πράγμα;",
+   "-Πού είναι; / -Ποιες;"
+  ],
+  "why": "«Πού είναι ποια;» δεν στέκει· το «them» είναι απροσδιόριστο και το «ποια» ηχεί περίεργα."
+ },
+ {
+  "cue": 590,
+  "hits": 2,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "tone",
+  "en": "Stay the fuck away from my husband.",
+  "el": "Μείνε μακριά απ' τον άντρα μου!",
+  "better": [
+   "Κράτα τα χέρια σου μακριά από τον άντρα μου, γαμώτο.",
+   "Κράτα τα χέρια σου μακριά απ' τον άντρα μου, να πάρει!"
+  ],
+  "why": "The angry 'fucking' register is lost; the Greek line is too mild for the threat."
+ },
+ {
+  "cue": 893,
+  "hits": 2,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "No, I can't have you do that.",
+  "el": "Όχι, δε μπορώ να σας βάλω να το κάνετε.",
+  "better": [
+   "Όχι, δεν γίνεται να το κάνετε αυτό.",
+   "Όχι, δεν μπορώ να το δεχτώ."
+  ],
+  "why": "«να σας βάλω να το κάνετε» is a clumsy calque of 'I can't have you do that'."
+ },
+ {
+  "cue": 937,
+  "hits": 2,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "to do really boring shit.",
+  "el": "για να κάνω τέρμα βαρετές μαλακίες.",
+  "better": [
+   "για να κάνω απίστευτα βαρετές μαλακίες.",
+   "για να κάνω απίστευτα βαρετές μαλακίες."
+  ],
+  "why": "«τέρμα βαρετές μαλακίες» is an awkward slang calque; the profanity sounds forced."
+ },
+ {
+  "cue": 11,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I'm just going to say, I think you might be overqualified for this job",
+  "el": "Θα σου πω απλώς ότι μάλλον / έχεις υπερβολικά προσόντα",
+  "better": [
+   "Θα σου πω ότι μάλλον είσαι υπερκατάλληλη για τη δουλειά"
+  ],
+  "why": "«έχεις υπερβολικά προσόντα» is a calque of \"overqualified\"; Greek says υπερκατάρτιση."
+ },
+ {
+  "cue": 114,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I knew she wouldn't call.",
+  "el": "<i>Το 'ξερα ότι δεν θα έπαιρνε.</i>",
+  "better": [
+   "Το 'ξερα ότι δεν θα τηλεφωνούσε."
+  ],
+  "why": "«δεν θα έπαιρνε» without an object is unnatural; it should say she wouldn't call."
+ },
+ {
+  "cue": 158,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "that has to be a barn burner,",
+  "el": "που πρέπει να τα σπάει,",
+  "better": [
+   "που πρέπει να είναι εκπληκτική,"
+  ],
+  "why": "'Να τα σπάει' is slang for 'smashing it'; 'barn burner' means rousing, fiery speech; fine but loose."
+ },
+ {
+  "cue": 165,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "tone",
+  "en": "Yeah, you look better without them.",
+  "el": "Ναι, είσαι πιο όμορφη χωρίς αυτά.",
+  "better": [
+   "Ναι, σου πάνε περισσότερο χωρίς αυτά."
+  ],
+  "why": "Too blunt; 'you look better' loses casual tone and 'πιο όμορφη' is heavy."
+ },
+ {
+  "cue": 173,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "register",
+  "en": "Hello.",
+  "el": "Γεια σας.",
+  "better": [
+   "Γεια."
+  ],
+  "why": "Child greets Millie with formal plural 'Γεια σας'; unnatural for a kid."
+ },
+ {
+  "cue": 189,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "turn this dinner for three into a dinner for four.",
+  "el": "να κάνουμε το δείπνο για τρεις / για τέσσερις.",
+  "better": [
+   "να μετατρέψουμε το δείπνο για τρεις / σε δείπνο για τέσσερις."
+  ],
+  "why": "Awkward syntax: 'να κάνουμε το δείπνο για τρεις για τέσσερις'."
+ },
+ {
+  "cue": 216,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "And then if I could just get a key for the deadbolt.",
+  "el": "Και αν γινόταν να έχω ένα κλειδί / για τον σύρτη.",
+  "better": [
+   "Και αν μπορώ να έχω ένα κλειδί / για την κλειδαριά ασφαλείας."
+  ],
+  "why": "Το deadbolt είναι κλειδαριά ασφαλείας με κλειδί, όχι σύρτης. Ο «σύρτης με κλειδί» ακούγεται παράξενα."
+ },
+ {
+  "cue": 238,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "Shit.",
+  "el": "Σκατά.",
+  "better": [
+   "Γαμώτο."
+  ],
+  "why": "'Σκατά' sounds like a literal translation; milder natural exclamation fits."
+ },
+ {
+  "cue": 247,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "Bullshit!",
+  "el": "Μαλακίες!",
+  "better": [
+   "Ψέματα!"
+  ],
+  "why": "'Μαλακίες' is too crude/literal for 'Bullshit' shouted at Millie's denial."
+ },
+ {
+  "cue": 263,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "Where's my nail at?",
+  "el": "Πού πήγε το νύχι μου;",
+  "better": [
+   "Πού έπεσε το νύχι μου;"
+  ],
+  "why": "Odd literal rendering; she is looking for a fallen nail."
+ },
+ {
+  "cue": 288,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "um, Mercury in retrograde.",
+  "el": "ε, ο ανάδρομος Ερμής.",
+  "better": [
+   "Δεν σε είχα για τύπο / των αστρολογικών χαρτών."
+  ],
+  "why": "'Ανάδρομος Ερμής' is correct but 'ορμ...' cut-off is fine; however 'ωροσκοπίων' mismatch with star-chart."
+ },
+ {
+  "cue": 483,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "Not a root in sight. Is...",
+  "el": "Ούτε ίχνος ρίζας. Είναι...",
+  "better": [
+   "Ούτε μία ρίζα στα μαλλιά. Είναι..."
+  ],
+  "why": "«Ούτε ίχνος ρίζας» is a calque; Greek speakers say it differently about hair roots."
+ },
+ {
+  "cue": 503,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "register",
+  "en": "-I'll leave you alone. -No, no. Please.",
+  "el": "-Θα σας αφήσω. / -Όχι, σε παρακαλώ.",
+  "better": [
+   "-Θα σ' αφήσω ήσυχο/η. / -Όχι, όχι. Σε παρακαλώ."
+  ],
+  "why": "Plural «σας» to a single person, while the reply uses singular «σε παρακαλώ»."
+ },
+ {
+  "cue": 519,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "What about you? You... your, um...",
+  "el": "Εσένα; Οι... ε...",
+  "better": [
+   "Εσένα; Οι γονείς σου / τους αρέσουν τα παιχνίδια;"
+  ],
+  "why": "«Των παιχνιδιών» is a calque of 'game people'; the Greek sounds odd."
+ },
+ {
+  "cue": 971,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I don't suppose you feel sober enough to drive us home?",
+  "el": "Φαντάζομαι δεν είσαι αρκετά ξεμέθυστος / για να οδηγήσεις ως το σπίτι;",
+  "better": [
+   "Δε φαντάζομαι να είσαι αρκετά νηφάλιος / για να μας πας σπίτι;"
+  ],
+  "why": "Το «ξεμέθυστος» είναι σπάνιο και αφύσικο· το φυσικό είναι «νηφάλιος»."
+ },
+ {
+  "cue": 1192,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "I've had enough of that asshole.",
+  "el": "Ως εδώ με δαύτον τον μαλάκα.",
+  "better": [
+   "Μου 'χει query τα νεύρα αυτός ο μαλάκας."
+  ],
+  "why": "Το «δαύτον» ακούγεται παλιομοδίτικο και διαλεκτικό σε σύγχρονο, θυμωμένο λόγο."
+ },
+ {
+  "cue": 1515,
+  "hits": 1,
+  "max_sev": 2,
+  "confirmed": 0,
+  "kind": "unnatural",
+  "en": "with zero chance at custody.",
+  "el": "<i>με μηδέν πιθανότητες</i> / <i>για την επιμέλεια.</i>",
+  "better": [
+   "χωρίς καμία πιθανότητα για την επιμέλεια."
+  ],
+  "why": "«με μηδέν πιθανότητες» is a calque and ungrammatical in number."
+ }
+]

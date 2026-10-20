@@ -51,3 +51,8 @@ def test_make_pairs_drops_untranslated_and_duplicates():
 
 def test_pair_is_a_dataclass():
     assert Pair("a", "β", 1, 2).el == "β"
+
+
+def test_make_pairs_drops_empty_english():
+    pairs, _ = make_pairs([C(1, 1000, 2000, "-")], [C(1, 1000, 2000, "Ναι.")])
+    assert pairs == []

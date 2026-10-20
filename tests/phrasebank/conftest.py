@@ -7,7 +7,7 @@ import pytest
 class FakeEmbedder:
     """Deterministic bag-of-words embedder: texts that share words are close."""
 
-    def __init__(self, dims=32):
+    def __init__(self, dims=256):
         self.dims = dims
         self.calls = []
 
