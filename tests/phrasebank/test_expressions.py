@@ -72,3 +72,13 @@ def test_load_results_single_jsonl_object(tmp_path):
     b = tmp_path / "b.json"
     b.write_text(json.dumps({"expressions": [entry()]}), encoding="utf-8")
     assert load_results(str(b)) == [entry()]
+
+
+def test_load_results_rejects_non_objects(tmp_path):
+    import pytest
+
+    for body in ('{"expressions": [null]}', "[1, 2]", '"text"', "[[]]", "null\n"):
+        p = tmp_path / "r.json"
+        p.write_text(body, encoding="utf-8")
+        with pytest.raises(ValueError):
+            load_results(str(p))

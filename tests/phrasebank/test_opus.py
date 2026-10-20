@@ -181,3 +181,40 @@ def test_remote_zip_detects_truncated_data():
     rz = RemoteZip({"a.xml": (off, size, kind)}, lambda s, n: raw[s:s + max(0, n - 5)] if n > 30 else raw[s:s + n])
     with pytest.raises(ValueError):
         rz.read("a.xml")
+
+
+def test_parse_raw_xml_inline_tags_and_cdata():
+    xml = ('<document><s id="1"><time id="T1S" value="00:00:01,000" /><i>Good</i>bye, <b>Tom</b>.'
+           '<time id="T1E" value="00:00:02,000" /></s>\n<s id="2"><time id="T2S" value="00:00:03,000" />'
+           '<![CDATA[Tom & <Jerry>]]><time id="T2E" value="00:00:04,000" /></s></document>')
+    assert [c.text for c in parse_raw_xml(xml)] == ["Goodbye, Tom.", "Tom & <Jerry>"]
+
+
+def _corrupt(raw, index, name, pos, value):
+    off = index[name][0]
+    buf = bytearray(raw)
+    buf[off + pos:off + pos + len(value)] = value
+    return bytes(buf)
+
+
+def test_remote_zip_checks_crc_and_size():
+    import pytest
+
+    raw, index = _local_zip({"a.xml": "Γεια σου".encode() * 50})
+    for name in ("a.xml", "stored.txt"):
+        bad_crc = _corrupt(raw, index, name, 14, b"\x00\x00\x00\x00")
+        with pytest.raises(ValueError):
+            RemoteZip(index, lambda s, n, b=bad_crc: b[s:s + n]).read(name)
+        bad_size = _corrupt(raw, index, name, 22, (999).to_bytes(4, "little"))
+        with pytest.raises(ValueError):
+            RemoteZip(index, lambda s, n, b=bad_size: b[s:s + n]).read(name)
+
+
+def test_remote_zip_rejects_trailing_data_after_deflate():
+    import pytest
+
+    raw, index = _local_zip({"a.xml": "Γεια σου".encode() * 50})
+    off, size, kind = index["a.xml"]
+    grown = {"a.xml": (off, size + 4, kind)}  # 4 bytes past the deflate stream are read as member data
+    with pytest.raises(ValueError):
+        RemoteZip(grown, lambda s, n: raw[s:s + n]).read("a.xml")
