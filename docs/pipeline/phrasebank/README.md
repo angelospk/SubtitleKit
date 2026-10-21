@@ -24,6 +24,23 @@ skipped-if-missing model test). Data (never in git): `~/phrasebank-data/`.
   when a word-for-word translation would not give it and it still sounds native. The 288 older expressions were
   judged again with this rule: 163 kept, 125 dropped (literal renderings, single neutral words, plain commands).
 
+## Scout/judge extraction and naturalness lessons (2026-10-21)
+
+- `scout-prepare` drops the usual rendering of frequent English lines (an English line seen ≥ 5 times; a Greek
+  rendering with ≥ 30 % of its occurrences) and writes one file per title in screen order. A Sonnet scout reads the
+  whole title as a scene and flags special lines (`scout-check`); `judge-prepare` batches only the flagged pairs for
+  the strict extract step. Scout files are never overwritten (`scout-<imdb>-2.jsonl` for late pairs).
+- Test on 10 comedy titles (Barbie, Deadpool, Pineapple Express, Ted Lasso, Sex Education, The Good Place, The Office):
+  the frequency filter cut only 6 % (549 of 9,153 lines); the scouts flagged 497 of 8,604 (5.8 %); the judges kept
+  312 (63 %). Old method (2 batches, 240 random candidates): 22 kept (9 %). Recall check: a judge on 120 random
+  unflagged lines found 10 (8 %, mostly weaker: «Γαμώτο», «Άκου», «Εβίβα»; some good: «Ήταν φτιαγμένος»), so the
+  scout keeps the strongest third and misses about 2/3 of what a full pass would find. Token cost per kept expression
+  is about the same (~3k); the gain is that the judged material is dense.
+- Lessons: a worker distilled 30 lessons from the 497 expressions (brief:
+  `~/phrasebank-data/scout1/lessons/BRIEF-lessons.md`); `lessons-load` checks that every example quotes a real pair.
+  `lessons-prompt` renders them as a Greek prompt section (~24 KB, ~7k tokens; `~/phrasebank-data/lessons-prompt.md`).
+  Not wired into the translation prompt yet.
+
 ## Commands
 
 ```bash
@@ -117,7 +134,7 @@ seconds between calls (the login endpoint answered 429 to back-to-back calls). N
   then `--genre Comedy`: 37 more, 205 skipped for lack of a professional Greek version) and the OpenSubtitles API
   (sarcastic comedies: Deadpool, Zombieland 1-2, Game Night, Glass Onion, Fleabag, Sex Education, The Office, What
   We Do in the Shadows, Ted Lasso, …). A nightly job (`nightshift later`, 03:15) keeps fetching.
-- Live: 163 expressions, 158 pairs, 29 titles (3.3 MB). Only about 1.4 % of the archive pairs have been through
+- Live (2026-10-21): 506 expressions, 498 pairs, 39 titles, 30 lessons. Archive: 519 titles, 423,706 pairs. Only about 1.4 % of the archive pairs have been through
   extraction so far; the strict extraction continues from the archive.
 - Before the archive split: 30 titles after the first `prune` (129 before it: 74 `unknown`, 25 `amateur`). Two
   titles (Imitation Game, Jojo Rabbit) left when Latin pseudonyms stopped counting as credits.
