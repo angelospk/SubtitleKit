@@ -78,3 +78,12 @@ def test_download_needs_login_then_fetches_link():
     assert s.calls[1][2]["headers"]["Authorization"] == "Bearer T"
     assert s.calls[1][2]["json"] == {"file_id": 11}
     assert s.calls[2][1] == "https://dl/x.srt"
+
+
+def test_download_without_credentials_skips_login():
+    s = Session([Resp({"link": "https://dl/x.srt", "remaining": 4}),
+                 Resp(None, content=b"1\n00:00:01,000 --> 00:00:02,000\nhi\n")])
+    c = OpenSubtitlesClient(api_key="KEY", session=s)
+    assert c.download(11).startswith(b"1\n")
+    assert s.calls[0][1].endswith("/download")
+    assert "Authorization" not in s.calls[0][2]["headers"]

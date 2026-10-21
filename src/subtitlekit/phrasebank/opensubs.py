@@ -133,7 +133,8 @@ class OpenSubtitlesClient:
         return self.token or ""
 
     def download(self, file_id: int) -> bytes:
-        if not self.token:
+        # Login is optional: the API key alone gets the same daily download quota.
+        if not self.token and self.username and self.password:
             self.login()
         resp = self.session.request(
             "POST",

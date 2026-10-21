@@ -99,8 +99,8 @@ release first; `--max-english`, default 3) and moves on to the next English file
 align (`AlignmentError`: another cut, a double episode). No English candidate: no Greek download either.
 
 Needed from Harold: an API key (opensubtitles.com → Profile → API consumers → new consumer), written to
-`~/.config/opensubtitles/api_key` (or env `OPENSUBTITLES_API_KEY`), and for downloads a username/password
-in env `OPENSUBTITLES_USER` / `OPENSUBTITLES_PASSWORD`. Harold keeps all three in
+`~/.config/opensubtitles/api_key` (or env `OPENSUBTITLES_API_KEY`). A username/password is optional
+(env `OPENSUBTITLES_USER` / `OPENSUBTITLES_PASSWORD`): without them `download` skips login and the key alone gets the same quota (checked 2026-10-21: 100/day). Harold keeps all three in
 `~/.config/opensubtitles/.env` (load with `set -a; . ~/.config/opensubtitles/.env; set +a`). His account
 allows 300 downloads per day; a title costs 2 to 5. Each `os-fetch` logs in once; run a batch with a few
 seconds between calls (the login endpoint answered 429 to back-to-back calls). Never put them in the repo.
