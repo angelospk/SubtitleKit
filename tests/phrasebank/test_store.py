@@ -207,7 +207,7 @@ def test_publish_keeps_only_titles_and_pairs_that_carry_an_expression(tmp_path, 
 
     archive, live = str(tmp_path / "archive.sqlite"), str(tmp_path / "live.sqlite")
     a, b = _archive_with_one_expression(archive, fake_embedder)
-    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1, "lessons": 0}
     st = Store(live)
     assert st.stats()["titles"] == 1 and st.has_title("tt0000001") and not st.has_title("tt0000002")
     assert st.get_pair(a)["el"] == "Άντε χέσου." and st.get_pair(b) is None  # ids are kept
@@ -229,7 +229,7 @@ def test_publish_replaces_the_previous_live_file(tmp_path, fake_embedder):
     stale.add_title(title("tt0000009", title="Stale"))
     stale.close()
     publish(archive, live)
-    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1, "lessons": 0}
     st = Store(live)
     assert not st.has_title("tt0000009")
     st.close()
@@ -283,7 +283,7 @@ def test_publish_skips_titles_that_are_not_professional(tmp_path, fake_embedder)
                          "register": "colloquial", "gist": "go away", "source": "old"}],
                        fake_embedder.embed(["dismissal go away"]))
     st.close()
-    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1}
+    assert publish(archive, live) == {"titles": 1, "pairs": 1, "expressions": 1, "lessons": 0}
     assert not Store(live).has_title("tt0000005")
 
 

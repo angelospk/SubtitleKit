@@ -69,6 +69,8 @@ class Store:
                     id INTEGER PRIMARY KEY, pair_id INTEGER, el TEXT, el_norm TEXT,
                     en_trigger TEXT, function TEXT, register TEXT, gist TEXT, source TEXT,
                     UNIQUE(el_norm, function));
+                CREATE TABLE IF NOT EXISTS lessons(
+                    id INTEGER PRIMARY KEY, rule TEXT, avoid TEXT, examples TEXT);
                 CREATE VIRTUAL TABLE IF NOT EXISTS vec_pair_en USING vec0(
                     id INTEGER PRIMARY KEY, embedding float[{d}] distance_metric=cosine);
                 CREATE VIRTUAL TABLE IF NOT EXISTS vec_pair_el USING vec0(
@@ -218,6 +220,25 @@ class Store:
                 inserted += 1
         return inserted
 
+    # -- lessons ----------------------------------------------------------
+    def replace_lessons(self, lessons: Sequence[Dict[str, Any]]) -> None:
+        """Replace the whole lesson set in one transaction."""
+        with self.conn:
+            self.conn.execute("DELETE FROM lessons")
+            self.conn.executemany(
+                "INSERT INTO lessons(rule, avoid, examples) VALUES (?, ?, ?)",
+                [(x["rule"], x.get("avoid"), json.dumps(x["examples"], ensure_ascii=False)) for x in lessons])
+
+    def get_lessons(self) -> List[Dict[str, Any]]:
+        """All lessons in id order; ``avoid`` is left out when there is none."""
+        out = []
+        for r in self.conn.execute("SELECT rule, avoid, examples FROM lessons ORDER BY id"):
+            lesson = {"rule": r["rule"], "examples": json.loads(r["examples"])}
+            if r["avoid"] is not None:
+                lesson["avoid"] = r["avoid"]
+            out.append(lesson)
+        return out
+
     # -- search -----------------------------------------------------------
     def search(self, table: str, vec: np.ndarray, k: int = 5) -> List[Dict[str, Any]]:
         """KNN search in pair_en, pair_el, or expr; nearest first."""
@@ -320,6 +341,7 @@ def publish(archive_path: str, live_path: str) -> Dict[str, int]:
         titles = rows("SELECT * FROM titles WHERE imdb IN ({marks})", sorted({p["imdb"] for p in pairs}))
         vecs = {table: rows(f"SELECT id, embedding FROM {table} WHERE id IN ({{marks}})", ids)
                 for table, ids in (("vec_pair_en", pair_ids), ("vec_pair_el", pair_ids), ("vec_expr", expr_ids))}
+        lessons = [dict(r) for r in s.execute("SELECT * FROM lessons ORDER BY id")]
         s.rollback()
 
         def insert(table: str, items: Sequence[Dict[str, Any]]) -> None:
@@ -331,6 +353,7 @@ def publish(archive_path: str, live_path: str) -> Dict[str, int]:
             insert("titles", titles)
             insert("pairs", pairs)
             insert("expressions", exprs)
+            insert("lessons", lessons)
             for table, items in vecs.items():
                 insert(table, items)
         dst.close()
@@ -347,4 +370,4 @@ def publish(archive_path: str, live_path: str) -> Dict[str, int]:
             src.close()
         if dst is not None:
             dst.close()
-    return {"titles": len(titles), "pairs": len(pairs), "expressions": len(exprs)}
+    return {"titles": len(titles), "pairs": len(pairs), "expressions": len(exprs), "lessons": len(lessons)}

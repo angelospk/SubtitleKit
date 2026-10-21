@@ -40,6 +40,12 @@ $PB prune                         # delete titles that are not professional (the
 $PB extract-prepare --out ~/phrasebank-data/extract --batch-size 120 --per-title 120
 $PB extract-check --batch batch-0001.jsonl result-0001.json   # what a worker runs on its own output
 $PB extract-load ~/phrasebank-data/extract/result-*.json       # validate + embed + store expressions (archive)
+$PB scout-prepare --out ~/phrasebank-data/scout --titles 10   # per title: unsent, non-routine pairs; marks them scouted
+$PB scout-check --batch scout-tt....jsonl flags-tt....json     # what a scout runs on its own flags
+$PB judge-prepare --out ~/phrasebank-data/extract flags-*.json # batch only the flagged pairs for extraction
+$PB lessons-source --out lessons-source.jsonl                  # expressions with their pairs, to distil lessons from
+$PB lessons-load lessons.json     # validate + replace the naturalness lessons (archive)
+$PB lessons-prompt                # print the lessons as a Greek prompt section (live db)
 $PB publish                       # live db := expressions + their pairs, from the archive
 $PB ingest-srt --en EN.srt --el EL.srt --imdb tt... --title "..."   # any local aligned pair
 $PB os-search --imdb tt...       # OpenSubtitles API (needs a key, see below)

@@ -316,5 +316,5 @@ def test_publish_command_writes_the_live_db(tmp_path, fake_embedder, capsys):
     archive = seed(tmp_path, fake_embedder)  # three pairs, no expressions
     live = str(tmp_path / "live.sqlite")
     assert cli.main(["publish", "--archive", archive, "--db", live]) == 0
-    assert json.loads(capsys.readouterr().out) == {"titles": 0, "pairs": 0, "expressions": 0}
+    assert json.loads(capsys.readouterr().out) == {"titles": 0, "pairs": 0, "expressions": 0, "lessons": 0}
     assert Store(live).stats()["pairs"] == 0

@@ -123,16 +123,32 @@ def cmd_publish(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_extract_prepare(args: argparse.Namespace) -> int:
-    from .expressions import is_candidate
-
-    out = Path(os.path.expanduser(args.out))
+def _write_batches(store, out: Path, rows: Sequence[Dict[str, Any]], batch_size: int) -> str:
+    """Write ``rows`` as numbered batch files (continuing after the highest in ``out``) and mark them sent."""
     out.mkdir(parents=True, exist_ok=True)
     highest = 0
     for path in out.glob("batch-*.jsonl"):
         m = _BATCH_RE.match(path.name)
         if m:
             highest = max(highest, int(m.group(1)))
+    batches = pairs_written = 0
+    for start in range(0, len(rows), batch_size):
+        batches += 1
+        name = f"batch-{highest + batches:04d}"
+        chunk = rows[start:start + batch_size]
+        with open(out / f"{name}.jsonl", "w", encoding="utf-8") as fh:
+            for row in chunk:
+                fh.write(json.dumps({"id": row["id"], "en": row["en"], "el": row["el"]},
+                                    ensure_ascii=False) + "\n")
+        store.mark_sent([row["id"] for row in chunk], name)
+        pairs_written += len(chunk)
+    return f"wrote {batches} batches, {pairs_written} pairs"
+
+
+def cmd_extract_prepare(args: argparse.Namespace) -> int:
+    from .expressions import is_candidate
+
+    out = Path(os.path.expanduser(args.out))
     store = _open_store(args)
     limit = args.batch_size * args.max_batches
     per_title: Counter = Counter()
@@ -145,20 +161,147 @@ def cmd_extract_prepare(args: argparse.Namespace) -> int:
         if is_candidate(p["en"], p["el"]) and (not args.per_title or per_title[p["imdb"]] < args.per_title):
             per_title[p["imdb"]] += 1
             candidates.append(p)
-    batches = pairs_written = 0
-    for start in range(0, len(candidates), args.batch_size):
-        batches += 1
-        number = highest + batches
-        name = f"batch-{number:04d}"
-        chunk = candidates[start:start + args.batch_size]
-        with open(out / f"{name}.jsonl", "w", encoding="utf-8") as fh:
-            for row in chunk:
-                fh.write(json.dumps({"id": row["id"], "en": row["en"], "el": row["el"]},
-                                    ensure_ascii=False) + "\n")
-        store.mark_sent([row["id"] for row in chunk], name)
-        pairs_written += len(chunk)
+    report = _write_batches(store, out, candidates, args.batch_size)
     store.close()
-    print(f"wrote {batches} batches, {pairs_written} pairs")
+    print(report)
+    return 0
+
+
+def cmd_scout_prepare(args: argparse.Namespace) -> int:
+    """Write one scouting file per title: its unsent pairs minus the routine ones; mark all of them sent."""
+    from .scout import is_routine, routine_keys
+
+    out = Path(os.path.expanduser(args.out))
+    out.mkdir(parents=True, exist_ok=True)
+    store = _open_store(args)
+    keys = routine_keys(store.iter_pairs(), min_count=args.min_count, share=args.share)
+    imdbs = [r[0] for r in store.conn.execute(
+        "SELECT DISTINCT imdb FROM pairs WHERE sent IS NULL ORDER BY imdb")]
+    if args.imdb:
+        wanted = set(args.imdb)
+        imdbs = [i for i in imdbs if i in wanted]
+    else:
+        imdbs = imdbs[:args.titles]
+    kept = routine = 0
+    for imdb in imdbs:
+        rows = [dict(r) for r in store.conn.execute(
+            "SELECT id, en, el FROM pairs WHERE imdb = ? AND sent IS NULL ORDER BY start_ms, id", (imdb,))]
+        keep = [r for r in rows if not is_routine(r, keys)]
+        name, run = f"scout-{imdb}", 1
+        while (out / f"{name}.jsonl").exists():  # a title can get late pairs: never overwrite an earlier scout file
+            run += 1
+            name = f"scout-{imdb}-{run}"
+        with open(out / f"{name}.jsonl", "w", encoding="utf-8") as fh:
+            for row in keep:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        store.mark_sent([r["id"] for r in rows], name)
+        kept += len(keep)
+        routine += len(rows) - len(keep)
+    store.close()
+    print(json.dumps({"titles": len(imdbs), "kept": kept, "routine": routine}))
+    return 0
+
+
+def cmd_scout_check(args: argparse.Namespace) -> int:
+    """Validate one scouting result (a list of flags) against its scouting file, without a database."""
+    from .expressions import _strip_fences, load_results
+    from .scout import check_flags
+
+    with open(os.path.expanduser(args.batch), encoding="utf-8") as fh:
+        batch = {row["id"]: row for row in (json.loads(line) for line in fh if line.strip())}
+    try:
+        with open(os.path.expanduser(args.result), encoding="utf-8") as fh:
+            if not _strip_fences(fh.read()):  # a worker that wrote nothing is not "no flags": that needs an explicit []
+                print(f"empty result {args.result}: write [] when nothing qualifies")
+                return 1
+        flags = load_results(args.result)
+    except (OSError, ValueError) as exc:
+        print(f"cannot read {args.result}: {exc}")
+        return 1
+    valid, errors = check_flags(flags, batch)
+    print(f"valid {len(valid)} invalid {len(errors)}")
+    for line in errors:
+        print("  " + line)
+    return 1 if errors else 0
+
+
+def cmd_judge_prepare(args: argparse.Namespace) -> int:
+    """Batch the pairs scouts flagged for the extraction step; pairs already batched are skipped."""
+    from .expressions import load_results
+
+    ids: List[int] = []
+    for path in args.files:
+        try:
+            flags = load_results(path)
+        except (OSError, ValueError) as exc:
+            print(f"cannot read {path}: {exc}")
+            return 1
+        ids.extend(f["pair_id"] for f in flags
+                   if isinstance(f, dict) and isinstance(f.get("pair_id"), int) and not isinstance(f["pair_id"], bool))
+    store = _open_store(args)
+    rows = []
+    for pid in dict.fromkeys(ids):
+        pair = store.get_pair(pid)
+        sent = store.conn.execute("SELECT sent FROM pairs WHERE id = ?", (pid,)).fetchone()["sent"] if pair else None
+        if pair and (sent or "").startswith("scout-"):
+            rows.append(pair)
+    report = _write_batches(store, Path(os.path.expanduser(args.out)), rows, args.batch_size)
+    store.close()
+    print(report)
+    return 0
+
+
+def cmd_lessons_source(args: argparse.Namespace) -> int:
+    """Export every expression with its pair, as the material a worker distils lessons from."""
+    store = _open_store(args)
+    rows = store.conn.execute(
+        "SELECT e.pair_id, p.en, p.el, e.el AS expr, e.function, e.gist "
+        "FROM expressions e JOIN pairs p ON p.id = e.pair_id ORDER BY e.id")
+    out = Path(os.path.expanduser(args.out))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(dict(row), ensure_ascii=False) + "\n")
+    store.close()
+    return 0
+
+
+def cmd_lessons_load(args: argparse.Namespace) -> int:
+    from .expressions import load_results
+    from .lessons import validate_lesson
+
+    try:
+        entries = load_results(args.file)
+    except (OSError, ValueError) as exc:
+        print(f"cannot read {args.file}: {exc}")
+        return 1
+    store = _open_store(args)
+    valid, reasons = [], []
+    for entry in entries:
+        err = validate_lesson(entry, store.get_pair)
+        if err:
+            reasons.append(err)
+        else:
+            valid.append(entry)
+    if valid:
+        store.replace_lessons(valid)
+    store.close()
+    if valid:
+        print(f"accepted {len(valid)} rejected {len(reasons)}")
+    else:
+        print(f"no valid lesson; the stored lessons are unchanged (rejected {len(reasons)})")
+    for reason, count in Counter(reasons).most_common(5):
+        print(f"  {count}x {reason}")
+    return 0 if valid else 1
+
+
+def cmd_lessons_prompt(args: argparse.Namespace) -> int:
+    from .lessons import render_prompt
+
+    store = _open_store(args)
+    text = render_prompt(store.get_lessons())
+    store.close()
+    print(text, end="")
     return 0
 
 
@@ -268,6 +411,13 @@ def _positive_int(text: str) -> int:
     value = int(text)
     if value < 1:
         raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
+    return value
+
+
+def _share(text: str) -> float:
+    value = float(text)
+    if not 0 < value <= 1:
+        raise argparse.ArgumentTypeError(f"must be in (0, 1], got {value}")
     return value
 
 
@@ -431,6 +581,37 @@ def build_parser() -> argparse.ArgumentParser:
     ec.add_argument("--batch", required=True)
     ec.add_argument("result")
     ec.set_defaults(func=cmd_extract_check)
+
+    sp = sub.add_parser("scout-prepare", parents=[archived],
+                        help="write one scouting file per title without its routine lines")
+    sp.add_argument("--out", required=True)
+    sp.add_argument("--titles", type=_positive_int, default=10, help="how many unscouted titles to write")
+    sp.add_argument("--imdb", action="append", default=[], help="only this title (repeatable; ignores --titles)")
+    sp.add_argument("--min-count", type=_positive_int, default=5, help="an English line seen this often can be routine")
+    sp.add_argument("--share", type=_share, default=0.3, help="a rendering this common is the usual one")
+    sp.set_defaults(func=cmd_scout_prepare)
+
+    sc = sub.add_parser("scout-check", help="validate a scout's flags against its scouting file")
+    sc.add_argument("--batch", required=True)
+    sc.add_argument("result")
+    sc.set_defaults(func=cmd_scout_check)
+
+    jp = sub.add_parser("judge-prepare", parents=[archived], help="write extraction batches from scout flags")
+    jp.add_argument("--out", required=True)
+    jp.add_argument("--batch-size", type=_positive_int, default=120)
+    jp.add_argument("files", nargs="+")
+    jp.set_defaults(func=cmd_judge_prepare)
+
+    ls = sub.add_parser("lessons-source", parents=[archived], help="export expressions with their pairs")
+    ls.add_argument("--out", required=True)
+    ls.set_defaults(func=cmd_lessons_source)
+
+    ll = sub.add_parser("lessons-load", parents=[archived], help="validate and store the lessons (replaces all)")
+    ll.add_argument("file")
+    ll.set_defaults(func=cmd_lessons_load)
+
+    lp = sub.add_parser("lessons-prompt", parents=[common], help="print the lessons as a prompt section")
+    lp.set_defaults(func=cmd_lessons_prompt)
 
     pr = sub.add_parser("prepare", help="download OPUS/IMDb metadata and archive indexes (~1.1 GB)")
     pr.add_argument("--data", default=DEFAULT_DATA)
