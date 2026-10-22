@@ -216,7 +216,7 @@ references (median offset −62 ms; reference-transfer ceiling 100 % ≤ 0.5 s).
 On the real Lilo TS the same method scores 87 % against Sparta's WEB Greek.
 With an exact GT it scores 98-100 %, so the earlier cap came from the GT.
 The 21 hard-level errors > 1 s: end-credit and sign cues with no reference
-line (8), Hawaiian song lyrics (3), short generic lines (10).
+line (9), Hawaiian song lyrics (3), short or split lines (9).
 
 ### LLM pass: Haiku vs DeepSeek Flash
 
