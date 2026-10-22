@@ -45,7 +45,8 @@ for name, lv in LEVELS.items():
             end, text = web[i + 1].end_ms, c.text + "\n" + web[i + 1].text
             i += 1
         j = rng.normal(0, lv["jitter"])
-        s2, e2 = ts_time(start, lv) + j, ts_time(end, lv) + j
+        s2 = ts_time(start, lv) + j
+        e2 = s2 + (end - start) / lv["scale"]  # a cue keeps its length (no splice inside a cue)
         gt[len(out)] = start
         out.append(Cue(len(out) + 1, int(max(0, s2)), int(max(s2 + 300, e2)), text))
         i += 1

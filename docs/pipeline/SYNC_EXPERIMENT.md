@@ -245,3 +245,24 @@ costs $0.04 per audio hour (Grok search, not measured here). Sampling 30 s
 clips and bisecting where offsets differ would cut the audio to ~25 % but
 adds failure modes (a cut and an insertion between two samples cancel out;
 music-only samples give no anchor). Full ASR is cheap enough.
+
+### Overlap fix (2026-10-23)
+
+Each cue moves by its own offset, so where the offset drops between two cues
+the next one starts before the previous one ends. The source tracks have no
+overlaps; ai2p and llm made 51 (Arrested Development pilot), 98-125 (Lilo)
+and 192 (synthetic hard). `aisync.fix_overlaps` now runs after `apply`:
+
+- overlap ≤ 300 ms: timing noise; trim the previous end.
+- 300 ms - 2 s: the next start is usually early (the Greek line is the second
+  half of a two-speaker reference line and got that line's start); push the
+  next start to the previous end if the next cue keeps ≥ 1 s and does not
+  pass the cue after it, else meet in the middle.
+- > 2 s: the previous end is suspect; trim it. Never push further, so one bad
+  cue cannot drag the following ones (a first version without this cap moved
+  16 cues by 90 s on the synthetic test).
+
+The gap kept is min(2 frames, the source gap). Results: overlaps 0 (1 left on
+Lilo llm); synthetic hard ai2p 98.4 → 98.5 %, llm 99.5 %; Sinners 99.2 →
+99.4 %; Lilo unchanged within one cue. `synth_lilo.py` now keeps each cue's
+length (a splice inside a cue had made one cue 92 s long).
