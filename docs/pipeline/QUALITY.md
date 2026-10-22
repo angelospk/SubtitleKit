@@ -788,3 +788,47 @@ Length slack (S32): 15 of 20 rejected fixes on reader-flagged Housemaid lines we
 
 Open: a human-marked file (`~/pipeline-demo/eval/human/Euphoria.S03E01.S26e.review.txt`, the raw Flash
 translation in script view) to measure the reviewers against a person instead of against each other.
+
+## E33 result: Gemini 4 with naturalness lessons and phrasebank ideas (2026-10-22/23)
+
+Housemaid (1985 cues, 2.09 h), Gemini 4 (gemini-argon, web), 3 chunks (660/555/770 cues). Two arms, one model:
+`base` = housemaid prompt v2 as is; `lx` = the same + "## 8. Μαθήματα φυσικότητας" (all 30 lessons from the
+phrasebank, incl. «κωλο-») + "## 9. Ιδέες" (<= 80 nearest live-db expressions per chunk, no cue numbers).
+Scripts: `eval/e33/` (build, retrieve, run2 = numbering check + retry + halves, merge, ab).
+4 audits per arm (Sonnet audits, sol confirms), serious / noticeable per hour:
+
+| arm | audit 1 | 2 | 3 | 4 | mean |
+|---|---|---|---|---|---|
+| base | 1.92 / 12.95 | 1.44 / 17.75 | 0.96 / 16.79 | 1.44 / 14.39 | **1.44 / 15.47** |
+| lx | 0.96 / 14.39 | 1.44 / 15.83 | 0.96 / 16.31 | 0.96 / 11.99 | **1.08 / 14.63** |
+
+Reference: raw Gemini 4 (gemini2) 0.96 / 13.43 and 0.96 / 10.55. The spread inside one arm (12.0-17.8) is
+larger than the gap between arms, so the audits do not separate them.
+
+«κωλο-»: lx has 6 such words (base 0). The judges flagged them 10 times in 4 audits (all noticeable, never
+serious: «κωλορίζες», «κωλοδωμάτιο», «κωλοδόντι», "invented / calque"), about 1.2 per hour. Harold wants these
+words, so without that penalty lx is about 1.08 / 13.4.
+
+Blind A/B (Opus medium, `ab.py`, 778 cues that differ): **base 207, lx 132, equal 439**. Base wins where lx
+cuts content or drifts in meaning; lx wins on tighter, more colloquial lines.
+
+| cue | EN | base | lx | A/B |
+|---|---|---|---|---|
+| 1838 | I fucked up | Τα έκανα σκατά, | Τα σκάτωσα | lx |
+| 115 | Why did I even think I had a shot at that job? | Γιατί πίστεψα ότι είχα έστω και μία ελπίδα; | Πώς μου 'ρθε ότι είχα ελπίδα γι' αυτή τη δουλειά; | lx |
+| 488 | This fucking window. | Αυτό το παράθυρο, γαμώτο. | Αυτό το κωλοπαράθυρο. | lx |
+| 1649 | ..., you fucking freak. | ..., Τσάρλι, ανώμαλε. | ..., Τσάρλι, κωλοανώμαλε. | lx |
+| 1876 | like a fucking clown | σαν κλόουν, γαμώτο, | σαν κωλοκλόουν | lx |
+| 1295 | -There they are. -Hi. | -Ορίστε. -Γεια. | -Να τα. -Γεια. | lx |
+| 1976 | Nina Winchester recommended you very highly. | ...μας έδωσε τις καλύτερες συστάσεις. | ...μου έδωσε τις καλύτερες συστάσεις για σένα. | lx |
+| 1762 | Millie, Millie, Millie, stop it right now! | Μίλι, Μίλι, σταμάτα το αμέσως! | Μίλι, Μίλι, Μίλι, σταμάτα το αμέσως! | lx |
+| 60 | which also means that you would definitely have | που σημαίνει ότι σίγουρα θα αναγκαστείς | που σημαίνει ότι σίγουρα | base |
+| 964 | I hate it. | Το σιχαίνομαι. | Μου τη δίνει. | base |
+| 405 | ...a ton of really cool nannies. | ...ένα σωρό πολύ κουλ νταντάδες. | ...ένα σωρό γαμάτες νταντάδες. | base |
+| 1353 | Oh, that's okay. | Δεν πειράζει. | Α, μια χαρά. | base |
+| 1689 | I do want those things. | Όντως τα θέλω αυτά. | Τα θέλω αυτά. | base |
+| 374 | If I could just have a couple hours off, | Αν μπορούσα να λείψω δυο ωρίτσες μόνο, | Μόνο δυο ωρίτσες αν γίνεται, | base |
+| 629 | Would he get custody, considering... | Θα έπαιρνε την επιμέλεια, με δεδομένο... | Θα έπαιρνε αυτός την επιμέλεια, μετά απ'... | base |
+
+Decision input: the lessons + ideas do not clearly lower audit errors and lose the blind A/B 132 to 207; the
+clear gain is the «κωλο-» swearing, which lesson 14 alone gives. Not adopted as is.
