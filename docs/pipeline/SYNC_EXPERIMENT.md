@@ -191,3 +191,57 @@ On the weak-GT films, a score above ~90 % cannot be shown against this GT.
    not separate them.
 3. The LLM pass stays the only measured gain on short-line films (Lilo
    87 → 93 %).
+
+## Round 3 (2026-10-23): exact synthetic GT, cheaper LLM
+
+### Synthetic TS from a professional WEB track
+
+`synth_lilo.py` takes a professional Greek WEB track of Lilo & Stitch (AMZN,
+1492 cues) as the truth and distorts it into a fake TS with a known map, so
+every cue has an exact GT. The track is on the same timeline as the foreign
+references (median offset −62 ms; reference-transfer ceiling 100 % ≤ 0.5 s).
+
+- easy: +12.3 s offset, timing jitter sd 150 ms.
+- medium: easy + 3 scenes missing in the TS (2 min, 45 s, 3 min), +8 s splice
+  at 30 min, +95 s intermission at 70 min.
+- hard: medium + framerate drift (25/23.976), jitter sd 300 ms, 8 % of
+  neighbour pairs merged into one cue, 3 % of cues dropped.
+
+| Level (ref) | ffsubsync ≤1 s | ai2p ≤1 s / ≤0.5 s | ai2p >3 s |
+|---|---|---|---|
+| easy (spa / fre) | 100 / 100 | 99.8 / 99.7 · 100 / 99.9 | 0 |
+| medium (spa / fre) | 14.3 / 1.9 | 99.8 / 99.6 · 100 / 99.9 | 0 |
+| hard (spa / fre) | 14.2 / 1.8 | 98.4 / 92.5 · 98.7 / 91.9 | 0.3 |
+
+On the real Lilo TS the same method scores 87 % against Sparta's WEB Greek.
+With an exact GT it scores 98-100 %, so the earlier cap came from the GT.
+The 21 hard-level errors > 1 s: end-credit and sign cues with no reference
+line (8), Hawaiian song lyrics (3), short generic lines (10).
+
+### LLM pass: Haiku vs DeepSeek Flash
+
+`llmfix.py --model` now also takes OpenCode models (a `/` in the name).
+
+| Run | ≤1 s | ≤0.5 s | failed windows |
+|---|---|---|---|
+| synthetic hard, ai2p (no LLM) | 98.4 | 92.5 | - |
+| synthetic hard, Haiku 5.5 | **99.4** | 93.9 | 0 |
+| synthetic hard, DeepSeek v4.1 Flash (NVIDIA) | 99.1 | 93.6 | 2 of 33 |
+| real Lilo (Sparta GT), ai2p | 87.2 | 76.1 | - |
+| real Lilo, Haiku 5.5 | **93.0** | 81.5 | 0 |
+| real Lilo, DeepSeek Flash free | 90.9 | 81.1 | 2 of 41 |
+
+DeepSeek Flash gives most of the gain. Its failures: the free tier hit its
+quota (`FreeUsageLimitError`, 429) during the run, and the NVIDIA endpoint
+cut long JSON replies ("no JSON in reply"). A failed window keeps the
+embedding anchors, so failures cost gain, never accuracy. Both DeepSeek
+endpoints ran at ~1 window per minute per worker (Haiku: ~4x faster).
+
+### Whisper (not run)
+
+Full ASR of a 2 h film on an M4 is reported at 3-8 min, free
+(parakeet-mlx, mlx-whisper large-v3-turbo); Groq's whisper-large-v3-turbo
+costs $0.04 per audio hour (Grok search, not measured here). Sampling 30 s
+clips and bisecting where offsets differ would cut the audio to ~25 % but
+adds failure modes (a cut and an insertion between two samples cancel out;
+music-only samples give no anchor). Full ASR is cheap enough.

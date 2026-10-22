@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from common import load_srt, save_srt, visible_text
 import aisync
-from subtitlekit.pipeline.llm import ClaudeCliBackend, CachingBackend, extract_json
+from subtitlekit.pipeline.llm import ClaudeCliBackend, OpenCodeBackend, CachingBackend, extract_json
 
 WIN, PAD_MS, MAX_DEV_MS = 40, 20_000, 4_000
 LANG = {"spa": "Spanish", "fre": "French", "eng": "English", "ger": "German"}
@@ -84,6 +84,7 @@ def validate(src, ref, pairs, emb_off):
     return [p for p, kp in zip(pairs, keep) if kp]
 
 def run(src_path, ref_path, prior_path, out_path, lang, model="claude-haiku-5-5", report=None, workers=4):
+    """model with a "/" (e.g. opencode/deepseek-v4.1-flash-free) runs through OpenCode."""
     src, ref = load_srt(src_path), load_srt(ref_path)
     # stage 1: embedding map (smoothed) gives the window times and the validator baseline
     tmp = out_path + ".emb.srt"
@@ -92,7 +93,8 @@ def run(src_path, ref_path, prior_path, out_path, lang, model="claude-haiku-5-5"
     emb = load_srt(tmp)
     mapped = [c.start_ms for c in emb]
     emb_off = np.array([e.start_ms - s.start_ms for e, s in zip(emb, src)], float)
-    llm = CachingBackend(inner=ClaudeCliBackend(model=model, timeout=600), cache_dir=ROOT + "/llmcache")
+    inner = OpenCodeBackend(model=model, timeout=600) if "/" in model else ClaudeCliBackend(model=model, timeout=600)
+    llm = CachingBackend(inner=inner, cache_dir=ROOT + "/llmcache")
     wins = [(i, min(i + WIN, len(src))) for i in range(0, len(src), WIN)]
     with ThreadPoolExecutor(workers) as ex:
         results = list(ex.map(lambda w: window_pairs(llm, src, ref, mapped, w[0], w[1], lang), wins))
@@ -115,6 +117,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     for a in ("src", "ref", "prior", "out", "lang"):
         ap.add_argument(a)
-    ap.add_argument("--model", default="claude-haiku-5-5"); ap.add_argument("--report")
+    ap.add_argument("--model", default="claude-haiku-5-5"); ap.add_argument("--report"); ap.add_argument("--workers", type=int, default=4)
     a = ap.parse_args()
-    print(run(a.src, a.ref, a.prior, a.out, a.lang, a.model, a.report))
+    print(run(a.src, a.ref, a.prior, a.out, a.lang, a.model, a.report, a.workers))
