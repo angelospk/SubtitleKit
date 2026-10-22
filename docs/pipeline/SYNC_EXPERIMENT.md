@@ -117,3 +117,77 @@ higher than the table shows.
 - Not wired into the pipeline; `resync.py` stays the production path.
 - Codex design review was attempted; the bridge job failed (connection
   error), so the design is not externally reviewed.
+
+## Round 2: can it pass 95 %? (2026-10-22)
+
+Literature (Grok search): no standard benchmark exists for cue-timing
+accuracy; papers report sentence-alignment F1 or "% lines within X ms".
+Closest prior art: Vecalign (Thompson & Koehn 2019, embedding DP with
+many-to-many spans), SentAlign / Bertalign (LaBSE + DP), SEAS (KONVENS 2025:
+subtitle drift correction + dialogue-gap partitioning + Vecalign, 93 % F1),
+alass (split-penalty DP on VAD or a reference subtitle), duosubs (LaBSE
+bilingual merge with a "cuts" mode). The ai2p design is already a hybrid of
+these (time prior + gap-placed steps + embedding DP).
+
+### Where the remaining error comes from
+
+- **Cross-reference consensus** (`consensus.py`): for 4-12 % of cues on the
+  weak-GT films, two or three independent references (spa/fre/eng/ger) agree
+  with each other within 0.5 s but all disagree with the GT by > 1 s.
+- **Reference-transfer ceiling** (`ceiling.py`): for confident 1:1 matches
+  (LaBSE sim ≥ 0.8), |ref start − Greek GT start| ≤ 1 s for 99-100 % of
+  pairs on Sinners, Avatar, Zootopia 2, Captain America, but only 91.7 %
+  (Lilo), 87.8 % (Jurassic). Example: the Jurassic prologue "ΔΕΚΑΕΦΤΑ
+  ΧΡΟΝΙΑ" sits exactly on "HACE DIECISIETE AÑOS" in the WEB reference, but
+  the Greek WEB GT is 2 s later. On those films the GT, not the method, caps
+  the score near 88-92 %.
+- Real method errors (`inspect_agree.py`): short generic lines placed by
+  interpolation, and merge/split boundaries (one Greek line covers two
+  reference lines; the GT keeps the start of the first).
+
+### New films
+
+Found with `scan_pairs.py` (IMDb suggestion API → OpenSubtitles `ell`, same
+uploader with a TS/CAM and a WEB release):
+
+| Film | Translator | Difference | GT cues | Ceiling ≤1 s |
+|---|---|---|---|---|
+| Captain America: BNW | haroldpoi | pure offset −17.3 s | 1253 | 100 % |
+| Fantastic Four: First Steps | T3LL4V1S10N | non-linear (linear refused) | 106 | 98.6 % |
+
+The F4 Greek WEB copies the Amazon timing exactly (direct transfer median
+error 0 ms), but its text was re-edited, so only 106 cues match.
+
+### Variants tried (all two-pass, smooth = 2; % cues ≤ 1 s, primary ref)
+
+- `d` direct: confident 1:1 anchors (sim ≥ 0.6) take the ref start exactly.
+- `f` fine: third DP pass in a ±4 s band around the map, with vectors mixing
+  each cue and its ±1 neighbours (dot = 0.5·sim + 0.5·context sim).
+- `e` extend: a Greek line also covering the previous unmatched ref line
+  (gap < 400 ms, merged similarity higher) starts at that line.
+
+| Film | ffs | ai2p | d | f | fd | fde | fde, ±6 s |
+|---|---|---|---|---|---|---|---|
+| Sinners | 72.6 | **99.2** | 99.1 | 98.2 | 98.1 | 97.8 | 97.8 |
+| Avatar | 54.6 | 98.1 | 98.1 | 98.2 | 98.2 | 98.2 | 98.2 |
+| Zootopia 2 | 33.9 | 93.8 | 94.1 | 94.1 | 93.8 | 93.8 | 93.8 |
+| Lilo & Stitch | 27.2 | 87.2 | 86.8 | 88.1 | 86.8 | 87.2 | 86.4 |
+| Superman | 15.7 | 85.5 | 88.0 | 88.0 | 89.2 | 88.0 | 88.0 |
+| Jurassic W. R. | 34.4 | 84.4 | 83.9 | 82.3 | 82.3 | 81.7 | 81.7 |
+| Captain America | 98.6 | 98.3 | 98.2 | 98.3 | 98.2 | 98.0 | 98.0 |
+| Fantastic Four | 40.0 | 91.5 | 91.5 | 91.5 | 91.5 | 90.6 | 90.6 |
+
+No variant beats ai2p beyond noise (on Superman one cue = 1.2 points). The
+fine pass shifts Sinners by ~1 point down (dense weak matches add jitter).
+Verdict: ai2p is at the measurable ceiling on the clean-GT films (98-99 %).
+On the weak-GT films, a score above ~90 % cannot be shown against this GT.
+
+### What >95 % on every film would need
+
+1. Better ground truth: audit sampled disagreements against the WEB video, or
+   use only films whose Greek WEB is timed to the reference release.
+2. WEB audio for the residual short-line errors (VAD onset or ASR of the
+   original language plus word alignment); the reference subtitle alone does
+   not separate them.
+3. The LLM pass stays the only measured gain on short-line films (Lilo
+   87 → 93 %).

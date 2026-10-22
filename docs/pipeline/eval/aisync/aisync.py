@@ -13,17 +13,19 @@ Times come only from cue timestamps, never from a model.
 """
 from __future__ import annotations
 import os, sys, json, hashlib, argparse
-from common import ROOT
 import numpy as np
-from common import load_srt, save_srt, visible_text
+from common import ROOT, load_srt, save_srt, visible_text
 
 _MODEL = None
 
-def embed(cues, model_name="sentence-transformers/LaBSE"):
+def _clean(c):
+    return " ".join(visible_text(c.text).replace("-", " ").split()) or "."
+
+def embed(cues, model_name="sentence-transformers/LaBSE", texts=None):
     global _MODEL
-    texts = [" ".join(visible_text(c.text).replace("-", " ").split()) or "." for c in cues]
+    texts = texts or [_clean(c) for c in cues]
     key = hashlib.sha1(("\n".join(texts) + model_name).encode()).hexdigest()[:16]
-    cache = ROOT + f"/cache/{key}.npy"
+    cache = f"{ROOT}/cache/{key}.npy"
     if os.path.exists(cache):
         return np.load(cache)
     if _MODEL is None:
@@ -163,6 +165,27 @@ def apply(src, off, snap=None, ref=None):
         out.append(c.with_timing(s, e)); prev = s
     return out
 
+def embed_ctx(cues, w=0.5):
+    """Cue vector mixed with a vector of the cue plus its neighbours: dot = w*sim + (1-w)*ctx_sim."""
+    E = embed(cues)
+    t = [_clean(c) for c in cues]
+    C = embed(None, texts=[" ".join(t[max(0, k - 1):k + 2]) for k in range(len(t))])
+    return np.hstack([np.sqrt(w) * E, np.sqrt(1 - w) * C])
+
+def fine_pass(src, ref, off, good, band_ms=4000, tau=0.35, min_sim=0.5):
+    """Dense narrow-band re-alignment around the current map with context vectors."""
+    pred = [c.start_ms + off[i] for i, c in enumerate(src)]
+    a = align(src, ref, pred, embed_ctx(src), embed_ctx(ref), band_ms=band_ms, tau=tau)
+    a = [x for x in a if x[2] >= min_sim and abs(ref[x[1]].start_ms - pred[x[0]]) <= band_ms]
+    fine = filter_anchors(src, ref, a, min_sim=min_sim)
+    by_i = {i: (i, j, s, k) for i, j, s, k in good}
+    by_i.update({i: (i, j, s, k) for i, j, s, k in fine})
+    merged, lastj = [], -1
+    for i in sorted(by_i):
+        if by_i[i][1] > lastj:
+            merged.append(by_i[i]); lastj = by_i[i][1]
+    return merged, len(fine)
+
 def run(src_path, ref_path, prior_path, out_path, snap=False, report=None, **kw):
     src, ref, prior = load_srt(src_path), load_srt(ref_path), load_srt(prior_path)
     if len(prior) != len(src):  # ffsubsync may drop empty cues; fall back to its global shift
@@ -181,10 +204,29 @@ def run(src_path, ref_path, prior_path, out_path, snap=False, report=None, **kw)
     anchors = align(src, ref, prior_ms, Es, Er, band_ms=kw.get("band_ms", 120_000), tau=kw.get("tau", 0.45))
     good = filter_anchors(src, ref, anchors, min_sim=kw.get("min_sim", 0.55))
     off = build_map(src, ref, good, smooth=kw.get("smooth", 0))
+    nfine = 0
+    if kw.get("fine"):
+        good, nfine = fine_pass(src, ref, off, good, band_ms=kw.get("fine_band", 4000))
+        off = build_map(src, ref, good, smooth=kw.get("smooth", 0))
+    if kw.get("direct"):
+        # confident 1:1 matches take the reference start exactly (smoothing would blur them)
+        for i, j, s_, k in good:
+            d = ref[j].start_ms - src[i].start_ms
+            if k == "11" and s_ >= kw.get("direct_sim", 0.6) and abs(d - off[i]) <= 1500:
+                off[i] = d
+        if kw.get("ext"):
+            # a Greek line may cover the previous, unmatched ref line too: start there
+            used = {j for _, j, _, _ in good}
+            for i, j, s_, k in good:
+                if k == "11" and j > 0 and j - 1 not in used and ref[j].start_ms - ref[j - 1].end_ms < 400:
+                    if float(Es[i] @ _unit(Er[j - 1] + Er[j])) > s_ + 0.02:
+                        d = ref[j - 1].start_ms - src[i].start_ms
+                        if abs(d - off[i]) <= 3000:
+                            off[i] = d
     smap = {i: j for i, j, s, k in good if k == "11" and s >= kw.get("snap_sim", 0.75)} if snap else None
     save_srt(apply(src, off, smap, ref), out_path)
     if report:
-        json.dump({"anchors": len(anchors), "kept": len(good),
+        json.dump({"anchors": len(anchors), "kept": len(good), "fine": nfine,
                    "pairs": [[int(i), int(j), round(float(s), 3), k] for i, j, s, k in good]}, open(report, "w"))
     return len(anchors), len(good)
 
