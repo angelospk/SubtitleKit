@@ -21,6 +21,7 @@ import aisync
 
 SNAP_MS, TURN_MARGIN, PAUSE_MS = 400, 0.1, 300
 SENT_WIN, SENT_SIM = 2500, 0.5
+SHIFT_SIM, SHIFT_MARGIN = 0.5, 0.1
 
 
 def norm_words(text):
@@ -139,6 +140,28 @@ def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_shar
             anchor[i] = later[i]
         elif j in cue_ms and share.get(j, 0) >= min_share:
             anchor[i] = cue_ms[j]
+    # the ASR missed the line (background voices, talk over narration): the reference subtitle
+    # shares the audio timeline, so its start beats interpolation; first Greek line per cue only
+    refsub, used = set(), set(anchor)
+    for i, j in pairs:
+        if i not in used and j not in {jj for ii, jj in pairs if ii in used}:
+            anchor[i] = ref[j].start_ms; refsub.add(i); used.add(i)
+    # a reference cue that opens with a sentence the previous Greek line already carries
+    # ("- Πρέπει... - Ναι." | "Yeah. No. I don't think so."): the line starts at the next sentence
+    sents = {}
+    for u, v in sorted(sent_ms.items()):
+        sents.setdefault(u[0], []).append((u, v))
+    def gsent(i):
+        return [x.lstrip("- ").strip() for x in re.split(r"(?<=[.!?;])\s+|\n", visible_text(src[i].text)) if x.strip("- ").strip()]
+    cand = [(i, j) for i, j in pairs if i in anchor and i not in refsub and i not in later and i > 0
+            and len(sents.get(j, [])) >= 2 and sents[j][0][0][1:] == (0, 0) and gsent(i - 1) and gsent(i)]
+    shifted = set()
+    if cand:
+        E = aisync.embed(None, texts=[t for i, j in cand for t in (gsent(i - 1)[-1], gsent(i)[0], sents[j][0][1][1], sents[j][1][1][1])])
+        for n, (i, j) in enumerate(cand):
+            last, first, e0, e1 = E[4 * n:4 * n + 4]
+            if float(last @ e0) >= max(SHIFT_SIM, float(first @ e0) + SHIFT_MARGIN) and first @ e1 >= first @ e0:
+                anchor[i] = sents[j][1][1][0]; shifted.add(i)
     ai = np.array(sorted(anchor)); ao = np.array([anchor[i] - src[i].start_ms for i in ai], float)
     off = np.interp(np.arange(len(src)), ai, ao)
     on = np.array(onsets)
@@ -161,7 +184,7 @@ def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_shar
     for i, c in enumerate(src):
         s = c.start_ms + off[i]
         if i in anchor:
-            how.append("turn" if i in later else "cue")
+            how.append("turn" if i in later else "shift" if i in shifted else "refsub" if i in refsub else "cue")
         elif i in sent_hit:
             s = sent_hit[i]; how.append("sentence")
         else:

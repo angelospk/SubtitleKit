@@ -312,3 +312,20 @@ starts a median +221 ms after the voice.
 
 Limits: lines the ASR does not hear (laughter, music, overlap) fall back to
 interpolation; a 1 s readability floor can push the next line late.
+
+### Early lines (2026-10-23, Harold's report)
+
+Symptom: a few lines appeared before the speaker talked and cut the previous
+line as it was spoken. Two causes, two fixes in `audiosync.py`:
+- shift: the Greek translator moved the first sentence of a reference cue
+  into the previous line ("- Πρέπει... - Ναι." | EN "Yeah. No. I don't think
+  so."). The next line took the "yeah" time, 3.4 s early. If the previous
+  Greek line's last sentence matches the cue's first sentence (LaBSE ≥ 0.5 and
+  +0.1 over the line's own first sentence) and the line's first sentence
+  matches the second reference sentence at least as well as the first, it
+  starts at the second sentence. 4 lines, all checked against the ASR words
+  (e.g. 945.92 → 948.48 "I'm tempted to kiss again").
+- refsub: a paired line without ASR words (background voices, talk over
+  narration) took the BluRay reference start instead of interpolation (17
+  lines; e.g. 863.20 → 864.19).
+Interpolated lines: 16 → 8.
