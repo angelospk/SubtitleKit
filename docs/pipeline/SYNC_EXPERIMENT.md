@@ -251,14 +251,14 @@ music-only samples give no anchor). Full ASR is cheap enough.
 Each cue moves by its own offset, so where the offset drops between two cues
 the next one starts before the previous one ends. The source tracks have no
 overlaps; ai2p and llm made 51 (Arrested Development pilot), 98-125 (Lilo)
-and 192 (synthetic hard).  now runs after :
+and 192 (synthetic hard). `aisync.fix_overlaps` now runs after `apply`:
 
 - Trim the previous end to the next start minus min(2 frames, source gap).
   Starts carry the alignment, so they stay.
 - Only if the trim leaves the previous cue unreadable (< min(1 s, its source
   length)) does the next start move, as far as needed, while the next cue
   stays readable and before the cue after it. This also fixes cues that the
-  monotonic clamp in  had collapsed to 1 ms.
+  monotonic clamp in `apply` had collapsed to 1 ms.
 
 Rejected variants:
 - Push the next start on every overlap of 0.3-2 s (theory: the Greek line is
@@ -275,5 +275,5 @@ Results (≤1 s): synthetic hard ai2p 98.4 → 98.4 %, llm 99.4 → 99.2 %;
 Sinners 99.2 → 99.3 %; Avatar 98.1 = 98.1 %; Lilo llm 93.0 → 92.6 % (one cue).
 Overlaps: 0 on every run except Lilo llm (2; 24 cues shorter than 0.7 s remain
 where dense sign cues collapse). AD pilot: 0 overlaps, 0 unreadable cues.
- now keeps each cue's length (a splice inside a cue had made one
+`synth_lilo.py` now keeps each cue's length (a splice inside a cue had made one
 cue 92 s long).
