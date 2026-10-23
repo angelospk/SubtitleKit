@@ -277,3 +277,38 @@ Overlaps: 0 on every run except Lilo llm (2; 24 cues shorter than 0.7 s remain
 where dense sign cues collapse). AD pilot: 0 overlaps, 0 unreadable cues.
 `synth_lilo.py` now keeps each cue's length (a splice inside a cue had made one
 cue 92 s long).
+
+## Audio-anchored sync (2026-10-23, `audiosync.py`)
+
+Goal: put each Greek line where its words are spoken in the target audio
+(Arrested Development pilot, stream audio = BluRay timeline).
+
+Pipeline and warm times on an M-series Mac (21.7 min episode):
+- ffmpeg HLS download to 16 kHz mono WAV: ~2 min (network).
+- ASR: parakeet-mlx `mlx-community/parakeet-tdt-0.6b-v3`, word timestamps: 41 s.
+- Diarization: speakrs (Rust, CoreML, built from source): 16 s.
+- `audiosync.py`: < 1 s plus LaBSE embedding.
+
+Method (models never output a time):
+1. Monotonic word match (difflib) of the English reference against the ASR
+   words. Each reference cue, speaker turn and sentence starts at its first
+   matched word. Unmatched lead words take an ASR word only after a pause
+   (≥ 300 ms); a word glued to the previous matched word is that unit's tail
+   (e.g. "Gob" heard as "joe"). Else 250 ms per lead word, clamped to a
+   speech onset.
+2. Greek lines paired (ai2p/llm report) with an audio-anchored reference cue
+   start there; a line that carries only a later speaker turn starts at it.
+3. Unpaired lines: if LaBSE matches one reference sentence spoken within
+   2.5 s (sim ≥ 0.5), start there (fixes a Greek line that is the second half
+   of an English cue). Else interpolate and snap to an onset within 400 ms.
+4. Ends keep the source length; `fix_overlaps`.
+
+Result (396 cues, llm pairs): 333 cue, 2 turn, 31 sentence, 14 snap, 16
+interp. 96 % of starts within 200 ms of a speech onset; 0 overlaps; 0 cues
+shorter than 0.7 s. Against the text-only llm output: median |Δstart| 245 ms,
+81 cues move > 0.5 s, 14 > 1 s; the > 1 s movers were checked against the
+ASR words and land on the spoken line. The BluRay English subtitle itself
+starts a median +221 ms after the voice.
+
+Limits: lines the ASR does not hear (laughter, music, overlap) fall back to
+interpolation; a 1 s readability floor can push the next line late.
