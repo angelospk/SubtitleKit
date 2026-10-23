@@ -251,18 +251,29 @@ music-only samples give no anchor). Full ASR is cheap enough.
 Each cue moves by its own offset, so where the offset drops between two cues
 the next one starts before the previous one ends. The source tracks have no
 overlaps; ai2p and llm made 51 (Arrested Development pilot), 98-125 (Lilo)
-and 192 (synthetic hard). `aisync.fix_overlaps` now runs after `apply`:
+and 192 (synthetic hard).  now runs after :
 
-- overlap ≤ 300 ms: timing noise; trim the previous end.
-- 300 ms - 2 s: the next start is usually early (the Greek line is the second
-  half of a two-speaker reference line and got that line's start); push the
-  next start to the previous end if the next cue keeps ≥ 1 s and does not
-  pass the cue after it, else meet in the middle.
-- > 2 s: the previous end is suspect; trim it. Never push further, so one bad
-  cue cannot drag the following ones (a first version without this cap moved
-  16 cues by 90 s on the synthetic test).
+- Trim the previous end to the next start minus min(2 frames, source gap).
+  Starts carry the alignment, so they stay.
+- Only if the trim leaves the previous cue unreadable (< min(1 s, its source
+  length)) does the next start move, as far as needed, while the next cue
+  stays readable and before the cue after it. This also fixes cues that the
+  monotonic clamp in  had collapsed to 1 ms.
 
-The gap kept is min(2 frames, the source gap). Results: overlaps 0 (1 left on
-Lilo llm); synthetic hard ai2p 98.4 → 98.5 %, llm 99.5 %; Sinners 99.2 →
-99.4 %; Lilo unchanged within one cue. `synth_lilo.py` now keeps each cue's
-length (a splice inside a cue had made one cue 92 s long).
+Rejected variants:
+- Push the next start on every overlap of 0.3-2 s (theory: the Greek line is
+  the second half of a two-speaker reference line and got that line's start).
+  It moved a correct start 1.4 s late (AD pilot 07:37), and without a cap one
+  bad cue dragged 16 cues by 90 s on the synthetic test.
+- Start a Greek line that matches the second turn of a two-speaker reference
+  cue at that turn (character share of the cue's duration). On the synthetic
+  test it made 12 moves and lost 0.2 points: the professional Greek timing
+  also starts such lines at the reference cue start (e.g. +37 ms), so this is
+  the timing convention, not an error.
+
+Results (≤1 s): synthetic hard ai2p 98.4 → 98.4 %, llm 99.4 → 99.2 %;
+Sinners 99.2 → 99.3 %; Avatar 98.1 = 98.1 %; Lilo llm 93.0 → 92.6 % (one cue).
+Overlaps: 0 on every run except Lilo llm (2; 24 cues shorter than 0.7 s remain
+where dense sign cues collapse). AD pilot: 0 overlaps, 0 unreadable cues.
+ now keeps each cue's length (a splice inside a cue had made one
+cue 92 s long).

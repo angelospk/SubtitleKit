@@ -165,18 +165,16 @@ def apply(src, off, snap=None, ref=None):
         out.append(c.with_timing(s, e)); prev = s
     return fix_overlaps(out, src)
 
-SMALL_OVERLAP_MS, MAX_PUSH_MS, GAP_MS, MIN_DUR_MS = 300, 2000, 84, 1000
+GAP_MS, MIN_DUR_MS = 84, 1000  # 2 frames; shortest readable cue
 
 def fix_overlaps(out, src):
     """The source track has no overlaps; per-cue offsets create them where the offset drops.
 
-    Small overlap (<= 300 ms): timing noise, trim the previous end.
-    Medium overlap (<= 2 s): the next start is usually early (a Greek line that is the second half
-    of a two-speaker reference line got that line's start), so push the next start to the previous
-    end, if the next cue keeps >= 1 s; otherwise meet in the middle.
-    Larger overlap: the previous end is suspect (a splice inside the cue); trim it. Never push
-    further, so one bad cue cannot drag the following cues along.
-    The gap kept is min(2 frames, the source gap).
+    Starts carry the alignment, so trim the previous end to the next start minus
+    min(2 frames, the source gap). (Pushing the next start on every overlap was tested: it broke
+    correct starts where the previous end was the wrong one.) Only when the trim would leave the
+    previous cue unreadable (< min(1 s, its source length)) does the next start move, and only as
+    far as needed, while the next cue stays readable and before the cue after it.
     """
     out = list(out)
     for i in range(len(out) - 1):
@@ -184,14 +182,13 @@ def fix_overlaps(out, src):
         if a.end_ms <= b.start_ms:
             continue
         gap = min(GAP_MS, max(0, src[i + 1].start_ms - src[i].end_ms))
-        ov = a.end_ms - b.start_ms
-        after = out[i + 2].start_ms if i + 2 < len(out) else float("inf")
-        if SMALL_OVERLAP_MS < ov <= MAX_PUSH_MS and b.end_ms - (a.end_ms + gap) >= MIN_DUR_MS and a.end_ms + gap < after:
-            out[i + 1] = b.with_timing(a.end_ms + gap, b.end_ms)
-            continue
-        cut = (a.end_ms + b.start_ms) // 2 if SMALL_OVERLAP_MS < ov <= MAX_PUSH_MS else b.start_ms
-        out[i] = a.with_timing(a.start_ms, max(a.start_ms + 1, cut - gap))
-        out[i + 1] = b.with_timing(max(b.start_ms, cut), b.end_ms)
+        need_a = min(MIN_DUR_MS, src[i].end_ms - src[i].start_ms)
+        if b.start_ms - gap - a.start_ms < need_a:
+            nb = a.start_ms + need_a + gap
+            after = out[i + 2].start_ms if i + 2 < len(out) else float("inf")
+            if b.end_ms - nb >= min(MIN_DUR_MS, src[i + 1].end_ms - src[i + 1].start_ms) and nb < after:
+                b = out[i + 1] = b.with_timing(int(nb), b.end_ms)
+        out[i] = a.with_timing(a.start_ms, max(a.start_ms + 1, b.start_ms - gap))
     return out
 
 def embed_ctx(cues, w=0.5):
