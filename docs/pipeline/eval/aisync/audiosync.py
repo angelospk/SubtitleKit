@@ -115,7 +115,8 @@ def turns(text):
 
 
 
-def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_share=0.5):
+def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_share=0.5, sent_sim=SENT_SIM):
+    """sent_sim > 1 turns the sentence step off (text mode: proportional word times are too rough)."""
     src, ref = load_srt(src_path), load_srt(ref_path)
     words = asr_words(asr_path)
     onsets = sorted({s for _, s, _ in words} | {int(float(l.split()[0]) * 1000) for l in open(turns_path) if l.strip()})
@@ -178,7 +179,7 @@ def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_shar
         for g, i in zip(G, free):
             if near[i]:
                 sim, x = max((float(S[x] @ g), x) for x in near[i])
-                if sim >= SENT_SIM:
+                if sim >= sent_sim:
                     sent_hit[i] = sm_t[x]
     starts, how = [], []
     for i, c in enumerate(src):
@@ -196,7 +197,10 @@ def run(src_path, ref_path, asr_path, turns_path, pairs_path, out_path, min_shar
         starts.append(int(round(s)))
     out, prev = [], 0
     for i, c in enumerate(src):
-        s = max(starts[i], prev); out.append(c.with_timing(s, s + c.end_ms - c.start_ms)); prev = s
+        s = max(starts[i], prev)
+        if i and s - prev < 300:  # two lines on one start: give the earlier one a readable slot
+            s = prev + min(1000, src[i - 1].end_ms - src[i - 1].start_ms) + 84
+        out.append(c.with_timing(s, s + c.end_ms - c.start_ms)); prev = s
     out = aisync.fix_overlaps(out, src)
     save_srt(out, out_path)
     ds = np.array([min(abs(on - o.start_ms)) for o in out])

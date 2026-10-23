@@ -329,3 +329,34 @@ line as it was spoken. Two causes, two fixes in `audiosync.py`:
   narration) took the BluRay reference start instead of interpolation (17
   lines; e.g. 863.20 → 864.19).
 Interpolated lines: 16 → 8.
+
+## E01 benchmark against the audio-synced track, VAD, season run (2026-10-23)
+
+Reference: the audio-synced E01 (`audiosync.py`, real ASR), checked by Harold.
+Start error per Greek line:
+
+| method | median | ≤300 ms | ≤500 ms | ≤1 s |
+|---|---|---|---|---|
+| ffsubsync | 197 ms | 69 % | 81 % | 86 % |
+| ai2p (text) | 259 ms | 57 % | 80 % | 96 % |
+| ai2p + text-mode audiosync (no sentence step, bias 200 ms) | 242 ms | 59 % | 82 % | 97 % |
+| ai2p + silero VAD snap (min silence 50 ms, ±800 ms) | 228 ms | 62 % | 85 % | 96 % |
+| parakeet ASR + speakrs | 0 | 97.5 % | 98 % | 99.5 % |
+
+- Text-only methods inherit the English subtitle's lag behind the voice
+  (~220 ms on this BluRay track) and cannot see it.
+- Text mode (`fake_asr.py`): word times spread over each reference cue by
+  character position, so the turn/shift/refsub fixes run without audio. The
+  sentence step is off in text mode (it cost 1 point at ≤1 s).
+- VAD (silero, 3.3 s on CPU for 21.7 min) adds ~5 points at ≤500 ms only:
+  sitcom dialogue has few pauses, so VAD segments span several lines.
+  ASR knows which word is which; that is the large gain.
+
+Season run (`season_ident.py` + `season_sync.py`, E02-E22, text mode):
+- Episodes identified by content (LaBSE coverage vs each reference), not by
+  folder: DVD/SDH files swap E04/E05 and E07/E08 against the BluRay order;
+  a season-2 file sat in the E13 folder (flagged WEAK); two files had broken
+  13 s timestamps (dropped by a duration check).
+- All 21 pass the validators (0 overlaps, monotonic, pair share 0.77-0.92).
+  Final vs paired English cue: median 200 ms (the bias), ≥99 % within 500 ms.
+  ffsubsync alone was ~1 s off on E02/E14 and missed cuts on E09.
