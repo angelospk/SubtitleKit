@@ -1,0 +1,16 @@
+# speakrs cluster -> who it mostly is, read by hand from the cues it gets (cues.jsonl).
+# "mixed" = no single main speaker.
+SPEAKER_00	News anchor
+SPEAKER_01	mixed
+SPEAKER_02	Reporter
+SPEAKER_03	Tobias
+SPEAKER_04	Narrator
+SPEAKER_05	Lucille
+SPEAKER_06	Buster
+SPEAKER_07	George
+SPEAKER_08	Gob
+SPEAKER_09	Michael
+SPEAKER_10	Lindsay
+SPEAKER_11	Maeby
+SPEAKER_12	George Michael
+SPEAKER_13	mixed
