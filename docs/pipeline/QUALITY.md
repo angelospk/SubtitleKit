@@ -854,3 +854,87 @@ of swearing as errors. Blind A/B (Opus medium, `e34/ab.py`, 189 cues that differ
 Several audit items on E34 look wrong to a Greek reader («καύλας» for "hot", vocative «υπναρού», «έπρεπε να
 βλέπατε»); Harold reviews the list. Remaining real errors: εσύ/εσείς drift in one scene (930-947), «Ελεύθερες»
 for a man and a woman (1668), the lost pot/teapot pun (1746-1747).
+
+
+## E35 result: εσύ/εσείς and gender per speaker -> addressee pair, from Polish, Spanish and voices (2026-10-24)
+
+Input: the E34 Greek Housemaid (1985 cues), no new translation. Harold cares almost only about two error kinds:
+εσύ/εσείς that changes between the same two people, and wrong gender. Scripts in `eval/e35/` (`run.sh`); data
+(diarization, maps, conflicts, changes, audits) in `out/The.Housemaid.2025.e35/`, outside git.
+
+1. Speakers (`speakers.py`): speakrs on the stream audio (7882 s, 56 s on the MacBook, 17 clusters). The reference
+   English fits the audio at scale 1.0, +0.9 s; the SDH (`en.SDH-NeoNoir`, 88 `NAME:` tags) is re-timed to it
+   (align.sync_track, -800 ms). Each tag votes for its cluster; a cluster takes a name at >= 2 votes and >= 55 %.
+   The 55 % was set after seeing Millie at 15/26 (60 % left her unnamed); there is no held-out film to check it.
+   Named: Nina (2 clusters, 666 cues), Andrew (2 clusters, 513), Millie (460); the rest stay `unknown_N`.
+2. Address map (`e35.py map`): Sonnet 5.5 (medium) per 40 cues (+12 of scene) reads English, Polish and Spanish
+   (WEB-ETHEL, turn level, synced -941 / -766 ms) and the speaker, and writes per cue: speaker, addressee, you
+   sg/pl, T/V, genders, gendered "we", and the sources it used. One record per cue: a dash cue with two speakers
+   gets the rule of one of them (a known limit).
+3. Vote (`e35.py vote`): gender per character over the film; T/V per pair of NAMED characters (>= 3 votes,
+   >= 70 %) is the rule for every cue of that pair; other cues keep their own form, and an unknown form is not a
+   constraint. All 17 voted pairs are T (Millie > Andrew 58 T / 2 V, Andrew > Millie 156 / 3, Millie > Nina 17 / 1).
+4. Check (`e35.py check`): Sonnet compares each Greek cue with its rule and lists only gender / number / formality
+   conflicts: 35 (28 formality, 4 number, 3 gender). A number or formality conflict on a cue whose rule has no
+   "you" is dropped (1: cue 231).
+5. Correct (`e35.py correct`): sol (bridge gpt-6.1-sol high) gets only the 34 conflict cues, the rule as a RULE,
+   the problem and 5 cues of scene; only those cues can change. sol kept 2 as they were (1571; 1675 «υπναρού» is
+   already feminine) and changed 32 (1.6 % of the film).
+
+Three runs. Run 1 let the pair vote cover `unknown_07` (several of Nina's friends on one voice cluster, 6 V / 2 T)
+and forced εσείς where Polish and Spanish say T (611, 1945). Run 2 voted only named pairs, but a rule without a
+known form still said "ενικός", so sol made «Γεια σου. Ευχαριστώ που ήρθες» for funeral guests (1941-1942).
+Run 3 (final, after the Codex review) treats an unknown form as no constraint. The numbers below are run 3.
+
+**(a) Target cues.** 930-933 and 947 are Millie -> Andrew, not Millie -> Nina (diarization; Polish «A ty?»,
+«co robisz», Spanish «¿Y tú?», «te dedicas»). All five are now T: «Εσύ;», «Ζεις...», «τη ζωή σου», «τι δουλειά
+κάνεις», «δε νιώθεις έτσι;». **1668 is not an error**: Nina says "We're free" to her daughter Cece (Polish
+«Tylko we dwie. Jesteśmy wolne», Spanish «Para nosotras dos»), so «Ελεύθερες» is right, and E35 keeps it.
+
+**(b) Targeted audit, gender / number / formality only** (`e35/audit35.py`, Sonnet 5.5, blind: English + Greek
+only, no Polish, Spanish or speakers, so it cannot reward E35 for copying the same evidence; windows of 60 cues,
+so it sees consistency inside a scene, not across the film). Errors per hour (2.08 h):
+
+| arm | audit 1 | audit 2 | mean |
+|---|---|---|---|
+| E34 | 5.76 (12) | 7.19 (15) | 6.48 |
+| E35 run 2 | 3.36 (7) | 2.40 (5) | 2.88 |
+| E35 run 3 (final) | 3.36 (7) | 4.80 (10) | **4.08** |
+
+The auditor is noisy (run 2 and run 3 differ by 1.2 / h with almost the same edits). By cue: the two E34 audits
+list 17 cues; E35 changed 9 of them (9, 434, 503, 504, 930-933, 947) and no E35 audit lists those again. The two
+E35 audits list 11 cues; only one is a cue E35 changed (391). The rest were in E34 too and E35 missed them:
+137, 341, 1025 (the map marked these lines without "you": imperatives and greetings, so the check had no rule),
+231 (dropped in step 4 for the same reason), 841 (the map gave "Nina+Millie" as both speaker and addressee).
+391 is disputed: Millie to her parole officer, Polish «chce pani» (V), Spanish «quieres» (T); E35 made it εσείς,
+the blind audit wants εσύ. Some audit items are the auditor's errors: 971 «νηφάλια» (Andrew to Millie, Polish
+«trzeźwa»), 1124 «πήγατε» (Nina to Andrew and Millie, Polish «byliście»), 547 «ξύπνια» (unchanged since E34).
+
+**(c) Changed cues: 32 of 1985.** Ten examples:
+
+| cue | E34 | E35 | rule |
+|---|---|---|---|
+| 930 | Εσείς; | Εσύ; | Millie > Andrew, T |
+| 933 | Δεν ξέρω καν τι δουλειά κάνετε. | Δεν ξέρω καν τι δουλειά κάνεις. | same |
+| 947 | -Αλλά δε νιώθετε έτσι; | -Αλλά δε νιώθεις έτσι; | same |
+| 503 | -Θα σας αφήσω. / -Όχι, σε παρακαλώ. | -Θα σ' αφήσω. / -Όχι, σε παρακαλώ. | Millie > Andrew, T (he says σε) |
+| 750 | Άντριου, είστε... / είστε καλά; | Άντριου, είσαι... / είσαι καλά; | Millie > Andrew, T |
+| 844 | Νίνα, έκανα ό,τι μου ζητήσατε. | Νίνα, έκανα ό,τι μου ζήτησες. | Millie > Nina, T |
+| 1158 | Θέλετε βοήθεια / να μαζέψετε τα πράγματά σας; | Θέλεις βοήθεια / να μαζέψεις τα πράγματά σου; | Nina > Millie, T |
+| 761 | Ζωντανός και μια χαρά. | Ζωντανή και μια χαρά. | Nina about herself, f |
+| 619 | Δηλαδή, είδες το δέρμα της; | Δηλαδή, είδατε το δέρμα της; | to the group of friends, pl |
+| 1948 | Λυπάμαι πολύ για τον γιο σου. | Λυπάμαι πολύ για τον γιο σας. | Nina > Evelyn, V (Spanish «su hijo») |
+
+Doubtful changes for Harold: 3 «Γεια σου, κυρία Γουίντσεστερ» (T from the pair vote, next to a title) and 391.
+
+**(d) What each source gave.** Of the 34 conflicts sent to sol, Polish or Spanish decided all 34 (Polish 26,
+Spanish 30), the speaker label 17, English 5, English alone 0 (self-reported by the map in "ev"); 28 took their
+T/V from the film-wide pair vote, whose votes come from other cues. Over all 1985 cues the map used the speaker in
+1228, Polish in 896, Spanish in 831, English in 922. The speaker track gives "who to whom" (it showed that 930-947
+is Andrew, not Nina); Polish and Spanish give the forms: Polish for the speaker's gender (zrobiłam), plural
+gender (wolne) and Pan/Pani, Spanish for tú/usted and nosotras.
+
+Verdict: the pair rule removes the drift Harold saw (930-947), fixes 9 of the 17 E34 audit cues and adds one
+disputed change, with 32 small edits; 1668 was right already. To do next: give the check a rule for lines the map
+marks without "you" (imperatives, greetings, thanks: 137, 231, 341, 1025), and run the check twice and take the
+union (the check is not stable between runs: 844 fell out in run 2 and came back in run 3).
