@@ -938,3 +938,75 @@ Verdict: the pair rule removes the drift Harold saw (930-947), fixes 9 of the 17
 disputed change, with 32 small edits; 1668 was right already. To do next: give the check a rule for lines the map
 marks without "you" (imperatives, greetings, thanks: 137, 231, 341, 1025), and run the check twice and take the
 union (the check is not stable between runs: 844 fell out in run 2 and came back in run 3).
+
+## E36 result: the εσύ rule, and a translation from the Polish subtitle without English (2026-10-24)
+
+Harold's rule (after E35): to ONE person always εσύ, also in imperatives, greetings and thanks («Έλα μέσα»,
+«Καλώς ήρθες», «Σ' ευχαριστώ»); εσείς of politeness only to a public or official role (police, parole officer,
+clerk) or an elderly relative at a formal moment; εσείς plural only when several listen. Scripts in `eval/e36/`.
+
+- **E36a** = E35 + the rule (`e36.py a`): the address map now gives the addressee also for lines without a "you"
+  word, plus "many" and "auth" (official role / formal moment). Form = V only for a named pair whose majority is
+  auth (Millie > Pam, Millie > police, clerks), or for a cue with its own auth (Nina > Evelyn at the funeral); else T.
+  The check sees every cue spoken to one or several people. 16 conflicts, sol changed 10 (sol now also sees the
+  Polish / Spanish line and may keep a cue when they contradict the rule: in a first pass without them it wrote
+  «πήγες» for «byliście» (1124) and «καλύτερη άνθρωπος» (1455)).
+- **E36pl**: Gemini 4 web translates the Polish WEB subtitle (1654 cues, its own timing), no English
+  (`build_pl.py`: Harold's prompt v2 with the source language Polish, the εσύ rule in section 4, and section 6 with
+  the speaker (speakrs + SDH names on the Polish cues) and the Spanish line per cue; 4 chunks, all 1654 numbers
+  right at the first call). Then the same style stage as E34 (`style.py`) and the same rule check + sol (`e36.py pl`):
+  26 conflicts, 19 changed. Gemini still wrote εσείς between Millie and Nina in 8 cues despite the rule in the
+  prompt; the check fixed them.
+
+**Targeted audit, gender / number / formality** (`audit36.py` = audit35 with English aligned by time, Sonnet, blind,
+2 runs), errors per hour. E36pl is audited on a copy shifted to the English timing (-941 ms,
+`audits_pl_synced.sh`); a first pair of audits without the shift attached the neighbour English line to some cues
+(2.38 targeted, 1.19 / 13.32 meaning), with the same conclusion:
+
+| arm | run 1 | run 2 | mean |
+|---|---|---|---|
+| E34 | 4.32 | 5.76 | 5.04 |
+| E35 | 2.88 | 2.88 | 2.88 |
+| **E36a** | 1.44 | 1.92 | **1.68** |
+| E36pl | 2.38 | 1.90 | 2.14 |
+
+E36a fixed 137, 231, 341, 841 and 1025 (the E35 misses). Wrong changes from map errors: E36a 388 (Pam greets Millie,
+the map swapped the speaker, now «πώς τα πάτε»); E36pl 333 and 1038 (auth on the wrong cue: «Πάρτε τη Σίσι»,
+«φέρτε»). The final scene (Millie at a job interview with a stranger, 1972-1985 in E36a) is V by the map's auth;
+the opening interview with Nina (3, 135) is T by the pair rule.
+
+**Meaning audit** (`e34/audit.py`, Sonnet + sol confirms, 2 runs), serious confirmed / noticeable per hour:
+
+| arm | run 1 | run 2 | mean |
+|---|---|---|---|
+| E35 | 0.48 / 6.72 | 0.48 / 5.76 | **0.48 / 6.24** |
+| E36pl | 1.90 / 13.32 | 0.95 / 13.79 | 1.43 / 13.56 |
+
+Confirmed serious E36pl errors in the synced runs: 5 cues. Three come from the Polish subtitle itself, which Gemini
+rendered faithfully: 791 «Wiem, że nie jestem idealna» ("I know you think I can do better"), 327 «I ogarniaj życie»
+(keep the living arrangement -> «στρώσε τη ζωή σου»), 1069 «Nie jestem pewien» (not in the English). One is
+Gemini's: 1206 «zmusiłam» (forced) -> «πλήρωσα» (English "blackmailed"). One is the pot/teapot pun (1423), lost in E35
+too. The unsynced runs also had 504 «cel» ("theme idea") and 1177 «się naćpałam» ("I drugged my baby"), both from
+the Polish text.
+
+**Structure** (`stats36.py`):
+
+| file | cues | characters | median CPS | CPS > 17 | CPS > 20 |
+|---|---|---|---|---|---|
+| English source | 1985 | 53162 | 13.6 | 25.4 % | 10.9 % |
+| Polish source | 1654 | 41898 | 11.4 | 7.2 % | 0.5 % |
+| E35 | 1985 | 51620 | 12.8 | 24.3 % | 11.7 % |
+| E36pl | 1654 | 43804 | 12.0 | **12.4 %** | **3.1 %** |
+
+**Blind A/B by 30 s window, E35 vs E36pl** (`ab36.py`, Opus medium, 227 windows that differ, all judged; 2 more
+windows have text on one side only and are not judged; Polish timing shifted -941 ms; the judge sees text, not
+times):
+with the English lines shown, **E35 201, E36pl 11, equal 15**; without any source (naturalness, consistency,
+readability only), **E36pl 98, E35 85, equal 44**. A judge with English favours the version made from it, so the
+first number overstates the gap, but the meaning audit agrees that E36pl loses content: the Polish translator cut
+or changed lines («Um, hey. Hi.» gone; "No, I can't have you do that" -> «Δεν μπορείς να το κάνεις αυτό»).
+
+Verdict: keep the εσύ rule (E36a: 1.68 per hour, best so far, 10 edits on E35). Translating from the Polish subtitle
+halves the fast cues (CPS > 17: 24 % -> 12 %) and reads as natural as E35, but triples the serious and doubles the
+noticeable meaning errors (1.43 / 13.56 vs 0.48 / 6.24), mostly errors of the Polish subtitle. Next: Polish (or another short professional track) as the base, plus one check per
+cue against the English line that restores only lost or changed meaning, as Harold proposed.
