@@ -14,19 +14,28 @@ One row per speaker turn of the base track (Polish for Housemaid). Columns:
 | column | source |
 |---|---|
 | id, start, end | base track (`412`, or `412.1` / `412.2` for the turns of a dash cue) |
-| block | set when another track forces several base cues together (n:1, m:n); translate the block as one unit |
+| block | set when English forces several base cues together (n:1, m:n) and no turn window resolves them; translate the block as one unit |
 | speaker | diarization + SDH names (`speakers.json`) |
+| speaker_check | `2 voices?` when the base row is one turn but a track has a dash dialogue there, or two rows with the same speaker take two turns of one track dash cue |
 | addressee, scene | prep step (below), later |
 | pl, en, es, sdh, ... | every track, re-timed to the base (`sync_track`) and grouped by overlap (`align_groups`) |
 | `<lang>_kind` | 1:1, 1:n, n:1, m:n, none |
+| `<lang>_turns` | paired, merged, window, mismatch (see rules) |
 | el | the Greek translation |
 | glossary options | the phrasebank / glossary alternatives for that row, for the corrector and later for Harold |
 
 Rules:
 - 1:n needs no merge. The track text joins in the row.
-- n:1 and m:n make a block. Nothing (no LLM) cleans the block: it stays a larger unit.
-- Dash cues split into turns. A track's turns pair one-to-one only when the counts match. Otherwise the row
-  holds the whole track text and is marked `mismatch`.
+- Dash cues split into turns. Turns pair one-to-one (`turn_windows` in `pipeline/align.py`, code only):
+  - `paired`: inside the cue's own group, the counts match.
+  - `merged`: an n:1 / m:n group whose turn counts match (e.g. `Tak. Millie.` + `Cześć.` <-> `-Yes. Hi, I'm Millie. -Hi.`).
+    The group needs no block.
+  - `window`: the group joined with one neighbour group (max 3 base cues), when turns cross cue boundaries
+    (1279/1280). At most two groups; the group alone first, then its neighbours. Only with a dash in the window;
+  every pair within 3x length (min 8 chars).
+  - `mismatch`: none of these; the row holds the whole track text.
+- n:1 and m:n that no window resolves make a block, but only from English. Spanish and SDH never merge base cues;
+  their text stays in the row as help.
 
 ## Pipeline on the table
 
@@ -74,5 +83,34 @@ What this shows:
   cue has another number of turns (1:n 50, 1:1 34: one side has a dash the other lacks), or the cue sits in a
   multi-cue group (m:n 8, n:1 2). These rows keep the whole track text and the `mismatch` mark; the split step
   must not depend on them.
+
+## Step 1b: turn windows, English-only blocks, speaker check (2026-10-24)
+
+Same data, three changes (Harold chose all three after the before / after page):
+
+| measure | step 1 | step 1b |
+|---|---|---|
+| base cues in a block | 208 (101 x 2, 2 x 3) | 40 (20 x 2) |
+| rows with a `mismatch` in some track | 88 | 68 |
+| dash cues unpaired in some track | 44 | 34 |
+| dash cues paired: en / es / sdh | 74 / 76 / 71 | 82 / 84 / 79 |
+| cues resolved by `merged`: en / es / sdh | - | 22 / 26 / 22 |
+| cues resolved by `window`: en / es / sdh | - | 13 / 14 / 15 |
+| rows with `speaker_check` | - | 133 |
+
+Checks by reading:
+- `merged` rows read right in a sample of 26 (46/47, 348/349, 875/876).
+- `window` rows: English 19 of 20 right. Wrong: 498.2 `Dziewięć miesięcy.` <-> `I mean, good Lord,` (English
+  moves the phrase to the next cue; Spanish pairs right). Spanish 17 of 20: 740-742 shift, because Spanish
+  condenses the lines (`Entiendo.` <-> `robiąc nudne rzeczy.`).
+- Windows of three groups (Codex review) paired by chance in both cases on Housemaid (es 1090-1092 `Umówię
+  kolejną wizytę.` <-> `Perdón.`, sdh 81-83), and one took 1277-1279 before the right 1279/1280 window. They stay
+  out.
+- The first version had no dash and no length rule: 35 English windows, with shifts on plain sentence splits
+  (938/939) and `Nie.` <-> `because I haven't gotten laid in ten years?` (322/323). Both rules removed them.
+- `speaker_check` is a prompt to look, not an error. Often the second voice is a short reply that Polish drops
+  (`Wygląda fantastycznie.` vs `-This looks fantastic. -Yes.`), so the speaker is right. The prep session decides
+  per row. 348/349 (`Tak. Millie.` + `Cześć.`): `merged` pairs them with the two turns of `-Yes. Hi, I'm Millie.
+  -Hi.`, both rows say Millie, so both get the flag (CodeRabbit).
 
 Next: the metadata step (TMDB + Wikipedia) and the prep agent session on this table.

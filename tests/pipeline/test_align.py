@@ -6,6 +6,7 @@ from subtitlekit.pipeline.align import (
     split_turns,
     sync_track,
     turn_pairs,
+    turn_windows,
 )
 from subtitlekit.pipeline.srt import Cue
 
@@ -264,3 +265,84 @@ def test_other_languages_turns_keeps_whole_text_after_a_trailing_ellipsis(tmp_pa
     con = build_db(str(tmp_path / "z5.db"), "eng", ref, {"spa": spa})
     assert other_languages(con, 0, turns=True) == other_languages(con, 0)
     con.close()
+
+
+def _win(ref, track, **kw):
+    return turn_windows(ref, track, align_groups(ref, track), **kw)
+
+
+def test_turn_windows_pairs_turns_that_cross_cue_boundaries():
+    ref = [C(1, 0, 2000, "-Otwórz.\n-Nie mogę."), C(2, 3000, 5000, "-Czemu?\n-Otworzę.")]
+    track = [C(1, 0, 2000, "Open the door."), C(2, 3000, 5000, "-I can't.\n-Why not?\n-I will.")]
+    assert _win(ref, track) == [((0, 1), [("Otwórz.", "Open the door."), ("Nie mogę.", "I can't."),
+                                          ("Czemu?", "Why not?"), ("Otworzę.", "I will.")])]
+
+
+def test_turn_windows_resolves_a_merged_group_with_equal_turn_counts():
+    ref = [C(1, 0, 2000, "Tak. Cześć."), C(2, 2500, 4500, "Cześć.")]
+    track = [C(1, 0, 4500, "-Yes. Hi.\n-Hi.")]
+    assert _win(ref, track) == [((0, 1), [("Tak. Cześć.", "Yes. Hi."), ("Cześć.", "Hi.")])]
+
+
+def test_turn_windows_leaves_unpairable_groups_out():
+    ref = [C(1, 0, 2000, "-A.\n-B."), C(2, 3000, 5000, "C.")]
+    track = [C(1, 0, 2000, "X."), C(2, 3000, 5000, "Y.")]
+    assert _win(ref, track) == []
+
+
+def test_turn_windows_ignores_groups_that_already_pair():
+    ref = [C(1, 0, 2000, "A."), C(2, 3000, 5000, "-B.\n-C.")]
+    track = [C(1, 0, 2000, "X."), C(2, 3000, 5000, "-Y.\n-Z.")]
+    assert _win(ref, track) == []
+
+
+def test_turn_windows_does_not_cross_a_cue_with_no_track_text():
+    ref = [C(1, 0, 2000, "-A.\n-B."), C(2, 3000, 5000, "C."), C(3, 6000, 8000, "D.")]
+    track = [C(1, 0, 2000, "X."), C(2, 6000, 8000, "-Y.\n-Z.")]
+    assert _win(ref, track) == []
+
+
+def test_turn_windows_respects_max_ref():
+    ref = [C(i + 1, i * 3000, i * 3000 + 2000, "-A.\n-B.") for i in range(2)]
+    track = [C(1, 0, 2000, "X."), C(2, 3000, 5000, "-Y.\n-Z.\n-W.")]
+    assert _win(ref, track, max_ref=1) == []
+    assert _win(ref, track, max_ref=2)[0][0] == (0, 1)
+
+
+
+def test_turn_windows_needs_a_dash_to_join_neighbour_groups():
+    # sentences cut at different points, no dialogue: counts match by chance, but it is not a turn shift
+    ref = [C(1, 0, 2000, "I will bring her back here,"), C(2, 3000, 5000, "so she is safe."),
+           C(3, 6000, 8000, "I will look for her.")]
+    track = [C(1, 0, 1000, "I'm gonna get"), C(2, 1100, 2000, "her back here,"),
+             C(3, 3000, 8000, "make sure she's safe.")]
+    assert _win(ref, track) == []
+
+
+def test_turn_windows_rejects_pairs_with_very_different_length():
+    ref = [C(1, 0, 2000, "-Tinder?\n-No."), C(2, 3000, 5000, "Ten years.")]
+    track = [C(1, 0, 2000, "If I know how Tinder works,"),
+             C(2, 3000, 5000, "-because I haven't been out in ten years?\n-Wow.")]
+    assert _win(ref, track) == []
+    # the same layout with similar lengths pairs
+    track = [C(1, 0, 2000, "Tinder?"), C(2, 3000, 5000, "-No.\n-Ten years.")]
+    assert _win(ref, track) == [((0, 1), [("Tinder?", "Tinder?"), ("No.", "No."), ("Ten years.", "Ten years.")])]
+
+
+def test_turn_windows_never_joins_three_groups():
+    # turn counts ref [2, 1, 1] vs track [1, 1, 2] would pair over three groups; on real data such windows
+    # paired by chance (Housemaid es 1090-1092, sdh 81-83), so they stay out
+    ref = [C(1, 0, 2000, "-Otwórz.\n-Nie mogę."), C(2, 3000, 5000, "Czemu?"), C(3, 6000, 8000, "Otworzę.")]
+    track = [C(1, 0, 2000, "Open it."), C(2, 3000, 5000, "I can't."), C(3, 6000, 8000, "-Why?\n-I will.")]
+    assert _win(ref, track) == []
+
+
+def test_turn_windows_prefers_smaller_windows_over_earlier_larger_ones():
+    # Housemaid 1277-1280: a 3-group window from 1277 pairs by chance and would shift 1279 by one turn
+    ref = [C(1, 0, 2000, "Millie."), C(2, 3000, 5000, "Please stop it."), C(3, 6000, 8000, "-Open.\n-I can't."),
+           C(4, 9000, 11000, "-Why?\n-I will.")]
+    track = [C(1, 0, 2000, "-Millie.\n-Ah!"), C(2, 3000, 5000, "Millie, please stop."),
+             C(3, 6000, 8000, "Open the door."), C(4, 9000, 10000, "-I can't do that.\n-Why not?"),
+             C(5, 10100, 11000, "I will.")]
+    assert _win(ref, track) == [((2, 3), [("Open.", "Open the door."), ("I can't.", "I can't do that."),
+                                          ("Why?", "Why not?"), ("I will.", "I will.")])]

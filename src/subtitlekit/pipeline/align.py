@@ -119,6 +119,72 @@ def turn_pairs(ref_cues: Sequence[Cue], track_cues: Sequence[Cue]) -> Optional[L
     return list(zip(a, b))
 
 
+_PAIR_MIN_CHARS = 8
+_PAIR_MAX_RATIO = 3
+
+
+def turn_windows(
+    ref: Sequence[Cue], track: Sequence[Cue], groups: Sequence[Group], max_ref: int = 3
+) -> List[Tuple[Tuple[int, ...], List[Tuple[str, str]]]]:
+    """Turn pairs for groups whose own turns do not pair one-to-one. A group needs a window when it has
+    several ref cues, or one ref cue whose turn count differs from its track cues'. The window is the
+    group alone (equal counts) or the group joined with neighbour groups whose turns then pair
+    one-to-one in time order (at most two groups; the group alone is tried first). A window joining
+    several groups must hold a cue with at least two turns, so a dash marks the turn shift. A window is rejected when a paired turn is more than
+    ``_PAIR_MAX_RATIO`` times longer than the other, measured against at least ``_PAIR_MIN_CHARS``.
+    Returns (ref positions, pairs) per window."""
+    gs = [g for g in groups if g.ref]
+    used: set = set()
+
+    def pair(window: Sequence[Group]) -> Optional[List[Tuple[str, str]]]:
+        r = [ref[i] for i in sorted(p for g in window for p in g.ref)]
+        t = [track[j] for j in sorted(p for g in window for p in g.track)]
+        return turn_pairs(r, t)
+
+    def needs(g: Group) -> bool:
+        if not g.track:
+            return False
+        return len(g.ref) > 1 or pair([g]) is None
+
+    def valid(cand: List[int]) -> Optional[List[Tuple[str, str]]]:
+        if any(i < 0 or i >= len(gs) or not gs[i].track or i in used for i in cand):
+            return None
+        if sum(len(gs[i].ref) for i in cand) > max_ref:
+            return None
+        pairs = pair([gs[i] for i in cand])
+        if pairs is None:
+            return None
+        if len(cand) > 1:
+            cues = [ref[p] for i in cand for p in gs[i].ref] + [track[j] for i in cand for j in gs[i].track]
+            if not any(len(split_turns(c.text)) >= 2 for c in cues):
+                return None
+        if any(max(len(a), len(b)) / max(min(len(a), len(b)), _PAIR_MIN_CHARS) > _PAIR_MAX_RATIO
+               for a, b in pairs):
+            return None
+        return pairs
+
+    # Smaller windows first, over all groups: a larger window that pairs by chance must not take a group
+    # that a smaller window pairs.
+    # No three-group windows: on Housemaid both that appeared paired by chance (es 1090-1092, sdh 81-83).
+    sizes = [[(0,)], [(0, 1), (-1, 0)]]
+    out: List[Tuple[Tuple[int, ...], List[Tuple[str, str]]]] = []
+    for shapes in sizes:
+        for k, g in enumerate(gs):
+            if not needs(g) or k in used:
+                continue
+            for shape in shapes:
+                cand = [k + d for d in shape]
+                if len(g.ref) == 1 and cand == [k]:
+                    continue
+                pairs = valid(cand)
+                if pairs is not None:
+                    out.append((tuple(sorted(p for i in cand for p in gs[i].ref)), pairs))
+                    used.update(cand)
+                    break
+    out.sort()
+    return out
+
+
 def _same_starts(track: Sequence[Cue], ref: Sequence[Cue], tol_ms: int = 120) -> float:
     """Share of track cues that start within ``tol_ms`` of some reference cue."""
     starts = sorted(c.start_ms for c in ref)
