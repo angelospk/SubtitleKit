@@ -12,8 +12,11 @@ A "block" is the union of base cues that a BLOCK_FROM track (English) forces tog
 window resolves. Other tracks never merge base cues; their text stays in the row as help.
 Turns: the base cue splits into turns. A track's turns pair one-to-one when the counts match inside the group, or
 inside a window of neighbour groups (turn_windows: turns that cross cue boundaries, merged groups with equal counts).
+A group alone may leave out short extra track turns ("Yeah.") that the base drops ("skip"). A help track's
+window or skip counts only where English does the same on that cue.
 Rows that still do not pair keep the whole track text and the mark "mismatch".
-speaker_check: a one-turn base row whose track text is a dash dialogue (two voices in one base line), or two rows
+speaker_check: a one-turn base row whose track text is a dash dialogue (two voices in one base line; also when "skip"
+left the other voice out), or two rows
 with the same speaker that a turn window pairs with two turns of one track dash cue (two voices, one speaker).
 
 Usage: build_table.py  -> ~/pipeline-demo/eval/table/housemaid/{table.json,table.tsv,stats.json}
@@ -22,7 +25,7 @@ import json
 import os
 from collections import Counter
 
-from subtitlekit.pipeline.align import align_groups, split_turns, sync_track, turn_windows
+from subtitlekit.pipeline.align import align_groups, split_turns, sync_track, turn_skip_index, turn_windows
 from subtitlekit.pipeline.srt import load_srt, visible_text
 
 E = os.path.expanduser("~/pipeline-demo/eval")
@@ -82,12 +85,17 @@ def main():
         win = {}   # base pos -> (track text per turn, window ref positions, source dash track cue per turn or None)
         for refs, pairs in turn_windows(base, track, groups):
             js = sorted({j for p in refs for j in gmap[p].track})
-            src = [j if len(split_turns(track[j].text)) > 1 else None for j in js for _ in split_turns(track[j].text)]
+            tsrc = [j if len(split_turns(track[j].text)) > 1 else None for j in js for _ in split_turns(track[j].text)]
+            skipped = len(pairs) < len(tsrc)
+            # the source dash cue of each pair, by position (texts can repeat: "-Yes." left out, "Yes." kept)
+            keep = (turn_skip_index([base[p] for p in refs], [track[j] for j in js]) if skipped
+                    else range(len(pairs)))
+            src = [tsrc[k] for k in keep]
             i = 0
             for p in refs:
                 n = len(split_turns(base[p].text))
                 # a cue with no visible turn (tags only) gets no track text, not the whole dialogue
-                win[p] = ([b for _, b in pairs[i:i + n]] or [""], refs, src[i:i + n] or [None])
+                win[p] = ([b for _, b in pairs[i:i + n]] or [""], refs, src[i:i + n] or [None], skipped)
                 i += n
         for g in groups:
             if not g.ref:
@@ -103,7 +111,16 @@ def main():
                            "dash": any(len(split_turns(c.text)) > 1 for c in tcues)}
                 if p in win:
                     cell[p]["win"], cell[p]["src"] = win[p][0], win[p][2]
-                    cell[p]["how"] = "merged" if set(win[p][1]) == set(g.ref) else "window"
+                    cell[p]["how"] = ("window" if set(win[p][1]) != set(g.ref)
+                                      else "skip" if win[p][3] else "merged")
+    # A window or skip in a help track (es, sdh) counts only where English does the same there. Spanish condenses
+    # lines, so on its own it pairs by chance (740-742, 386, 501; 90 took a sign); the row keeps the group text.
+    for lang in per:
+        if lang in BLOCK_FROM:
+            continue
+        for p, x in per[lang].items():
+            if x.get("how") in ("window", "skip") and per.get("en", {}).get(p, {}).get("how") != x["how"]:
+                del x["win"], x["src"], x["how"]
     blk = blocks(len(base), merges)
     size = Counter(blk)
 
@@ -136,8 +153,10 @@ def main():
                     row[f"{lang}_turns"] = "paired" if paired else "mismatch"
                 else:
                     row[lang] = x["text"]
-            if len(turns) == 1 and any(per[l].get(p, {}).get("kind") in ("1:1", "1:n") and per[l][p]["dash"]
-                                       and "win" not in per[l][p] for l in per):
+            # a skip left a voice out, in any group kind; otherwise a dash dialogue over this one cue
+            if len(turns) == 1 and any(per[l].get(p, {}).get("how") == "skip" or (
+                    per[l].get(p, {}).get("kind") in ("1:1", "1:n") and per[l][p]["dash"]
+                    and "how" not in per[l][p]) for l in per):
                 row["speaker_check"] = "2 voices?"
             row["el"] = ""
             rows.append(row)
@@ -176,6 +195,7 @@ def main():
              "dash_unpaired_any": sum(any(not paired(l, p) for l in per) for p in dash),
              "window_cues": {l: sum(per[l][p].get("how") == "window" for p in per[l]) for l in per},
              "merged_resolved": {l: sum(per[l][p].get("how") == "merged" for p in per[l]) for l in per},
+             "skip_cues": {l: sum(per[l][p].get("how") == "skip" for p in per[l]) for l in per},
              "mismatch_rows": sum(any(r.get(f"{l}_turns") == "mismatch" for l in per) for r in rows),
              "speaker_check_rows": sum("speaker_check" in r for r in rows),
              "speaker_rows": sum(r["speaker"] not in (None, "none") for r in rows)}

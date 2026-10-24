@@ -6,6 +6,8 @@ from subtitlekit.pipeline.align import (
     split_turns,
     sync_track,
     turn_pairs,
+    turn_pairs_skip,
+    turn_skip_index,
     turn_windows,
 )
 from subtitlekit.pipeline.srt import Cue
@@ -305,9 +307,8 @@ def test_turn_windows_does_not_cross_a_cue_with_no_track_text():
 def test_turn_windows_respects_max_ref():
     ref = [C(i + 1, i * 3000, i * 3000 + 2000, "-A.\n-B.") for i in range(2)]
     track = [C(1, 0, 2000, "X."), C(2, 3000, 5000, "-Y.\n-Z.\n-W.")]
-    assert _win(ref, track, max_ref=1) == []
+    assert not any(len(r) > 1 for r, _ in _win(ref, track, max_ref=1))
     assert _win(ref, track, max_ref=2)[0][0] == (0, 1)
-
 
 
 def test_turn_windows_needs_a_dash_to_join_neighbour_groups():
@@ -346,3 +347,63 @@ def test_turn_windows_prefers_smaller_windows_over_earlier_larger_ones():
              C(5, 10100, 11000, "I will.")]
     assert _win(ref, track) == [((2, 3), [("Open.", "Open the door."), ("I can't.", "I can't do that."),
                                           ("Why?", "Why not?"), ("I will.", "I will.")])]
+
+
+def test_turn_pairs_skip_drops_a_short_extra_reply():
+    ref = [C(1, 0, 2000, "-Nie, to wszystko.\n-Świetnie.")]
+    track = [C(1, 0, 2000, "-Oh, no, this is it.\n-Great. Wow.\n-Yeah.")]
+    assert turn_pairs_skip(ref, track) == [("Nie, to wszystko.", "Oh, no, this is it."), ("Świetnie.", "Great. Wow.")]
+
+
+def test_turn_pairs_skip_picks_the_short_turn_that_fits_by_length():
+    ref = [C(1, 0, 2000, "-O Boże, Nina! Jesteś w ciąży!\n-Wiedziałam.")]
+    track = [C(1, 0, 2000, "-Oh, my God, Nina! You're pregnant.\n-Nina.\n-I knew it.")]
+    assert turn_pairs_skip(ref, track) == [("O Boże, Nina! Jesteś w ciąży!", "Oh, my God, Nina! You're pregnant."),
+                                           ("Wiedziałam.", "I knew it.")]
+
+
+def test_turn_pairs_skip_never_drops_a_long_turn():
+    ref = [C(1, 0, 2000, "-Where were you all night?\n-At work.")]
+    track = [C(1, 0, 2000, "-Where were you all night?\n-I was at work, I swear to you.\n-At the office, really.")]
+    assert turn_pairs_skip(ref, track) is None
+
+
+def test_turn_pairs_skip_needs_more_track_turns():
+    ref = [C(1, 0, 2000, "-Naprawdę.\n-Ja też.")]
+    assert turn_pairs_skip(ref, [C(1, 0, 2000, "Me too.")]) is None
+    same = [C(1, 0, 2000, "-Really.\n-Me too.")]
+    assert turn_pairs_skip(ref, same) == turn_pairs(ref, same)
+
+
+def test_turn_windows_uses_skip_pairing_for_one_group():
+    ref = [C(1, 0, 2000, "-Nie, to wszystko.\n-Świetnie."), C(2, 3000, 5000, "Dobrze.")]
+    track = [C(1, 0, 2000, "-Oh, no, this is it.\n-Great. Wow.\n-Yeah."), C(2, 3000, 5000, "Good.")]
+    assert _win(ref, track) == [((0,), [("Nie, to wszystko.", "Oh, no, this is it."), ("Świetnie.", "Great. Wow.")])]
+
+
+def test_turn_pairs_skip_leaves_out_only_dash_turns():
+    # two plain cues of one sentence are not two replies
+    ref = [C(1, 0, 2000, "I will bring her back here.")]
+    track = [C(1, 0, 1000, "I'm gonna get"), C(2, 1100, 2000, "her back here.")]
+    assert turn_pairs_skip(ref, track) is None
+
+
+
+def test_turn_pairs_skip_needs_two_base_turns():
+    # one Polish turn under a dash dialogue: length cannot tell which voice it is (Housemaid 917, 1611)
+    ref = [C(1, 0, 2000, "Co?")]
+    track = [C(1, 0, 2000, "-I can't sit here\n-What?")]
+    assert turn_pairs_skip(ref, track) is None
+
+
+
+def test_turn_skip_index_gives_positions_not_texts():
+    # the left-out "Yes." of the dash cue and the kept plain "Yes." have the same text
+    ref = [C(1, 0, 2000, "-Tak.\n-Pa.")]
+    track = [C(1, 0, 1000, "-Yes.\n-Bye."), C(2, 1100, 2000, "Yes."), C(3, 2100, 2500, "Bye.")]
+    assert turn_skip_index(ref, track) == [2, 3]   # plain cues are never left out; matching by text gives 0, 1
+    track = [C(1, 0, 1000, "-Yes.\n-Bye.\n-Yes.")]
+    assert turn_skip_index(ref, track) == [0, 1]
+    ref = [C(1, 0, 2000, "-Tak, jasne.\n-Pa.")]
+    track = [C(1, 0, 1000, "-Hm.\n-Yes, sure.\n-Bye.")]
+    assert turn_skip_index(ref, track) == [1, 2]

@@ -113,4 +113,63 @@ Checks by reading:
   per row. 348/349 (`Tak. Millie.` + `Cześć.`): `merged` pairs them with the two turns of `-Yes. Hi, I'm Millie.
   -Hi.`, both rows say Millie, so both get the flag (CodeRabbit).
 
-Next: the metadata step (TMDB + Wikipedia) and the prep agent session on this table.
+## Step 1c: skip short replies, English gate for help tracks (2026-10-25)
+
+Harold's principle: Polish is the base. The other tracks only add context or catch a meaning that Polish loses;
+small English-only replies ("Yeah", "Hi") do not matter.
+
+- `turn_skip_index` / `turn_pairs_skip` (`pipeline/align.py`): a group alone may leave out short extra track turns
+  (only turns of a dash dialogue, at most 3 words and 15 chars, chosen by length with a small DP). Only when the
+  base has 2+ turns: with one Polish turn, length cannot tell which voice it is (first try: about 10 of 63 rows
+  wrong, e.g. 917 `Co?` <-> `I can't sit here`). Runs after the strict windows, so it never takes their groups.
+  Label `skip`.
+- Help tracks (es, sdh) keep a `window` or `skip` only where English does the same on that cue. Alone, Spanish
+  paired by chance (740-742, 386, 501; 90.2 took the sign `SE BUSCA EMPLEADO`). The row keeps the group text.
+- `speaker_check` stays on `skip` rows: a left-out turn is another voice.
+
+| measure | step 1b | step 1c |
+|---|---|---|
+| base cues in a block | 40 | 38 |
+| rows with a `mismatch` in some track | 68 | 56 |
+| dash cues paired: en / es / sdh | 82 / 84 / 79 | 91 / 89 / 86 |
+| English `skip` cues | - | 11 (1 doubtful: 1098 `Teraz?` <-> `Yeah.`) |
+| rows with `speaker_check` | 133 | 130 |
+
+## Step 2: metadata (code)
+
+`metadata.py <tmdb id> <wikipedia title> <out>`: TMDB movie + credits (cast as character -> gender of the actor),
+the Wikipedia Plot section. Housemaid: TMDB 1368166, 32 characters, plot 3914 chars. Token from
+`~/.config/tmdb/.env`, never printed or stored.
+
+## Step 3: trial prep session (Sonnet 5.5, one session, about 8 minutes)
+
+Input: `prep_input.py` (metadata + every row: id, time, diarized speaker, flag, Polish, English; 167 KB; built
+before the last review fix, so 2 cues show `[merged]` where the table now says `[skip]`). Brief:
+`prep_prompt.md`. Output in `~/pipeline-demo/eval/table/housemaid/prep/`: rows.tsv (speaker, addressee, form,
+note for all 1759 rows), characters, clusters, 64 scenes, glossary (19 names, 22 terms, 24 idioms), notes.
+
+| measure | value |
+|---|---|
+| rows unchanged from diarization | 1295 |
+| unknown_NN / none -> named speaker | 284 (no `?` left) |
+| named -> other named | 151 |
+| -> on-screen text (`-`) | 29 |
+| form: εσύ / εσείς-πλ / εσείς-ευγ / - | 1529 / 68 / 52 / 110 |
+| group addressee without plural, or form without addressee | 0 |
+
+Checks by reading:
+- 30 random speaker changes with two rows of context: all plausible, about 27 clearly right (365, 378.2, 1041 not
+  sure).
+- Known cases: 2 `Witaj, Millie!` -> Nina; 345 `Kogo szukasz?` and 349 `Cześć.` -> Patrice (the school mom);
+  1279/1280 alternate Millie / Andrew.
+- The notes catch what a translator needs: the twist (Andrew is the abuser; Nina's first-half hostility is staged),
+  Nina's letter to Cece as voice-over (1013-1276), Barry Lyndon on TV (1471-1485), the mantra "X is a privilege"
+  (254, 552, 1110, 1295, 1625-1628) with one Greek wording.
+- εσείς-ευγ goes to Pam (parole officer, 15), police (13), cashier and hotel clerk, and Nina -> Mrs. Winchester at
+  the funeral (14, "elderly relative at a formal moment"; the session itself flags it as a choice).
+- Clusters: unknown_00 Therapist, 01 Reverend, 04 Enzo, 06 Pam, 07 Officer Connors; 03, 09, 11, 12, 13 mix voices.
+
+Not measured: addressee accuracy beyond the sample, and whether the prep output makes the Greek better. That needs
+the translation step on this table.
+
+Next: translate the table with Gemini (step 4) using the prep notes per row, and compare with E38.

@@ -10,6 +10,7 @@ be paired one-to-one when both sides use the same dash convention.
 from __future__ import annotations
 
 import bisect
+import math
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -119,6 +120,58 @@ def turn_pairs(ref_cues: Sequence[Cue], track_cues: Sequence[Cue]) -> Optional[L
     return list(zip(a, b))
 
 
+_SKIP_MAX_CHARS = 15
+
+
+def turn_skip_index(ref_cues: Sequence[Cue], track_cues: Sequence[Cue]) -> Optional[List[int]]:
+    """Positions of the track turns that pair with the ref turns, one per ref turn, in order, leaving out short
+    extra track turns (a reply such as "Yeah." that the base track drops). Only a turn of a dash dialogue cue is
+    left out, never a piece of a plain sentence, and only when the base has two or more turns. None when the
+    track has fewer turns than the ref, or an extra turn is not short."""
+    a = [t for c in ref_cues for t in split_turns(c.text)]
+    tb = [(t, len(split_turns(c.text)) > 1) for c in track_cues for t in split_turns(c.text)]
+    b = [t for t, _ in tb]
+    if not a or len(b) < len(a):
+        return None
+    if len(b) == len(a):
+        return list(range(len(a)))
+    if len(a) < 2:
+        return None   # one base turn: length cannot tell which voice it is
+    short = [dash and len(t.split()) <= 3 and len(t) <= _SKIP_MAX_CHARS for t, dash in tb]
+    inf = float("inf")
+
+    def cost(i: int, j: int) -> float:
+        return abs(math.log(max(len(a[i]), 1) / max(len(b[j]), 1)))
+
+    # best[i][j]: least cost to align a[i:] with b[j:]; on equal cost, matching now (leaving out later turns) wins
+    best = [[inf] * (len(b) + 1) for _ in range(len(a) + 1)]
+    best[len(a)][len(b)] = 0.0
+    for j in range(len(b) - 1, -1, -1):
+        best[len(a)][j] = best[len(a)][j + 1] if short[j] else inf
+    for i in range(len(a) - 1, -1, -1):
+        for j in range(len(b) - 1, -1, -1):
+            best[i][j] = min(cost(i, j) + best[i + 1][j + 1], best[i][j + 1] if short[j] else inf)
+    if best[0][0] == inf:
+        return None
+    keep, i, j = [], 0, 0
+    while i < len(a):
+        if cost(i, j) + best[i + 1][j + 1] <= best[i][j]:
+            keep.append(j)
+            i += 1
+        j += 1
+    return keep
+
+
+def turn_pairs_skip(ref_cues: Sequence[Cue], track_cues: Sequence[Cue]) -> Optional[List[Tuple[str, str]]]:
+    """Pair turns one-to-one in order, leaving out short extra track turns (see turn_skip_index)."""
+    keep = turn_skip_index(ref_cues, track_cues)
+    if keep is None:
+        return None
+    a = [t for c in ref_cues for t in split_turns(c.text)]
+    b = [t for c in track_cues for t in split_turns(c.text)]
+    return [(a[i], b[j]) for i, j in enumerate(keep)]
+
+
 _PAIR_MIN_CHARS = 8
 _PAIR_MAX_RATIO = 3
 
@@ -130,7 +183,8 @@ def turn_windows(
     several ref cues, or one ref cue whose turn count differs from its track cues'. The window is the
     group alone (equal counts) or the group joined with neighbour groups whose turns then pair
     one-to-one in time order (at most two groups; the group alone is tried first). A window joining
-    several groups must hold a cue with at least two turns, so a dash marks the turn shift. A window is rejected when a paired turn is more than
+    several groups must hold a cue with at least two turns, so a dash marks the turn shift. A group alone may
+    leave out short extra track turns (turn_pairs_skip). A window is rejected when a paired turn is more than
     ``_PAIR_MAX_RATIO`` times longer than the other, measured against at least ``_PAIR_MIN_CHARS``.
     Returns (ref positions, pairs) per window."""
     gs = [g for g in groups if g.ref]
@@ -146,12 +200,16 @@ def turn_windows(
             return False
         return len(g.ref) > 1 or pair([g]) is None
 
-    def valid(cand: List[int]) -> Optional[List[Tuple[str, str]]]:
+    def valid(cand: List[int], skip: bool) -> Optional[List[Tuple[str, str]]]:
         if any(i < 0 or i >= len(gs) or not gs[i].track or i in used for i in cand):
             return None
         if sum(len(gs[i].ref) for i in cand) > max_ref:
             return None
-        pairs = pair([gs[i] for i in cand])
+        window = [gs[i] for i in cand]
+        if skip:
+            pairs = turn_pairs_skip([ref[p] for p in sorted(window[0].ref)], [track[j] for j in sorted(window[0].track)])
+        else:
+            pairs = pair(window)
         if pairs is None:
             return None
         if len(cand) > 1:
@@ -166,17 +224,18 @@ def turn_windows(
     # Smaller windows first, over all groups: a larger window that pairs by chance must not take a group
     # that a smaller window pairs.
     # No three-group windows: on Housemaid both that appeared paired by chance (es 1090-1092, sdh 81-83).
-    sizes = [[(0,)], [(0, 1), (-1, 0)]]
+    # Leaving out short turns comes last, so it never takes a group that a strict window pairs.
+    sizes = [[((0,), False)], [((0, 1), False), ((-1, 0), False)], [((0,), True)]]
     out: List[Tuple[Tuple[int, ...], List[Tuple[str, str]]]] = []
     for shapes in sizes:
         for k, g in enumerate(gs):
             if not needs(g) or k in used:
                 continue
-            for shape in shapes:
+            for shape, skip in shapes:
                 cand = [k + d for d in shape]
-                if len(g.ref) == 1 and cand == [k]:
-                    continue
-                pairs = valid(cand)
+                if cand == [k] and not skip and len(g.ref) == 1:
+                    continue   # a one-cue group alone only pairs by leaving out turns (last pass)
+                pairs = valid(cand, skip)
                 if pairs is not None:
                     out.append((tuple(sorted(p for i in cand for p in gs[i].ref)), pairs))
                     used.update(cand)
