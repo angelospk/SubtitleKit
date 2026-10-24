@@ -1112,3 +1112,15 @@ another film. Opus both flags (E38) and judges the A/B; sol both fixes and confi
 judgement yet. Open (review round 2): freeze the E38 prompts and run them on an unseen film, with a judge that
 neither flagged nor fixed. Doubtful, as in E37: the detective scene (1572-1583) is εσύ because the sheet lists only citizen ->
 police, and 713 «Σ' ευχαριστώ που ήρθες» (we -> I).
+
+## Source languages study (2026-10-24)
+
+Which subtitle languages can be the base or give signals when a release has no Polish track: measured on Euphoria
+S03E01 (33 tracks vs the professional Greek) and The Housemaid (19 tracks vs Harold's own Greek). Full tables, limits
+and a provisional strategy by available tracks: [LANGUAGES.md](LANGUAGES.md). Short: Polish, Slovenian, Croatian and
+Czech tracks are short in both films; Slavic and Romance tracks carry speaker and addressee gender, Hebrew the best
+addressee gender, Germanic / Finnic / Turkish tracks little; for εσείς, Romanian, Turkish, Spanish and Dutch are
+precise but miss many (Polish marks almost none), Czech and Serbian find more but over-mark, Russian and German over-mark heavily. Harold's own
+subtitle uses εσείς at job interviews, with strangers and with the detective, where the E38 sheet says εσύ; Polish
+«pani» and Spanish «Usted» agreed with him at 1572 and 1583, and the E38 rule check removed Gemini's εσείς there.
+Only the Polish route is tested; the other strategies need a translation run.
