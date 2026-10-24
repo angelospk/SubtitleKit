@@ -166,7 +166,9 @@ Checks by reading:
   Nina's letter to Cece as voice-over (1013-1276), Barry Lyndon on TV (1471-1485), the mantra "X is a privilege"
   (254, 552, 1110, 1295, 1625-1628) with one Greek wording.
 - εσείς-ευγ goes to Pam (parole officer, 15), police (13), cashier and hotel clerk, and Nina -> Mrs. Winchester at
-  the funeral (14, "elderly relative at a formal moment"; the session itself flags it as a choice).
+  the funeral (14, "elderly relative at a formal moment"; the session itself flags it as a choice). Harold
+  (2026-10-25): εσύ, as the Polish ty; a relative never gets εσείς. rows.tsv changed (14 rows) and the brief's rule
+  updated.
 - Clusters: unknown_00 Therapist, 01 Reverend, 04 Enzo, 06 Pam, 07 Officer Connors; 03, 09, 11, 12, 13 mix voices.
 
 Not measured: addressee accuracy beyond the sample, and whether the prep output makes the Greek better. That needs

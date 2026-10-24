@@ -35,7 +35,8 @@ OUTPUT: write these files in `~/pipeline-demo/eval/table/housemaid/prep/` (UTF-8
      (polite), or `-` when the line has no addressee. RULE (Harold's, fixed): to ONE person always `εσύ`, also in
      greetings, thanks and imperatives, also employer <-> housemaid, also when Polish says pan/pani; `εσείς-ευγ`
      only to a public or official role (police, parole officer, clerk, doctor in an official moment, a priest at a
-     funeral) or an elderly relative at a formal moment; `εσείς-πλ` only when several listen.
+     funeral); never to a relative, also not at a formal moment (Harold, 2026-10-25); `εσείς-πλ` only when several
+     listen.
    - note: empty, or a few English words when you changed the diarized speaker for a non-obvious reason, or when
      something is uncertain.
 2. `characters.json` — list of {"name", "gender" ("female"/"male"/"unknown"), "role" (one line), "polish_forms"
