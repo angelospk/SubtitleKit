@@ -832,3 +832,25 @@ cuts content or drifts in meaning; lx wins on tighter, more colloquial lines.
 
 Decision input: the lessons + ideas do not clearly lower audit errors and lose the blind A/B 132 to 207; the
 clear gain is the «κωλο-» swearing, which lesson 14 alone gives. Not adopted as is.
+
+## E34 result: Haiku check + turn-level other languages + phrasebank in the correction (2026-10-24)
+
+Input: the raw Gemini 4 Housemaid of E33 (`e33base`, 1985 cues), no new translation. All of Harold's ideas in one
+arm (`eval/e34/`): Haiku 5.5 checks the film in batches of 50 cues, each cue with its other-language lines at
+turn level (`other_languages(turns=True)`: por-amzn, fre-ts, bul-ts); it flagged 137 cues (unnatural 49, meaning
+39, number 36, gender 7, wordplay 6). Each flagged cue reaches sol (Harold's prompt, as `correct_e26.py`) with
+"check", "other" (136 cues) and up to 3 phrasebank expressions at distance < 0.40 (36 cues, live db 17,151
+expressions), plus lesson 14 («κωλο-») in the context note. sol applied 194 changes, 17 rejected, 12 reverted.
+Audits (`e34/audit.py`) add one note to the audit prompt: «κωλο-» compounds are wanted, never reported.
+Serious / noticeable per hour, Sonnet audits, sol confirms:
+
+| arm | audit 1 | audit 2 | mean |
+|---|---|---|---|
+| raw e33base (same note) | 0.96 / 10.07 | 0.96 / 10.55 | 0.96 / 10.31 |
+| E34 | 0.0 / 8.15 | 0.48 / 9.59 | **0.24 / 8.87** |
+
+With the «κωλο-» note the raw arm drops from 15.47 (E33) to 10.31 noticeable per hour: the judges counted a lot
+of swearing as errors. Blind A/B (Opus medium, `e34/ab.py`, 189 cues that differ): **E34 102, raw 64, equal 23**.
+Several audit items on E34 look wrong to a Greek reader («καύλας» for "hot", vocative «υπναρού», «έπρεπε να
+βλέπατε»); Harold reviews the list. Remaining real errors: εσύ/εσείς drift in one scene (930-947), «Ελεύθερες»
+for a man and a woman (1668), the lost pot/teapot pun (1746-1747).
