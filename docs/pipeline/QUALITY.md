@@ -1124,3 +1124,69 @@ precise but miss many (Polish marks almost none), Czech and Serbian find more bu
 subtitle uses εσείς at job interviews, with strangers and with the detective, where the E38 sheet says εσύ; Polish
 «pani» and Spanish «Usted» agreed with him at 1572 and 1583, and the E38 rule check removed Gemini's εσείς there.
 Only the Polish route is tested; the other strategies need a translation run.
+
+## E39 result: the E38 pipeline frozen on an unseen episode, Euphoria S03E01, vs the professional Greek (2026-10-24)
+
+The E38 pipeline ran with the same prompts, limits and code; only the film data changed (Polish track28, Spanish
+track10, English track3/SDH track4, character list from `human/euphoria-prompt-v2.txt`). The professional Greek
+track9 is used only for measurement and never in a translation or correction prompt. Scripts in `eval/e39/`
+(`run.sh pro|all|gem`), arms `e39pre` / `e39` in `e36/e36.py`. One logic change: `e39/speakers.py` also reads the
+SDH speaker tag "[Rue]" (Euphoria's SDH has no "RUE:"). Gemini 4 web translated the Polish in 2 chunks (1-294, 295-580).
+
+Speakers: 19 diarization clusters, 5 named from SDH tags (Rue x3, Nate, Mr. Miller); **14 clusters unknown, 295 of
+580 cues**. `alias_unknown` named **30** unknown speaker / addressee labels from the scene. The sheet gave 7 εσείς
+pairs (border officer <-> Rue / Faye, Rue > Clerk, Nate > Juana, Ali > Miss Marsha); vote: 4 εσείς cues; check:
+7 conflicts, 7 changed. Meaning guard: 33 flags, 21 fixed, 12 rejected by the length guard.
+
+Per-hour numbers below are count / track3 duration (3577.2 s, rounded at the end) for both sides, so E39 (Polish timing,
+ends 3610 s) and the professional track (ends 3578 s) share one denominator.
+
+| | professional (track9) | **E39** | E38 (Housemaid, for reference) |
+|---|---|---|---|
+| cues | 601 | 580 | 1654 |
+| CPS > 17 / > 20 | **5.2 % / 0.0 %** | 17.9 % / 8.4 % | 12.5 % / 3.0 % |
+| targeted gender/number/formality per hour (runs) | 2.01, 3.02 = 2.52 | **2.01, 0.00 = 1.01** | 0.95 |
+| meaning serious / noticeable per hour, run 1 | 3.02 / 17.11 | **1.01 / 6.04** | 0.95 / 7.61 |
+| meaning serious / noticeable per hour, run 2 | 5.03 / 11.07 | **1.01 / 4.03** | 0.48 / 5.23 |
+| meaning mean | 4.03 / 14.09 | **1.01 / 5.03** | 0.71 / 6.42 |
+
+Sources for CPS: English 34.7 % / 19.5 %, Polish 11.0 % / 4.3 %; E39 raw Gemini 17.4 % / 8.4 %, so Gemini lengthens
+the Polish on this film more than on Housemaid.
+
+Blind A/B by 30 s window with CPS shown (`ab39.py`, Opus medium, 104 windows):
+
+| judge sees | professional | E39 | equal |
+|---|---|---|---|
+| English + Greek | **66** | 23 | 15 |
+| Greek only | **58** | 33 | 13 |
+
+Verdict: **the professional track wins clearly**, although the audits count fewer errors in E39. The audits score
+against the English line by line (Sonnet + sol), so a free professional rendering counts as "noticeable" where the
+judge sees good Greek; the A/B judge sees whole scenes and reading speed, and E39 has 3.4x as many fast cues (> 17
+CPS) as the professional track. Housemaid had no professional reference (Harold's Greek is AI + light fix), so E38's
+A/B was against E36a, not a human; the E39 A/B is the first against professional work.
+
+Targeted errors: professional 323 «της Ντίλαν» (Dylan is male, both runs), 472 «σας» to one person (both runs),
+177 «φίλη» for Howard (run 2). E39 run 1: 96 and 209 only, the Housemaid 1572/1583 pattern (see below); run 2 none.
+The only confirmed serious meaning error in E39 is 28 «Πάρε τα φρέσκα, πατέρα» for "You know who gets it first, Dad"
+(both runs).
+
+Findings:
+
+1. Polish «pani / pana» -> εσύ again (as Housemaid 1572/1583, rule not changed). 209 Juana > Nate «Przepraszam
+   pana» (ES «señor Nate»): E39 «Με συγχωρείς, κύριε Νέιτ», a mixed register; the professional track avoids the
+   verb («Λυπάμαι πολύ, κ. Νέιτ»). Juana > Nate is not a sheet pair (only Nate > Juana), so the rule keeps εσύ.
+   96 border officer > Faye «Podobało się pani?» (ES «¿Te divertiste?»): E39 «Πέρασες ωραία;»; the professional
+   track also has εσύ («Διασκέδασες;»), so 96 is a doubtful audit hit, not a clear error.
+2. Missing source lines: the professional track has place captions («ΚΑΠΟΥ ΣΤΟ ΤΣΙΟΥΑΟΥΑ») and the translated
+   Spanish dialogue («Εμπρός! Σπρώξτε!»); the Polish WEB track has neither, so E39 has no such lines (580 vs 601
+   cues). Some A/B windows are lost on content the pipeline never saw; the main title shows as «EUPHORIA».
+3. Diarization: spkrun was not on the MacBook; it was rebuilt on the mini PC (CPU backend, about 15 min for the
+   episode), not CoreML as in E35. Euphoria's SDH has few speaker tags, so most clusters never reach the 2-vote /
+   55 % naming bar: half the cues have an unknown speaker, and `alias_unknown` does more of the work than on Housemaid.
+4. Gemini quota: the first Gemini run (18:48) hit an exhausted account quota (0/2400 Pro credits) and returned a
+   partial half; that output was deleted, and the full run was done after the reset (20:56).
+
+Limits: one episode; Opus judges the A/B and Opus flagged the meaning errors; sol fixes and confirms; no human
+judgement. Next, if wanted: an audit that does not use the English line by line (whole-scene, Greek-only), so the
+error counts and the A/B measure the same thing; and the forced / foreign-dialogue lines from the English track.

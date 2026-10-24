@@ -16,6 +16,7 @@ E = f"{H}/e36"
 OUT = f"{H}/out/The.Housemaid.2025.e36pl"
 SUBS = os.path.expanduser("~/media-in/housemaid/subs")
 V2 = f"{H}/human/housemaid-prompt-v2.txt"
+PARTS = 4  # chunks (E39 sets 2: ~400 cues per chunk, as here)
 
 V_OLD = "- Πληθυντικός ευγενείας σε αγνώστους, ανωτέρους και επίσημες περιστάσεις· ενικός σε φίλους, οικογένεια, συνομηλίκους."
 V_NEW = ("- Σε ΕΝΑ πρόσωπο γράφεις πάντα ενικό (εσύ), και στις προστακτικές, στους χαιρετισμούς και στις ευχαριστίες: "
@@ -61,8 +62,8 @@ def main():
         lines[c.index] = f"{c.index} | spk: {who or '?'}" + (f" | es: {es}" if es else "")
     con.close()
     cuts, w = [0], len(pl) * 6 // 100
-    for i in range(1, 4):
-        t = i * len(pl) // 4
+    for i in range(1, PARTS):
+        t = i * len(pl) // PARTS
         cuts.append(max(range(t - w, t + w), key=lambda j: pl[j].start_ms - pl[j - 1].end_ms))
     meta = []
     for n, (a, b) in enumerate(zip(cuts, cuts[1:] + [len(pl)]), 1):

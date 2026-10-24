@@ -46,6 +46,19 @@ ARMS = {
     "e38": {"src": f"{SUBS}/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt",
             "tracks": {"es": f"{SUBS}/es.WEB-ETHEL.srt"}, "speakers": f"{E}/out/{F}.e36pl/speakers.json",
             "out": f"{E}/out/{F}.e38", "sheet": f"{E}/e37/sheet.json", "alias": True},
+    # E39: the E38 pipeline frozen, on an unseen episode (Euphoria S03E01, all tracks WEB-ETHEL). e39pre runs the map
+    # before Gemini (the map reads PL + ES + speaker, not Greek: "el" is the Polish source as a placeholder) and its
+    # vote gives the pair counts for e39/cast.py; e39 is E38 on the Gemini output, with the e39pre map
+    "e39pre": {"src": f"{E}/e39/subs/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/e39/subs/pl.WEB-ETHEL.srt",
+               "tracks": {"es": f"{E}/e39/subs/es.WEB-ETHEL.srt"},
+               "speakers": f"{E}/out/Euphoria.S03E01.e39/speakers.json", "out": f"{E}/out/Euphoria.S03E01.e39pre",
+               "film": '"Euphoria" (season 3, episode 1, 2026)', "glossary": f"{E}/human/euphoria-prompt-v2.txt"},
+    "e39": {"src": f"{E}/e39/subs/pl.WEB-ETHEL.srt", "lang": "Polish",
+            "el": f"{E}/out/Euphoria.S03E01.e39_raw/Euphoria.S03E01.e39_raw.el.srt",
+            "tracks": {"es": f"{E}/e39/subs/es.WEB-ETHEL.srt"},
+            "speakers": f"{E}/out/Euphoria.S03E01.e39/speakers.json", "out": f"{E}/out/Euphoria.S03E01.e39",
+            "sheet": f"{E}/e39/sheet.json", "alias": True,
+            "film": '"Euphoria" (season 3, episode 1, 2026)', "glossary": f"{E}/human/euphoria-prompt-v2.txt"},
 }
 WIN, LEAD = 40, 12
 SONNET = {"backend": "claude", "claude_model": "claude-sonnet-5-5", "claude_effort": "medium", "timeout_s": 900,
@@ -88,10 +101,25 @@ def data():
     print(f"{len(cues)} cues; " + ", ".join(f"with {l} {sum(l in c for c in cues)}" for l in A["tracks"]))
 
 
-MAP_PROMPT = """You annotate who speaks to whom in the subtitles of the film "The Housemaid" (2025), so that a Greek
+# the film lines of MAP_PROMPT; an arm with "film" / "glossary" (E39) gets its own, the rest keep these
+HOUSEMAID_FILM = '"The Housemaid" (2025)'
+HOUSEMAID_CAST = """Main characters: Millie (f, the housemaid, on parole), Nina (f, the wife), Andrew (m, Nina's husband), Cece (f,
+their young daughter), Enzo (m, the gardener), Evelyn (f, Andrew's mother). Others appear by name in the dialogue."""
+
+
+def glossary_cast(path):
+    """The character line from the glossary of a prompt v2 file: "Name: note; ..." (as e37/cast.py)."""
+    text = open(path, encoding="utf-8").read()
+    i = text.index('{"terms"')
+    terms = json.loads(text[i:text.index("\n", i)])["terms"]
+    return ("Characters (glossary notes): " + "; ".join(f"{t['source']}: {t['note']}" for t in terms
+                                                        if t["kind"] == "name")
+            + ". Others appear by name in the dialogue.")
+
+
+MAP_PROMPT = """You annotate who speaks to whom in the subtitles of the film {film}, so that a Greek
 translation can be made consistent in gender, number and formality (εσύ vs εσείς).
-Main characters: Millie (f, the housemaid, on parole), Nina (f, the wife), Andrew (m, Nina's husband), Cece (f,
-their young daughter), Enzo (m, the gardener), Evelyn (f, Andrew's mother). Others appear by name in the dialogue.
+{cast}
 Each cue has "src" ({lang}, the line itself), and when available {tracks} of the same line, and "spk" (speaker from
 voice diarization: name(confidence); unknown_N is an unnamed voice, the same N is the same voice; it is often wrong
 when confidence < 0.6 or in dash cues).
@@ -120,6 +148,8 @@ def address_map():
     cues = load("cues.json")
     llm = make_backend(SONNET)
     keys = ["src", *A["tracks"], "spk"]
+    film = A.get("film", HOUSEMAID_FILM)
+    cast = glossary_cast(A["glossary"]) if A.get("glossary") else HOUSEMAID_CAST
     names = " and ".join(f'"{l}" ({"professional Polish" if l == "pl" else "professional Latin American Spanish"})'
                          for l in A["tracks"])
 
@@ -128,7 +158,8 @@ def address_map():
         show = lambda c: {k: c[k] for k in keys if c.get(k)}  # noqa: E731
         payload = json.dumps({"context": {str(c["id"]): show(c) for c in lead},
                               "annotate": {str(c["id"]): show(c) for c in part}}, ensure_ascii=False, indent=0)
-        return ask(llm, MAP_PROMPT.format(lang=A["lang"], tracks=names, payload=payload), {c["id"] for c in part})
+        return ask(llm, MAP_PROMPT.format(film=film, cast=cast, lang=A["lang"], tracks=names, payload=payload),
+                   {c["id"] for c in part})
 
     with ThreadPoolExecutor(4) as pool:
         got = {}
