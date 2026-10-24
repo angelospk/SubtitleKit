@@ -36,13 +36,19 @@ ARMS = {
           "speakers": f"{E}/out/{F}.e35/speakers.json"},
     "pl": {"src": f"{SUBS}/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/out/{F}.e36pl_raw/{F}.e36pl_raw.el.srt",
            "tracks": {"es": f"{SUBS}/es.WEB-ETHEL.srt"}, "speakers": f"{E}/out/{F}.e36pl/speakers.json"},
+    # E37: Gemini from Polish with the character sheet; same map as E36pl (it reads PL + ES + speaker, not Greek);
+    # the vote takes εσείς only from e37/sheet.json, never from the per-cue "auth"
+    "e37": {"src": f"{SUBS}/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt",
+            "tracks": {"es": f"{SUBS}/es.WEB-ETHEL.srt"}, "speakers": f"{E}/out/{F}.e36pl/speakers.json",
+            "out": f"{E}/out/{F}.e37", "sheet": f"{E}/e37/sheet.json"},
 }
 WIN, LEAD = 40, 12
 SONNET = {"backend": "claude", "claude_model": "claude-sonnet-5-5", "claude_effort": "medium", "timeout_s": 900,
           "cache_dir": None}
 ARM = sys.argv[1] if len(sys.argv) > 1 else "a"
 A = ARMS[ARM]
-OUT = f"{E}/out/{F}.e36{ARM}"
+OUT = A.get("out", f"{E}/out/{F}.e36{ARM}")
+NAME = os.path.basename(OUT)
 
 
 def named(name):
@@ -152,12 +158,23 @@ def vote():
     g = {n: c.most_common(1)[0][0] for n, c in gender.items() if c.most_common(1)[0][1] / sum(c.values()) >= 0.8}
     pair_v = {p for p, c in auth.items() if c[True] > c[False]}  # majority: this pair is an official relation
     rules = {}
+    sheet_v = None
+    if A.get("sheet"):
+        with open(A["sheet"], encoding="utf-8") as fh:
+            sheet = json.load(fh)
+        sheet_v = ({(norm(p["from"]), norm(p["to"])) for p in sheet["v_pairs"]},
+                   {r.strip().lower() for r in sheet["v_roles"] if r.strip()})
     for cid, a in amap.items():
         spk, to, who = norm(a.get("spk")), norm(a.get("to")), addressees(a)
         r = {"spk": spk or "?", "spk_g": g.get(spk, a.get("spk_g", "?")), "to": to or "none", "who": who}
         if who == "one":
             r["to_g"] = g.get(to, a.get("to_g", "?"))
-            if named(spk) and named(to):
+            if sheet_v is not None:  # E37: the sheet decides, once per pair or role
+                pairs_v, roles_v = sheet_v
+                # a role is an anonymous addressee: the whole name must be the role ("Clerk", not "Clerk Jones")
+                v = (spk, to) in pairs_v or " ".join(to.lower().replace("_", " ").split()) in roles_v
+                r["form"], r["form_from"] = ("V" if v else "T"), "sheet"
+            elif named(spk) and named(to):
                 # an official pair is V everywhere; a formal moment (auth on this cue) is V only here
                 r["form"], r["form_from"] = ("V" if (spk, to) in pair_v or a.get("auth") is True else "T"), "pair"
             else:
@@ -280,7 +297,7 @@ def correct_pass():
             changed[str(c.index)] = {"before": c.text, "after": text, "why": conf[c.index]}
             c = c.with_text(text)
         out.append(c)
-    save_srt(out, f"{OUT}/{F}.e36{ARM}.el.srt")
+    save_srt(out, f"{OUT}/{NAME}.el.srt")
     dump(changed, "changes.json")
     print(f"conflicts {len(conf)}, answered {len(fixed)}, changed {len(changed)}")
 

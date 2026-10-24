@@ -1010,3 +1010,56 @@ Verdict: keep the εσύ rule (E36a: 1.68 per hour, best so far, 10 edits on E35
 halves the fast cues (CPS > 17: 24 % -> 12 %) and reads as natural as E35, but triples the serious and doubles the
 noticeable meaning errors (1.43 / 13.56 vs 0.48 / 6.24), mostly errors of the Polish subtitle. Next: Polish (or another short professional track) as the base, plus one check per
 cue against the English line that restores only lost or changed meaning, as Harold proposed.
+
+## E37 result: Polish base + character sheet + English meaning guard (2026-10-24)
+
+Harold's question after E36: can the English fix the meaning of a Polish-based translation without "polluting" it,
+and can εσύ/εσείς stop depending on a per-line judgement? Scripts in `eval/e37/` (`run.sh`), arm `e37` in
+`e36/e36.py`.
+
+1. Character sheet (`cast.py`, one Sonnet call, decided once per film): εσείς of politeness only for Millie > Pam,
+   Millie > police, Nina > Evelyn, Andrew > clerk, and anyone to an unnamed police officer or clerk; εσύ for every
+   other pair, in every scene (`e37/sheet.json`, for Harold to review).
+2. Gemini 4 from the Polish subtitle as E36pl (`build.py`), with the sheet in place of the general εσείς rule.
+3. Rule check (`e36.py e37`): same address map as E36pl, but the form comes only from the sheet (no per-cue "auth").
+   19 conflicts, 14 changed. The per-cue auth errors of E36 are gone (no «Πάρτε» / «φέρτε»). Still doubtful: 713
+   «Σας ευχαριστούμε» -> «Σ' ευχαριστώ» (we -> I), 1624-1625 generic "you" made plural, and the detective speaking
+   to Nina (1572-1583) is now εσύ: the sheet only lists the citizen -> police direction.
+4. Meaning guard (`meaning.py flag`): Sonnet sees English (time-aligned), Polish and Greek and only names cues that
+   lose or change meaning; it writes no Greek. **12 flags.**
+5. Fix (`meaning.py fix`): sol on the 12, then a length guard in code (<= max(1.2 x, +8 characters), CPS <= max(17,
+   old)). 7 kept, among them 791 «πιστεύεις ότι μπορώ καλύτερα», 327 «τη στέγη σου», 639 «ψυχιατρική κλινική» and
+   the pot / teapot pun (1423-1424 «Να γλυκάνω λίγο την προσφορά; / Την τσαγιέρα, εννοώ.», lost in every earlier
+   run). 5 rejected by the length guard, 3 of them real fixes (525 who asks the cousin, 495 a question, 1356 tense).
+
+| | E35 | E36a | E36pl | **E37** |
+|---|---|---|---|---|
+| cues | 1985 | 1985 | 1654 | 1654 |
+| CPS > 17 / > 20 | 24.3 % / 11.7 % | 24.3 % / 11.7 % | 12.4 % / 3.1 % | **11.9 % / 3.0 %** |
+| targeted gender/number/formality per hour (2 runs) | 2.88 | **1.68** | 2.14 | 1.90 |
+| meaning: serious / noticeable per hour (2 runs) | **0.48 / 6.24** | (as E35: 10 edits) | 1.43 / 13.56 | 1.19 / 9.99 |
+
+Meaning audit runs of E37: 0.48 / 10.46 and 1.90 / 9.51. Confirmed serious E37 errors: 504 «σκοπός» (Polish «cel»),
+525 (rejected by the length guard), 1069 «Δεν είμαι σίγουρος» (in the Polish), 1530 a lost negation, 653 garbled
+«Όχι μιλάει αγγλικά». The guard flagged only one of them (525): it is too strict.
+
+Blind A/B by 30 s window, **E36a vs E37** (`ab37.py`, 228 windows, Opus medium). Each Greek line shows its CPS, so
+the judge can weigh reading speed (the first run showed only the text, as `ab36.py` did; review round 2):
+
+| A/B judge sees | E36a | E37 | equal |
+|---|---|---|---|
+| English + Greek with CPS | **106** | 91 | 31 |
+| Greek with CPS, no source | 50 | **136** | 42 |
+| (first run, text only) English + Greek | 205 | 7 | 16 |
+| (first run, text only) Greek, no source | 97 | 82 | 49 |
+
+The CPS changes the verdict: a judge who sees that a line is too fast to read prefers the shorter Polish route. The
+E35 vs E36pl A/B (85 / 98) had no CPS, so it is not comparable.
+
+Verdict: the sheet fixes the per-line εσείς noise, and the English guard does not pollute the text (7 short fixes,
+CPS unchanged). There is no single winner. **E36a** (English source + εσύ rule) has the fewest meaning errors (6.24 vs
+9.99 noticeable per hour) and wins narrowly when the judge has the English. **E37** has half the fast lines (11.9 %
+vs 24.3 % over 17 CPS) and wins clearly for a viewer without the original (136 vs 50). The guard catches too little:
+it flagged only 1 of the 5 confirmed serious errors. Next candidates: the character sheet for the English route too
+(instead of the per-cue auth of E36a), and a looser meaning guard on E37 (flag more, length limit 1.4 x) to close the
+meaning gap.
