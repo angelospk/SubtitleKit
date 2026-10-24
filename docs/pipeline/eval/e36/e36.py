@@ -13,6 +13,7 @@ one person or to several.
 """
 import json
 import os
+import re
 import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -41,6 +42,10 @@ ARMS = {
     "e37": {"src": f"{SUBS}/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt",
             "tracks": {"es": f"{SUBS}/es.WEB-ETHEL.srt"}, "speakers": f"{E}/out/{F}.e36pl/speakers.json",
             "out": f"{E}/out/{F}.e37", "sheet": f"{E}/e37/sheet.json"},
+    # E38: E37 plus scene names for unknown speakers (see alias_unknown); same Gemini output and map
+    "e38": {"src": f"{SUBS}/pl.WEB-ETHEL.srt", "lang": "Polish", "el": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt",
+            "tracks": {"es": f"{SUBS}/es.WEB-ETHEL.srt"}, "speakers": f"{E}/out/{F}.e36pl/speakers.json",
+            "out": f"{E}/out/{F}.e38", "sheet": f"{E}/e37/sheet.json", "alias": True},
 }
 WIN, LEAD = 40, 12
 SONNET = {"backend": "claude", "claude_model": "claude-sonnet-5-5", "claude_effort": "medium", "timeout_s": 900,
@@ -144,8 +149,42 @@ def addressees(a):
     return "many" if a.get("many") is True or "+" in to or to == "Group" else "one"
 
 
+def alias_unknown(amap, near=25):
+    """E38: the map writes "Unknown_06" where diarization found no name, even when it names the same voice a few cues
+    later ("Pam", from the dialogue). For each Unknown_K in spk / to: the cues within +-near whose diarization
+    cluster is unknown_K vote with the map's named speaker, except the partners of Unknown_K in that scene; a name with
+    >= 2 votes and a strict majority replaces it."""
+    with open(A["speakers"], encoding="utf-8") as fh:
+        spk = json.load(fh)["cues"]
+    voices = {int(k): {s["speaker"].lower() for s in v} for k, v in spk.items()}
+    out, changed = {}, 0
+    for cid, a in amap.items():
+        a = dict(a)
+        for field in ("spk", "to"):
+            label = norm(a.get(field)).lower()
+            if not label.startswith("unknown_"):
+                continue
+            scene = [j for j in range(cid - near, cid + near + 1) if j in amap]
+            # who talks with Unknown_K in the scene is its partner, never its name (mixed diarization clusters)
+            partners = {p.strip() for j in scene for f, o in (("spk", "to"), ("to", "spk"))
+                        if norm(amap[j].get(f)).lower() == label
+                        for p in re.split(r"[+/]", norm(amap[j].get(o)))}  # "Millie + Nina": both are partners
+            votes = Counter(norm(amap[j].get("spk")) for j in scene
+                            if label in voices.get(j, ()) and named(norm(amap[j].get("spk")))
+                            and norm(amap[j].get("spk")) not in partners)
+            if votes:
+                name, n = votes.most_common(1)[0]
+                if n >= 2 and n * 2 > sum(votes.values()):
+                    a[field], changed = name, changed + 1
+        out[cid] = a
+    print(f"alias: {changed} unknown speaker / addressee labels named from the scene")
+    return out
+
+
 def vote():
     amap = {int(k): v for k, v in load("address.json").items()}
+    if A.get("alias"):
+        amap = alias_unknown(amap)
     gender, auth = defaultdict(Counter), defaultdict(Counter)
     for a in amap.values():
         spk, to = norm(a.get("spk")), norm(a.get("to"))

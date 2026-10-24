@@ -1063,3 +1063,52 @@ vs 24.3 % over 17 CPS) and wins clearly for a viewer without the original (136 v
 it flagged only 1 of the 5 confirmed serious errors. Next candidates: the character sheet for the English route too
 (instead of the per-cue auth of E36a), and a looser meaning guard on E37 (flag more, length limit 1.4 x) to close the
 meaning gap.
+
+## E38 result: E37 + scene names for unknown speakers + wider meaning guard (2026-10-24)
+
+Harold chose the Polish route (E37) after side-by-side examples; E38 fixes the two weak points they showed. Same
+Gemini output and address map as E37. Scripts in `eval/e38/` (`run.sh`), arm `e38` in `e36/e36.py`.
+
+1. Scene names (`alias_unknown` in `e36.py vote`): where diarization has no name ("Unknown_06"), the map names the
+   same voice a few cues later from the dialogue ("Pam"). Within +-25 cues, the cues of that diarization cluster
+   vote with the map's named speaker; who talks with Unknown_K is its partner and never its name (mixed clusters);
+   >= 2 votes and a strict majority. In this film it changes only the parole scene (305-320, 16 cues): Millie > Pam
+   is εσείς by the sheet, so 307 «θέλεις να το διαβάσεις;» -> «θέλετε να το διαβάσετε;».
+2. Wider meaning guard (`e38/meaning.py`): the flag prompt names the error kinds E37 missed (tense / person,
+   question vs statement, wrong word sense, broken Greek) and no longer says "most cues are fine"; Opus flags
+   (audits use Sonnet + sol); length guard <= max(1.4 x, +12 characters), CPS <= max(20, old). **82 flags, 58 fixed,
+   24 rejected by the length guard.** Fixed among others: 316 «Νιώθω τυχερή», 495 a question again, 525 who asks the
+   cousin, 653 «Δεν μιλάω αγγλικά», 1156 «Ακόμα κι αν», 1206 «εκβίασα», 207-208 «Ανάπνευσε», 409 «Θρύλος».
+   Still rejected by length: 504 «σκοπός» (the fix «Σε παρακαλώ, σώσε μας με μια ιδέα για θέμα» is 21.9 CPS) and
+   1530 «ένα μέλλον».
+
+| | E36a | E37 | **E38** |
+|---|---|---|---|
+| cues | 1985 | 1654 | 1654 |
+| CPS > 17 / > 20 | 24.3 % / 11.7 % | 11.9 % / 3.0 % | **12.5 % / 3.0 %** |
+| targeted gender/number/formality per hour (2 runs) | 1.68 | 1.90 | **0.95** |
+| meaning: serious / noticeable per hour (2 runs) | 0.48 / 6.24 (as E35) | 1.19 / 9.99 | **0.71 / 6.42** |
+
+Meaning audit runs of E38: 0.95 / 7.61 and 0.48 / 5.23.
+
+Blind A/B by 30 s window with CPS shown (`ab38.py`, Opus medium):
+
+| A/B | judge sees | E38 | other | equal |
+|---|---|---|---|---|
+| E38 vs E36a (228 windows) | English + Greek | 86 | **107** | 35 |
+| E38 vs E36a | Greek only | **145** | 38 | 45 |
+| E38 vs E37 (55 windows differ) | English + Greek | **41** | 7 | 7 |
+| E38 vs E37 | Greek only | **25** | 13 | 17 |
+
+Verdict: **E38 is the best version so far on this film** (development data, see limits; not yet shown on an
+unseen film or by an independent judge). It keeps the Polish route's reading speed (half the fast lines of
+E36a), brings the meaning errors near E36a (0.71 / 6.42 vs 0.48 / 6.24) and has the fewest εσύ / gender errors
+(0.95 per hour). It clearly beats E37, and beats E36a for a judge without the original (145 vs 38); with the
+English the judge still prefers E36a (107 vs 86), which follows the English more closely.
+
+Limits (review round 1): this film is development data. The flag prompt quotes two errors found here («ας
+ήμασταν», a party "theme"), and the scene-name rule was made for the parole scene, so the gain must be checked on
+another film. Opus both flags (E38) and judges the A/B; sol both fixes and confirms the meaning audit; no human
+judgement yet. Open (review round 2): freeze the E38 prompts and run them on an unseen film, with a judge that
+neither flagged nor fixed. Doubtful, as in E37: the detective scene (1572-1583) is εσύ because the sheet lists only citizen ->
+police, and 713 «Σ' ευχαριστώ που ήρθες» (we -> I).
