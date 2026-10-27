@@ -174,4 +174,54 @@ Checks by reading:
 Not measured: addressee accuracy beyond the sample, and whether the prep output makes the Greek better. That needs
 the translation step on this table.
 
-Next: translate the table with Gemini (step 4) using the prep notes per row, and compare with E38.
+## Step 4: Gemini 4 on the table (2026-10-27)
+
+`eval/table/translate.py build|gem|merge`, measurements `eval/table/run_t4.sh`, A/B `eval/table/ab_t4.py`. Output
+`~/pipeline-demo/eval/out/The.Housemaid.2025.t4/`. Same prompt base (Harold's v2) and the same 4 chunks as E37, so
+the difference is the table. Changes against E37:
+- per cue: the prep notes (speaker -> addressee, εσύ / εσείς (πολλοί) / εσείς (ευγένεια), note) and the English
+  line of the table, "for meaning only", instead of diarization + Spanish;
+- film data: prep characters (gender), translator notes, scenes of the chunk, prep glossary with Greek options;
+- blocks: the note «μαζί με X-Y» (one sentence, each cue keeps its part); no Sonnet split step (step 5 skipped);
+- `prep/notes.md` still said εσείς at the funeral; the builder replaces those two lines (Harold's rule of 10-25).
+
+All 4 chunks passed on the first call (1654 / 1654 cues, Polish timing kept). No fix step after Gemini: T4 is
+Gemini + the style stage only. Baselines: **E37 raw** (same model and chunks, before the rule check and the meaning
+guard; first measured here) and the final **E38**.
+
+| | E37 raw | **T4** | E38 (final) |
+|---|---|---|---|
+| model calls after prep | 4 | **4** | 4 + map ~45 + check + meaning |
+| CPS > 17 / > 20 | 12.0 % / 3.0 % | 12.9 % / 3.4 % | 12.5 % / 3.0 % |
+| targeted gender/number/formality per hour (2 runs) | 1.67 (1.43, 1.90) | **0.95** (0.95, 0.95) | 0.95 |
+| meaning: serious / noticeable per hour (2 runs) | 1.67 / 8.56 | 1.19 / 9.04 | **0.71 / 6.42** |
+
+T4 meaning runs: 1.43 / 8.08 and 0.95 / 9.99. Targeted errors in T4 (both runs): 803 «όμορφος» to Millie, 1018
+«του» for the girl Nina. Confirmed serious: 791 («δεν είμαι τέλεια» for "you think I can do better"), 1423-1424
+the pot / teapot pun lost.
+
+Blind A/B by 30 s window (Opus medium, 213 windows differ):
+
+| T4 vs | judge sees | T4 | other | equal |
+|---|---|---|---|---|
+| E37 raw | English + Greek | 64 | 70 | 79 |
+| E37 raw | Greek only | 68 | 77 | 68 |
+| E38 | English + Greek | 48 | **75** | 90 |
+| E38 | Greek only | 61 | **82** | 70 |
+
+What this shows:
+- The prep notes fix address and gender in the translation itself: T4 reaches the E38 targeted rate (0.95/h) with
+  no address map and no rule check, i.e. without ~45 map calls. Seen in the text: the funeral (1616 «για τον γιο
+  σου»), 713 «Ευχαριστώ που ήρθες», 525 who asks the cousin, the detective (1572, 1583) all right in one pass.
+- Meaning is not better than E37 raw (serious lower, noticeable equal; two runs differ by up to 1.9/h), and E38's
+  final E38 still wins the A/B clearly. E38 differs in prompt, companion track and fix stages, so this does not show
+  that its meaning guard is the cause; T4 against T4 + guard would.
+- The judge leans slightly to E37 raw (Greek only 77 vs 68). The lost windows read more literal: «Μπορώ να έχω μια
+  αίτηση;» ("Can I have"), «Τεντί δεξιά», «της Νίνα», «Πηγαίνουμε σε έναν ειδικό», «το εξέλιξα». Hypothesis, not
+  tested: the English line pulls the wording toward English; Spanish (E37) did not.
+
+Known prompt flaw (Codex review): the block note says «μία πρόταση», but a block can hold a question and another
+speaker's answer (150-151). Next prompt: "one passage; keep the sentences, the speakers and each cue's part".
+
+Next options: (a) step 6, the meaning guard of E38 on T4, to see if T4 + guard beats E38 with fewer calls; (b) the
+same T4 prompt with Spanish instead of English per cue, to test the literal-wording hypothesis.
