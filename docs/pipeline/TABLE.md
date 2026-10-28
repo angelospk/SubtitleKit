@@ -225,3 +225,50 @@ speaker's answer (150-151). Next prompt: "one passage; keep the sentences, the s
 
 Next options: (a) step 6, the meaning guard of E38 on T4, to see if T4 + guard beats E38 with fewer calls; (b) the
 same T4 prompt with Spanish instead of English per cue, to test the literal-wording hypothesis.
+
+## Step 5: nets that flag suspect cues for a human (2026-10-28)
+
+Goal: a production run of about 10-15 LLM calls in total (prep, diarization help, 4 translation chunks, a check, one
+fix), with a net that flags the cues a human must judge. The net is scored by recall, not by translation quality.
+Code: `eval/table/net.py` (rules, llm, score, judge) and `eval/table/net_labse.py` (own venv with
+sentence-transformers).
+
+Nets on T4:
+- rules (0 calls): εσύ/εσείς forms in the Greek against the prep form of the row (regex).
+- labse (0 calls): LaBSE similarity of the Polish and the Greek line; the lowest 60 cues.
+- llm (4 calls): Opus 5.5 medium reads each E37 chunk once (Polish, English, Greek, prep note) and lists suspect
+  cues. "llm" lets the model choose how many; "llm15" asks for the 15 most suspect cues per chunk.
+
+Provisional gold: the 31 cues any of the 4 T4 audits reported. Strict (21): targeted, sol-confirmed, or reported by
+both meaning runs. Hard (5): targeted or sol-confirmed (791, 803, 1018, 1423, 1424). A flag within ±1 cue counts.
+
+| net | LLM calls | flagged | recall, all | recall, strict | recall, hard |
+|---|---|---|---|---|---|
+| rules | 0 | 7 | 0/31 | 0/21 | 0/5 |
+| labse | 0 | 60 | 7/31 | 6/21 | 2/5 |
+| llm (model decides) | 4 | 8 | 2/31 | 2/21 | 0/5 |
+| **llm15** | 4 | 60 | 13/31 | 10/21 | **5/5** |
+| rules + llm15 + labse | 4 | 119 | 16/31 | 13/21 | 5/5 |
+
+For scale: 60 random cues with ±1 tolerance hit about 11 % of the gold (3-4 of 31). One Sonnet meaning run finds
+20 of the 25 cues the other run reported, and a meaning run costs about 28 calls plus the confirm step.
+
+What this shows:
+- Left to decide, Opus flags almost nothing (8 cues, 0 hard). A fixed quota is what makes the check useful: llm15
+  catches all 5 hard errors in 4 calls and 60 cues for the human.
+- The rules net found no audit error. Of its 7 flags, 5 are noise (Ορίστε twice, the preposition «σε» twice, 497 «σ'»)
+  and 2
+  are plural where the table says εσύ (571 «Τουλάχιστον έχετε τη Σίσι», 1614 «Πώς θα τα βγάλετε πέρα»); no audit
+  reported them, so a human must judge them. It stays as a free guard, not as evidence.
+- LaBSE is about twice random: too weak on its own; it adds 3 strict cues at the cost of 52 more to read.
+- About half of the strict cues llm15 misses are cues where the Polish says something else than the English and the
+  Greek follows the Polish: 41 (testament vs chalk outline), 327 (ogarniaj życie vs living situation), 372, 1307,
+  1497. The audits judge against the English, so they count these; a checker that reads the Polish does not. Whether
+  they are errors is Harold's call (the base track is the source, but the film means the English). The gold also
+  holds register-only cues (696 «ευγενικό εκ μέρους σου»), which the check prompt tells Opus not to report.
+- Gold is provisional and comes from Sonnet audits only: llm15 gets no credit for the 48 flags that are not within ±1 of an
+  audit cue, and some of them look real (512 vocative «Καημένε», 1158 «υπακούσω αυτό το κάθαρμα», 1634 / 905 / 942
+  «αναστολή» for parole). Precision is unknown until Harold judges `eval/table/t4-judge.md`.
+
+Next: Harold marks the 31 cues in `t4-judge.md`; then re-score with his verdicts and, if the judged gold allows, judge
+a sample of the 48 llm15-only flags for precision.
