@@ -16,7 +16,7 @@ Context lines (±1) are the cues before and after.
 - 48 pl: Dzięki, autko Josha.
   - en: Thank you, Josh's car.
   - el: Ευχαριστώ, αμαξάκι του Τζος.
-- Λάθος; 
+- Λάθος;  oxi
 
 ## 52
 
@@ -31,7 +31,7 @@ Context lines (±1) are the cues before and after.
 - 53 pl: Kat mówiła o małej, / wiejskiej chatce w lesie.
   - en: Kat called this place a "little rustic cabin in the woods."
   - el: Η Κατ έλεγε για ένα μικρό, / ρουστίκ εξοχικό στο δάσος.
-- Λάθος; 
+- Λάθος; mikro
 
 ## 73
 
@@ -46,7 +46,7 @@ Context lines (±1) are the cues before and after.
 - 74 pl: Uśmiechaj się i bądź radosna.
   - en: Just remember to... remember to smile and act happy.
   - el: Χαμογέλα και δείξε χαρούμενη.
-- Λάθος; 
+- Λάθος; nai
 
 ## 119
 
@@ -61,7 +61,7 @@ Context lines (±1) are the cues before and after.
 - 120 pl: Nie znałem nikogo, / jak już wspomniałem.
   - en: and I didn't know a single person, as I said.
   - el: Δεν ήξερα ψυχή, / όπως σας είπα.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 151
 
@@ -76,7 +76,7 @@ Context lines (±1) are the cues before and after.
 - 152 pl: <i>I patrzysz na tę obcą osobę,</i>
   - en: And you're... you're staring at this stranger,
   - el: <i>Και κοιτάζεις αυτόν τον ξένο,</i>
-- Λάθος; 
+- Λάθος; mikro
 
 ## 204
 
@@ -91,7 +91,7 @@ Context lines (±1) are the cues before and after.
 - 205 pl: Chodźcie.
   - en: - Come on. - Come on!
   - el: Ελάτε!
-- Λάθος; 
+- Λάθος; nai
 
 ## 209
 
@@ -106,7 +106,7 @@ Context lines (±1) are the cues before and after.
 - 210 pl: Chcę tylko, żebyś był szczęśliwy.
   - en: I just want you to be happy, Josh. That's all.
   - el: Θέλω μόνο να είσαι ευτυχισμένος.
-- Λάθος; 
+- Λάθος; nai
 
 ## 309
 
@@ -121,7 +121,7 @@ Context lines (±1) are the cues before and after.
 - 310 pl: Ma tyle siły, ile jej dadzą.
   - en: She's only as strong as they want her to be.
   - el: Έχει όση δύναμη της δίνουν.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 320
 
@@ -136,7 +136,7 @@ Context lines (±1) are the cues before and after.
 - 321 pl: Wiadomo, będę musiał... Sam wiesz.
   - en: Well, uh, obviously I'll need to, uh, you know.
   - el: Ε, προφανώς θα πρέπει να... Ξέρεις τώρα.
-- Λάθος; 
+- Λάθος; mikro
 
 ## 408
 
@@ -151,7 +151,7 @@ Context lines (±1) are the cues before and after.
 - 409 pl: Będzie tak skupiona na panu, / pańskich potrzebach,
   - en: She'll be so fixated on you, your wants, your needs,
   - el: Θα είναι τόσο αφοσιωμένη σε εσάς / και στις ανάγκες σας,
-- Λάθος; 
+- Λάθος; oxi
 
 ## 415
 
@@ -166,7 +166,7 @@ Context lines (±1) are the cues before and after.
 - 416 pl: Można...
   - en: You can... You can change their intelligence?
   - el: Μπορείς...
-- Λάθος; 
+- Λάθος; den ksrw
 
 ## 417
 
@@ -181,7 +181,7 @@ Context lines (±1) are the cues before and after.
 - 418 pl: Rząd wprowadził / miliardy rozporządzeń
   - en: There's about a billion government regulations
   - el: Το κράτος έχει βγάλει / άπειρους κανονισμούς
-- Λάθος; 
+- Λάθος; den kerw
 
 ## 424
 
@@ -196,7 +196,7 @@ Context lines (±1) are the cues before and after.
 - 425 pl: Z wiadomych względów / soft nie zezwala
   - en: And for obvious reasons, her programming prevents her
   - el: Για ευνόητους λόγους, / το λογισμικό δεν της επιτρέπει
-- Λάθος; 
+- Λάθος; oxi
 
 ## 427
 
@@ -211,7 +211,7 @@ Context lines (±1) are the cues before and after.
 - 428 pl: Iris jest potulna jak baranek.
   - en: Iris is completely docile.
   - el: Η Άιρις είναι αρνάκι.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 429
 
@@ -226,7 +226,7 @@ Context lines (±1) are the cues before and after.
 - 430 pl: SYNCHRONIZACJA
   - en: 
   - el: ΣΥΓΧΡΟΝΙΣΜΟΣ
-- Λάθος; 
+- Λάθος; oxi
 
 ## 437
 
@@ -241,7 +241,7 @@ Context lines (±1) are the cues before and after.
 - 438 pl: Cześć.
   - en: H-Hi.
   - el: Γεια.
-- Λάθος; 
+- Λάθος; nai
 
 ## 466
 
@@ -256,7 +256,7 @@ Context lines (±1) are the cues before and after.
 - 467 pl: Będziesz szczęśliwy. / Bardzo, ale to bardzo, szczęśliwy.
   - en: I can make you happy, Josh. I can make you so, so, so, so happy.
   - el: Θα σε κάνω ευτυχισμένο. / Πάρα, μα πάρα πολύ ευτυχισμένο.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 503
 
@@ -271,7 +271,7 @@ Context lines (±1) are the cues before and after.
 - 504 pl: Udało się.
   - en: I mean, we did it!
   - el: Τα καταφέραμε.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 511
 
@@ -286,7 +286,7 @@ Context lines (±1) are the cues before and after.
 - 512 pl: To przez ten xanax.
   - en: It's just... It's just the Xanax Eli gave me.
   - el: Φταίει το Ζάναξ.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 536
 
@@ -301,7 +301,7 @@ Context lines (±1) are the cues before and after.
 - 537 pl: Coś ty jej zrobił?
   - en: What did you do to her?
   - el: Τι της έκανες;
-- Λάθος; 
+- Λάθος; oxi
 
 ## 566
 
@@ -316,7 +316,7 @@ Context lines (±1) are the cues before and after.
 - 567 pl: Żebyście potwierdzili wersję.
   - en: To corroborate our story.
   - el: Για να επιβεβαιώσετε την ιστορία μας.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 603
 
@@ -331,7 +331,7 @@ Context lines (±1) are the cues before and after.
 - 604 pl: Niezła propozycja.
   - en: That's not a bad deal.
   - el: Καλή συμφωνία.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 628
 
@@ -346,7 +346,7 @@ Context lines (±1) are the cues before and after.
 - 629 pl: WYSOKOŚĆ
   - en: 
   - el: ΥΨΟΣ ΤΟΝΟΥ
-- Λάθος; 
+- Λάθος; oxi
 
 ## 678
 
@@ -361,7 +361,7 @@ Context lines (±1) are the cues before and after.
 - 679 pl: - Do twarzy ci. / - Dzięki.
   - en: It looks good on you. Thanks, babe.
   - el: - Σου πάει. / - Ευχαριστώ.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 680
 
@@ -376,7 +376,7 @@ Context lines (±1) are the cues before and after.
 - 681 pl: Co byś nie włożył, wygląda świetnie. / Każda kamizelka.
   - en: I swear, you can pull everything off. Like, any kind of vest...
   - el: Ό,τι κι αν βάλεις, σου πάει τρελά. / Κάθε γιλέκο.
-- Λάθος; 
+- Λάθος; mikro
 
 ## 688
 
@@ -391,7 +391,7 @@ Context lines (±1) are the cues before and after.
 - 689 pl: Gniewasz się, że wycięli cię z planu?
   - en: You're still upset they left you out of their plan?
   - el: Είσαι ακόμα θυμωμένος / που σ' άφησαν απ' έξω;
-- Λάθος; 
+- Λάθος; oxi
 
 ## 698
 
@@ -406,7 +406,7 @@ Context lines (±1) are the cues before and after.
 - 699 pl: i napalony, bo łażę z wielką pukawą.
   - en: and carrying this huge gun makes me really horny.
   - el: κι έχω καυλώσει που κουβαλάω / αυτό το κουμπούρι.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 714
 
@@ -421,7 +421,7 @@ Context lines (±1) are the cues before and after.
 - 715 pl: ale wspomnienie jest prawdziwe.
   - en: my memory of it's real.
   - el: αλλά η ανάμνηση είναι αληθινή.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 739
 
@@ -436,7 +436,7 @@ Context lines (±1) are the cues before and after.
 - 740 pl: Ostrym.
   - en: And violent.
   - el: Βίαιη.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 876
 
@@ -451,7 +451,7 @@ Context lines (±1) are the cues before and after.
 - 877 pl: Kurwa mać.
   - en: Fuck.
   - el: Γαμώτο.
-- Λάθος; 
+- Λάθος; nai
 
 ## 920
 
@@ -466,7 +466,7 @@ Context lines (±1) are the cues before and after.
 - 921 pl: Co jest?
   - en: What the fuck?
   - el: Τι παίζει;
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 924
 
@@ -481,7 +481,7 @@ Context lines (±1) are the cues before and after.
 - 925 pl: Kurwa.
   - en: Oh, fuck.
   - el: Γαμώτο.
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 971
 
@@ -496,7 +496,7 @@ Context lines (±1) are the cues before and after.
 - 972 pl: Wal się.
   - en: Fuck you.
   - el: Άντε γαμήσου.
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 1023
 
@@ -511,7 +511,7 @@ Context lines (±1) are the cues before and after.
 - 1024 pl: Lubisz chodzić na pub quizy, / grać na konsoli
   - en: I know your favorite hobbies are bar trivia, video games
   - el: Σ' αρέσει να πηγαίνεις σε βραδιές κουίζ, / να παίζεις κονσόλα
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 1070
 
@@ -526,7 +526,7 @@ Context lines (±1) are the cues before and after.
 - 1071 pl: <i>Wydaje mi się,</i>
   - en: And I think...
   - el: <i>Νομίζω</i>
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1079
 
@@ -541,7 +541,7 @@ Context lines (±1) are the cues before and after.
 - 1080 pl: Bogu dzięki, / że w porę zjawił się szeryf Hendrix.
   - en: I mean, thank God Deputy Hendrix showed up when he did.
   - el: Δόξα τω Θεώ που ήρθε πάνω στην ώρα / ο βοηθός σερίφη Χέντριξ.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1082
 
@@ -556,7 +556,7 @@ Context lines (±1) are the cues before and after.
 - 1083 pl: Zastrzeliła się?
   - en: She shot herself?
   - el: Αυτοπυροβολήθηκε;
-- Λάθος; 
+- Λάθος; mikro
 
 ## 1087
 
@@ -571,7 +571,7 @@ Context lines (±1) are the cues before and after.
 - 1088 pl: Mówię z sensem?
   - en: Does that make sense?
   - el: Στέκει αυτό που λέω;
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1127
 
@@ -586,7 +586,7 @@ Context lines (±1) are the cues before and after.
 - 1128 pl: i raczej zaraz się uruchomi.
   - en: and she should power right back up.
   - el: και λογικά θα πάρει μπρος αμέσως.
-- Λάθος; 
+- Λάθος; mikro
 
 ## 1170
 
@@ -601,7 +601,7 @@ Context lines (±1) are the cues before and after.
 - 1171 pl: <i>Tak cię kocham.</i>
   - en: I love you so much.
   - el: <i>Σ' αγαπάω τόσο πολύ.</i>
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 1194
 
@@ -616,7 +616,7 @@ Context lines (±1) are the cues before and after.
 - 1195 pl: - Dobra sztuczka. / - Dzięki.
   - en: - Cute trick. - Thanks.
   - el: - Καλό κολπάκι. / - Ευχαριστώ.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1234
 
@@ -631,7 +631,7 @@ Context lines (±1) are the cues before and after.
 - 1235 pl: Jestem wszystkim.
   - en: I'm everything to you.
   - el: Είμαι τα πάντα.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1242
 
@@ -646,7 +646,7 @@ Context lines (±1) are the cues before and after.
 - 1243 pl: Dobra.
   - en: Okay.
   - el: Λοιπόν.
-- Λάθος; 
+- Λάθος; oxi
 
 ## 1270
 
@@ -661,7 +661,7 @@ Context lines (±1) are the cues before and after.
 - 1271 pl: Tekst – Jakub Kowalczyk
   - en: 
   - el: Υπότιτλοι – Jakub Kowalczyk
-- Λάθος; 
+- Λάθος; dn ksr
 
 ## 1271
 
@@ -673,4 +673,4 @@ Context lines (±1) are the cues before and after.
 - 1271 pl: Tekst – Jakub Kowalczyk
   - en: 
   - el: **Υπότιτλοι – Jakub Kowalczyk**
-- Λάθος; 
+- Λάθος; oxi

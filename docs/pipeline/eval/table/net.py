@@ -220,16 +220,17 @@ def judge():
     print(f"t4-judge.md: {len(found)} cues")
 
 
-def verdicts():
-    """Harold's verdicts in t4-judge.md: {cue: 'yes' | 'minor' | 'no'} (Greeklish accepted; 'ixu' = ισχύει = yes)."""
+def verdicts(name="t4-judge.md"):
+    """Harold's verdicts: {cue: 'yes' | 'minor' | 'no' | 'unsure'} (Greeklish accepted; 'ixu' = ισχύει = yes;
+    'den/dn ksero' = δεν ξέρω = unsure)."""
     out, cue = {}, None
-    for line in open(f"{REPO}/t4-judge.md", encoding="utf-8"):
+    for line in open(f"{REPO}/{name}", encoding="utf-8"):
         if m := re.match(r"## (\d+)", line):
             cue = int(m.group(1))
         elif line.startswith("- Λάθος;") and cue is not None:
             v = line.split(";", 1)[1].strip().lower()
             out[cue] = ("minor" if v.startswith(("mikr", "μικρ")) else "no" if v.startswith(("oxi", "όχι", "οχι"))
-                        else "yes" if v else None)
+                        else "unsure" if v.startswith(("den", "dn", "δεν", "δν")) else "yes" if v else None)
     return out
 
 
@@ -284,8 +285,24 @@ def review(net="llm15"):
     print(f"{path}: {len(flags)} cues")
 
 
+def precision():
+    """Precision of the net on <film>-review.md: Harold's verdict per flag, by flag kind."""
+    v = verdicts(f"{NAME}-review.md")
+    flags = json.load(open(f"{D}/llm15.json", encoding="utf-8"))
+    kinds = {}
+    for k, why in flags.items():
+        kinds.setdefault(why.split(":")[0], []).append(v.get(int(k)))
+    total = [x for xs in kinds.values() for x in xs]
+    print("| kind | flags | yes | minor | no | unsure |")
+    print("|---|---|---|---|---|---|")
+    for kind, xs in sorted(kinds.items(), key=lambda kv: -len(kv[1])) + [("all", total)]:
+        print(f"| {kind} | {len(xs)} | " + " | ".join(str(xs.count(x)) for x in ("yes", "minor", "no", "unsure")) + " |")
+    for x in ("yes", "minor", "unsure"):
+        print(x, sorted(int(k) for k in flags if v.get(int(k)) == x))
+
+
 if __name__ == "__main__":
     if sys.argv[1] in ("score", "judge", "harold") and NAME != "housemaid":
         sys.exit(f"{sys.argv[1]}: the audits and verdicts exist only for Housemaid")
     {"rules": rules, "llm": llm, "score": score, "judge": judge,
-     "harold": harold, "review": review}[sys.argv[1]](*map(int, sys.argv[2:]))
+     "harold": harold, "review": review, "precision": precision}[sys.argv[1]](*map(int, sys.argv[2:]))

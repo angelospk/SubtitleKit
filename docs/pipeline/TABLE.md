@@ -319,3 +319,24 @@ Steps and cost:
 5. llm15 (3 Opus calls): 45 cues flagged (meaning 28, broken 9, form 6, number 1, gender 1).
 
 Total after the table: 1 prep session + 3 translation calls + 3 check calls. Harold judges `eval/table/companion-review.md`.
+
+### Step 6b: Harold's verdicts on the 45 Companion flags (2026-11-04)
+
+`FILM=companion net.py precision`. Harold found the judging "a bit hard"; 8 of 45 he could not decide.
+
+| kind | flags | yes | minor | no | unsure |
+|---|---|---|---|---|---|
+| meaning | 28 | 4 | 2 | 18 | 4 |
+| broken | 9 | 0 | 4 | 4 | 1 |
+| form | 6 | 0 | 0 | 4 | 2 |
+| number | 1 | 1 | 0 | 0 | 0 |
+| gender | 1 | 0 | 0 | 0 | 1 |
+| all | 45 | 5 | 6 | 26 | 8 |
+
+- Precision: 5/45 errors, 11/45 errors or minor (24 %; 11/37 of the decided ones). For 97 minutes: 5 errors found
+  (about 3 per hour) after 3 translation calls, plus 6 minor. Recall is unknown: nobody read the other 1226 cues.
+- The errors are wrong Greek words or one repeated slip, not address or gender: 73 «μουτζουρώνεις» (smudge, for mope),
+  209 «μούτζωσα», 437 and 876 «Γεια σου κι εσένα» (the same slip twice), 204 singular «Σήκω πάνω» to the group.
+- The 6 form flags (4 no, 2 unsure) are all in the Empathix scenes where step 6 set εσείς both ways; Harold did not
+  call the εσύ lines there errors (424, 427, 429). The hand change was not needed.
+- The fixed quota makes most flags false alarms (26 no). Judging is slow when the flag only names a doubt; 8 unsure.
