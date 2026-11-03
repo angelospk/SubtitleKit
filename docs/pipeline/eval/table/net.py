@@ -285,5 +285,7 @@ def review(net="llm15"):
 
 
 if __name__ == "__main__":
+    if sys.argv[1] in ("score", "judge", "harold") and NAME != "housemaid":
+        sys.exit(f"{sys.argv[1]}: the audits and verdicts exist only for Housemaid")
     {"rules": rules, "llm": llm, "score": score, "judge": judge,
      "harold": harold, "review": review}[sys.argv[1]](*map(int, sys.argv[2:]))
