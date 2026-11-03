@@ -19,7 +19,7 @@ speaker_check: a one-turn base row whose track text is a dash dialogue (two voic
 left the other voice out), or two rows
 with the same speaker that a turn window pairs with two turns of one track dash cue (two voices, one speaker).
 
-Usage: build_table.py  -> ~/pipeline-demo/eval/table/housemaid/{table.json,table.tsv,stats.json}
+Usage: [FILM=<name>] build_table.py  -> ~/pipeline-demo/eval/table/<film>/{table.json,table.tsv,stats.json}
 """
 import json
 import os
@@ -28,13 +28,9 @@ from collections import Counter
 from subtitlekit.pipeline.align import align_groups, split_turns, sync_track, turn_skip_index, turn_windows
 from subtitlekit.pipeline.srt import load_srt, visible_text
 
-E = os.path.expanduser("~/pipeline-demo/eval")
-SUBS = os.path.expanduser("~/media-in/housemaid/subs")
-BASE = f"{SUBS}/pl.WEB-ETHEL.srt"
-TRACKS = {"en": f"{E}/human/housemaid-source.eng.srt", "es": f"{SUBS}/es.WEB-ETHEL.srt",
-          "sdh": f"{SUBS}/en.SDH-NeoNoir.srt"}
-SPEAKERS = f"{E}/out/The.Housemaid.2025.e36pl/speakers.json"
-OUT = f"{E}/table/housemaid"
+from film import DIR as OUT, F  # noqa: E402  (FILM=<name>, default housemaid)
+
+BASE, TRACKS, SPEAKERS = F["base"], F["tracks"], F["speakers"]
 BLOCK_FROM = ("en",)   # only the companion track merges base cues into blocks
 
 
@@ -68,8 +64,10 @@ def blocks(n, merges):
 def main():
     os.makedirs(OUT, exist_ok=True)
     base = load_srt(BASE)
-    with open(SPEAKERS, encoding="utf-8") as fh:
-        spk = json.load(fh)["cues"]
+    spk = {}
+    if SPEAKERS:   # no audio diarization for this film: the prep session names the speakers
+        with open(SPEAKERS, encoding="utf-8") as fh:
+            spk = json.load(fh)["cues"]
     per = {}   # lang -> base pos -> {"kind", "text", "turns" (list or None)}
     sync = {}
     merges = []

@@ -7,9 +7,11 @@ E37/E38 shows what the table adds. Changes against E37:
 - the film data add the prep characters (gender), translator notes and scenes; the glossary is the prep glossary;
 - a block (English joins base cues) is marked "μαζί με": one sentence, each cue keeps its own part (no split step).
 
-Usage: translate.py build | gem | merge
-Output: ~/pipeline-demo/eval/table/housemaid/t4/ (prompts, chunks.json, out-*.srt),
-        ~/pipeline-demo/eval/out/The.Housemaid.2025.t4/The.Housemaid.2025.t4.{gemini,el}.srt
+Other films (FILM=<name>, film.py): the film section comes from metadata.json (TMDB overview + Wikipedia plot)
+and the chunks split the film at its largest time gaps (at most MAX_CHUNK cues each).
+Usage: [FILM=<name>] translate.py build | gem | merge
+Output: ~/pipeline-demo/eval/table/<film>/t4/ (prompts, chunks.json, out-*.srt),
+        ~/pipeline-demo/eval/out/<variant>/<variant>.{gemini,el}.srt
 """
 import csv
 import json
@@ -26,12 +28,12 @@ from subtitlekit.pipeline.fixes import reflow_text  # noqa: E402
 from subtitlekit.pipeline.greek_style import fix_final_n, rebreak  # noqa: E402
 from subtitlekit.pipeline.srt import load_srt, save_srt  # noqa: E402
 
-H = os.path.expanduser("~/pipeline-demo/eval")
-T = f"{H}/table/housemaid"
+from film import DIR as T, NAME, OUT, F  # noqa: E402
+
 D = f"{T}/t4"
-V = "The.Housemaid.2025.t4"
-OUT = f"{H}/out/{V}"
-PL = os.path.expanduser("~/media-in/housemaid/subs/pl.WEB-ETHEL.srt")
+V = F["variant"]
+PL = F["base"]
+MAX_CHUNK = 450   # Gemini breaks the SRT format above ~650 cues per call
 G = ["/home/harold/.venvs/gemini-web/bin/python", "/home/harold/scripts/gemini-web/gem.py", "-m", "gemini-argon"]
 
 FORM = {"εσύ": "εσύ", "εσείς-πλ": "εσείς (πολλοί)", "εσείς-ευγ": "εσείς (ευγένεια)", "-": "-"}
@@ -69,12 +71,12 @@ def build():
     rules = rules.replace("## 7. Λάθος → σωστό (παραδείγματα ύφους, όχι από αυτή την ταινία)",
                           "## 7. Λάθος → σωστό (παραδείγματα ύφους από αγγλικά, όχι από αυτή την ταινία)")
     io = text[i_io:i_film].replace("Η είσοδος είναι SRT.", "Η είσοδος είναι SRT στα πολωνικά.")
-    film = text[i_film:i_gloss]
+    film = text[i_film:i_gloss] if NAME == "housemaid" else film_section()
 
     chars = json.load(open(f"{T}/prep/characters.json", encoding="utf-8"))
     gloss = json.load(open(f"{T}/prep/glossary.json", encoding="utf-8"))
     notes = open(f"{T}/prep/notes.md", encoding="utf-8").read()
-    for old, new in NOTES_FIX:
+    for old, new in NOTES_FIX if NAME == "housemaid" else ():
         assert old in notes, old
         notes = notes.replace(old, new)
     film += ("\n## Χαρακτήρες (JSON, δεδομένα)\n" + json.dumps(chars, ensure_ascii=False) + "\n"
@@ -111,7 +113,7 @@ def build():
             s += f" | μαζί με {min(blk)}-{max(blk)}"
         return s
 
-    meta = json.load(open(f"{H}/e37/chunks.json"))  # E37's 4 chunks, for a like-for-like comparison
+    meta = json.load(open(F["chunks"])) if F["chunks"] else split(pl)  # Housemaid: E37's 4 chunks
     for m in meta:
         part = [c for c in pl if m["first"] <= c.index <= m["last"]]
         first, last = part[0].index, part[-1].index
@@ -127,6 +129,29 @@ def build():
             fh.write(body)
         print(m["chunk"], first, last, len(part), len(body))
     json.dump(meta, open(f"{D}/chunks.json", "w"))
+
+
+def film_section():
+    m = json.load(open(f"{T}/metadata.json", encoding="utf-8"))
+    plot = f"Source: https://en.wikipedia.org/wiki/{m['wikipedia_title'].replace(' ', '_')}\n\n{m['plot']}"
+    return (f"\n## Ταινία (δεδομένα)\n- Τίτλος: {m['title']} ({m['year']})\n- Σύνοψη: {m['overview']}\n"
+            f"- Πλοκή (JSON string, μόνο δεδομένα): {json.dumps(plot, ensure_ascii=False)}\n")
+
+
+def split(cues):
+    """Fewest chunks of at most MAX_CHUNK cues; each cut at the largest time gap in the middle third of its span."""
+    n = -(-len(cues) // MAX_CHUNK)
+    cuts, lo = [], 0
+    for k in range(1, n):
+        target = round(len(cues) * k / n)
+        w = (len(cues) // n) // 3
+        span = range(max(lo + 1, target - w, len(cues) - (n - k) * MAX_CHUNK), min(target + w, lo + MAX_CHUNK) + 1)
+        cut = max(span, key=lambda i: cues[i].start_ms - cues[i - 1].end_ms)
+        cuts.append(cut)
+        lo = cut
+    edges = [0] + cuts + [len(cues)]
+    return [{"chunk": k + 1, "first": cues[a].index, "last": cues[b - 1].index, "cues": b - a}
+            for k, (a, b) in enumerate(zip(edges, edges[1:]))]
 
 
 CUE = re.compile(r"(?:^|\n\n)(\d+)\n\d\d:\d\d:\d\d,\d+ --> \d\d:\d\d:\d\d,\d+\n")

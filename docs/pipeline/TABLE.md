@@ -295,3 +295,27 @@ verdict «ixu» is read as ναι), 7 minor (41, 327, 481, 504, 583, 974, 1424),
 Conclusion: llm15 stays the net (the only real error and 5 of 8 real cues, 60 cues to read); rules and labse add
 nothing. With one real error the gold is small: recall 1/1 is not a measure. Precision of llm15 on its 48 flags
 outside the audit set is still unknown.
+
+## Step 6: production trial on an unseen film, Companion (2025) (2026-11-04)
+
+Harold's option 1 after step 5b: run T4 + llm15 on a new film and judge only the flagged cues. The film was a seeded
+random pick from TMDB (English-language, 2023-2025, 500+ votes, not animation): Companion (2025), TMDB 1084199.
+Tracks (OpenSubtitles): Polish AMZN WEB-DL APEX (12987055, 1271 cues, base), English same release (12980917), English
+SDH BluRay (13519119). No audio, so no diarization: the prep session names every speaker.
+
+The scripts now take `FILM=<name>` (`eval/table/film.py`); Housemaid stays the default and its table, prep input and
+T4 prompts come out byte for byte the same. New: `translate.py` builds the film section from `metadata.json` and splits
+the film at its largest time gaps (at most 450 cues per chunk); `net.py review` writes `<film>-review.md`.
+
+Steps and cost:
+1. Table (code): 1246 / 1271 cues clean in both tracks, no blocks, 14 mismatch rows, 45 `2 voices?` rows.
+2. Metadata (code): TMDB cast + Wikipedia «Companion (film)» plot.
+3. Prep (one Sonnet session, ~7 min): 1354 rows, no speaker left unknown, ~40 rows marked "speaker unsure".
+   Changed by hand after a check: the Empathix staff (delivery 392-420, pickup 1081-1132) say «pan» to Josh and he
+   says «pan» back, but the prep gave εσύ one way and εσείς the other; now εσείς-ευγ both ways (49 rows). 1094-1095
+   are Sid and Patrick posing as Deputy Hendrix (prep had Sid -> Teddy). The deputy scene stays asymmetric (Polish:
+   deputy ty, Iris pan).
+4. Gemini 4 (3 calls, 407 / 444 / 420 cues): all passed on the first call, Polish timing kept.
+5. llm15 (3 Opus calls): 45 cues flagged (meaning 28, broken 9, form 6, number 1, gender 1).
+
+Total after the table: 1 prep session + 3 translation calls + 3 check calls. Harold judges `eval/table/companion-review.md`.

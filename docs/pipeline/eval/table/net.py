@@ -10,7 +10,9 @@ Provisional gold: every cue any of the 4 T4 audits reported (targeted t4_1/2, me
 The gold comes from Sonnet audits only, so a net gets no credit for real errors the audits missed: precision is
 unknown until Harold judges (t4-judge.md).
 
-Usage: net.py rules | llm [quota per chunk] | score | judge   -> ~/pipeline-demo/eval/table/housemaid/net/
+Usage: [FILM=<name>] net.py rules | llm [quota per chunk] | score | judge | harold | review
+  -> ~/pipeline-demo/eval/table/<film>/net/; score, judge and harold need the Housemaid audits.
+review: <film>-review.md in this folder, every llm15 flag with Polish, English and Greek, for Harold's verdict.
 """
 import csv
 import json
@@ -24,12 +26,12 @@ from subtitlekit.pipeline.enrich import align_source
 from subtitlekit.pipeline.llm import LLMError, extract_json, make_backend
 from subtitlekit.pipeline.srt import load_srt
 
+from film import DIR as T, EN, NAME, OUT, F  # noqa: E402
+
 H = os.path.expanduser("~/pipeline-demo/eval")
-T = f"{H}/table/housemaid"
 D = f"{T}/net"
-EL = f"{H}/out/The.Housemaid.2025.t4/The.Housemaid.2025.t4.el.srt"
-PL = os.path.expanduser("~/media-in/housemaid/subs/pl.WEB-ETHEL.srt")
-EN = f"{H}/human/housemaid-source.eng.srt"
+EL = f"{OUT}/{F['variant']}.el.srt"
+PL = F["base"]
 AUDITS = {"t4_1": f"{H}/e36/audit36-t4_1.json", "t4_2": f"{H}/e36/audit36-t4_2.json",
           "m1": f"{H}/compare/audit-The.Housemaid.2025.t4_m1.json",
           "m2": f"{H}/compare/audit-The.Housemaid.2025.t4_m2.json"}
@@ -63,11 +65,10 @@ def rules():
     save("rules", flags)
 
 
-PROMPT = """You check a Greek subtitle translation of the film "The Housemaid" (2025) before a human reviewer sees it.
+PROMPT = """You check a Greek subtitle translation of the film "{title}" ({year}) before a human reviewer sees it.
 The Greek was translated from the Polish subtitles; "en" is the English subtitle of the same moment, "note" says who
 speaks to whom and the address form a careful reader chose (εσύ, εσείς-πλ = several people, εσείς-ευγ = politeness).
-Characters: Millie (f, the housemaid), Nina (f, the wife), Andrew (m, her husband), Cece (f, their young daughter),
-Enzo (m, the gardener), Evelyn (f, Andrew's mother).
+Characters: {characters}.
 List every cue a careful Greek reviewer should look at again:
 - meaning: the Greek says something else than the source, drops or adds content, or a joke or pun is lost;
 - form: εσύ / εσείς disagrees with the note, or changes between the same two people without a reason;
@@ -93,7 +94,8 @@ def llm(n=None):
     en = {c.index: c.text for c in align_source(timed, english)}
     pl = {c.index: c.text for c in load_srt(PL)}
     table = rows()
-    chunks = json.load(open(f"{H}/e37/chunks.json"))
+    chunks = json.load(open(f"{T}/t4/chunks.json"))   # the translation chunks (Housemaid: E37's)
+    film = film_data()
     back = make_backend({"backend": "claude", "claude_model": "claude-opus-5-5", "claude_effort": "medium",
                          "timeout_s": 1500, "cache_dir": None})
 
@@ -111,7 +113,7 @@ def llm(n=None):
         ids = {c.index for c in part}
         for _ in range(2):
             try:
-                data = extract_json(back.complete(PROMPT.format(payload=payload, quota=quota)))
+                data = extract_json(back.complete(PROMPT.format(payload=payload, quota=quota, **film)))
             except LLMError as e:
                 print(f"chunk {m['chunk']}: {e}", file=sys.stderr)
                 continue
@@ -124,6 +126,22 @@ def llm(n=None):
         for r in pool.map(run, chunks):
             flags.update(r)
     save(f"llm{n or ''}", flags)
+
+
+HOUSEMAID_CHARS = ("Millie (f, the housemaid), Nina (f, the wife), Andrew (m, her husband), Cece (f, their young "
+                   "daughter),\nEnzo (m, the gardener), Evelyn (f, Andrew's mother)")
+
+
+def film_data():
+    """Title, year and the character list for the check prompt (Housemaid: the list of step 5, unchanged)."""
+    meta = json.load(open(f"{T}/metadata.json", encoding="utf-8"))
+    if NAME == "housemaid":
+        chars = HOUSEMAID_CHARS
+    else:
+        g = {"female": "f", "male": "m"}
+        chars = ", ".join(f"{c['name']} ({g.get(c['gender'], '?')}, {c['role']})"
+                          for c in json.load(open(f"{T}/prep/characters.json", encoding="utf-8")))
+    return {"title": meta["title"], "year": meta["year"], "characters": chars}
 
 
 def save(name, flags):
@@ -235,6 +253,37 @@ def harold():
               f"{sum(hit(c, f) for c in real)}/{len(real)} | {miss} |")
 
 
+def review(net="llm15"):
+    """<film>-review.md: every cue the net flagged, with Polish, English, Greek and the reason, for Harold."""
+    flags = json.load(open(f"{D}/{net}.json", encoding="utf-8"))
+    el = {c.index: c.text.replace("\n", " / ") for c in load_srt(EL)}
+    pl = {c.index: c.text.replace("\n", " / ") for c in load_srt(PL)}
+    english = load_srt(EN)
+    timed, _ = sync_track(load_srt(EL), english)
+    en = {c.index: c.text.replace("\n", " / ") for c in align_source(timed, english)}
+    table = rows()
+    meta = json.load(open(f"{T}/metadata.json", encoding="utf-8"))
+    lines = [f"# {meta['title']} ({meta['year']}): cues to judge ({net})", "",
+             f"The {net} net flagged these {len(flags)} cues of the T4 translation "
+             f"(`{os.path.basename(EL)}`). Write your verdict after «Λάθος;»: ναι / όχι / μικρό, and the fix if you want.",
+             "Context lines (±1) are the cues before and after.", ""]
+    for k in sorted(flags, key=int):
+        c = int(k)
+        note = "; ".join(f"{r['speaker']} -> {r['addressee']}, {r['form']}" for r in table.get(c, []))
+        lines += [f"## {c}", "", f"- note: {note}", f"- reason: {flags[k]}"]
+        for i in (c - 1, c, c + 1):
+            if i in el:
+                mark = "**" if i == c else ""
+                lines += [f"- {i} pl: {pl.get(i, '')}", f"  - en: {en.get(i, '')}", f"  - el: {mark}{el[i]}{mark}"]
+        lines += ["- Λάθος; ", ""]
+    path = f"{REPO}/{NAME}-review.md"
+    if os.path.exists(path) and re.search(r"^- Λάθος;[ \t]*\S", open(path, encoding="utf-8").read(), re.M):
+        sys.exit(f"{path} has verdicts; not overwritten")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    print(f"{path}: {len(flags)} cues")
+
+
 if __name__ == "__main__":
     {"rules": rules, "llm": llm, "score": score, "judge": judge,
-     "harold": harold}[sys.argv[1]](*map(int, sys.argv[2:]))
+     "harold": harold, "review": review}[sys.argv[1]](*map(int, sys.argv[2:]))

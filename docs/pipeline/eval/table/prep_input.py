@@ -3,12 +3,12 @@
 The base is Polish. English is help only: it shows who speaks and what a Polish line means. Spanish and SDH stay out
 to keep the file small. A row: id | time | diarized speaker | flag | Polish | English (+ English turn state).
 
-Usage: prep_input.py  -> ~/pipeline-demo/eval/table/housemaid/prep/input.md
+Usage: [FILM=<name>] prep_input.py  -> ~/pipeline-demo/eval/table/<film>/prep/input.md
 """
 import json
 import os
 
-D = os.path.expanduser("~/pipeline-demo/eval/table/housemaid")
+from film import DIR as D  # noqa: E402
 
 
 def tm(ms):
