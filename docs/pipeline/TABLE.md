@@ -340,3 +340,28 @@ Total after the table: 1 prep session + 3 translation calls + 3 check calls. Har
 - The 6 form flags (4 no, 2 unsure) are all in the Empathix scenes where step 6 set εσείς both ways; Harold did not
   call the εσύ lines there errors (424, 427, 429). The hand change was not needed.
 - The fixed quota makes most flags false alarms (26 no). Judging is slow when the flag only names a doubt; 8 unsure.
+
+## Step 7: a lexical net for wrong Greek words (2026-11-04)
+
+Harold's choice after step 6b. Two of the five Companion errors are real Greek words with the wrong meaning (73
+«μουτζουρώνεις» for "mope", 209 «μούτζωσα»), so a dictionary alone cannot catch them. `eval/table/lex.py`:
+1. rare (code): Greek word forms of the translation that never occur in the professional Greek of the phrasebank
+   archive (432k subtitle lines, 82k forms); prep glossary names left out. Companion 92 cues, Housemaid 67.
+2. check (1 Opus call): only those cues; per listed word: does it exist and mean what the source means here.
+
+Companion, against Harold's verdicts on the llm15 flags:
+
+| net | calls | flags | yes (5) | minor (6) | no | unsure | new |
+|---|---|---|---|---|---|---|---|
+| llm15 | 3 | 45 | 5 | 6 | 26 | 8 | - |
+| **lex** | 1 | 6 | **2** (73, 209) | 0 | 1 (628) | 2 (1023, 1270) | 1 (1116) |
+
+- lex catches both lexical errors with 6 cues to read; 1023 is a typo («ξεστρωτα», no accent), 1270 and 1116 are the
+  same slip («Συντροφικός», adjective for the product name "Companion"). New for Harold: 1116
+  (`eval/table/companion-lex-review.md`).
+- Codex review caught that the first prompt used «μουτζουρώνω» / "mope" as its example, i.e. the answer to cue 73.
+  The numbers above come from the rerun with a neutral example («ξεφουσκώνω»); the first run had also flagged 421.
+- It cannot catch the other three errors (437 / 876 «Γεια σου κι εσένα», 204 number): common words.
+- Housemaid: 1 flag in 67 rare cues (338 «Τεντί», the ballet tendu), so the noise stays low on a second film.
+- Tried and dropped: a code rule for a missing or double accent (with synizesis words and enclitics excluded) finds
+  only 1023 on Companion and nothing on Housemaid; lex already has 1023.
