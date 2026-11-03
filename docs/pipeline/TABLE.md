@@ -272,3 +272,26 @@ What this shows:
 
 Next: Harold marks the 31 cues in `t4-judge.md`; then re-score with his verdicts and, if the judged gold allows, judge
 a sample of the 48 llm15-only flags for precision.
+
+### Step 5b: re-score with Harold's verdicts (2026-11-04)
+
+Harold judged the 31 audit cues in `eval/table/t4-judge.md` (`net.py harold`): 1 error (1329 «συμβιβασμό»; his
+verdict «ixu» is read as ναι), 7 minor (41, 327, 481, 504, 583, 974, 1424), 23 not errors.
+
+- The Sonnet audits over-report: 5 of the 21 strict cues and 1 of the 5 hard cues are real (yes or minor). The hard
+  gender/meaning flags 791, 803, 1018, 1423 are not errors. So the earlier T4 numbers (0.95/h targeted, 1.19/9.04
+  meaning) overstate the errors, and so do all audit-based numbers before them; they rank runs but do not count errors.
+- Two of the five Polish-vs-English cues (41, 327) are minor, three (372, 1307, 1497) are not errors: following the
+  Polish base is acceptable.
+
+| net | LLM calls | flagged | yes | yes or minor | missed |
+|---|---|---|---|---|---|
+| rules | 0 | 7 | 0/1 | 0/8 | all |
+| labse | 0 | 60 | 0/1 | 2/8 | 41, 327, 481, 504, 583, 1329 |
+| llm (model decides) | 4 | 8 | 0/1 | 0/8 | all |
+| **llm15** | 4 | 60 | 1/1 | 5/8 | 41, 327, 481 |
+| rules + llm15 + labse | 4 | 119 | 1/1 | 5/8 | 41, 327, 481 |
+
+Conclusion: llm15 stays the net (the only real error and 5 of 8 real cues, 60 cues to read); rules and labse add
+nothing. With one real error the gold is small: recall 1/1 is not a measure. Precision of llm15 on its 48 flags
+outside the audit set is still unknown.

@@ -202,5 +202,39 @@ def judge():
     print(f"t4-judge.md: {len(found)} cues")
 
 
+def verdicts():
+    """Harold's verdicts in t4-judge.md: {cue: 'yes' | 'minor' | 'no'} (Greeklish accepted; 'ixu' = ισχύει = yes)."""
+    out, cue = {}, None
+    for line in open(f"{REPO}/t4-judge.md", encoding="utf-8"):
+        if m := re.match(r"## (\d+)", line):
+            cue = int(m.group(1))
+        elif line.startswith("- Λάθος;") and cue is not None:
+            v = line.split(";", 1)[1].strip().lower()
+            out[cue] = ("minor" if v.startswith(("mikr", "μικρ")) else "no" if v.startswith(("oxi", "όχι", "οχι"))
+                        else "yes" if v else None)
+    return out
+
+
+def harold():
+    """Recall of each net on Harold's judged gold, and how many audit cues he confirmed."""
+    v = verdicts()
+    _, strict, hard = gold()
+    yes = {c for c, x in v.items() if x == "yes"}
+    real = yes | {c for c, x in v.items() if x == "minor"}
+    print(f"judged {len(v)}: yes {len(yes)} {sorted(yes)}, minor {len(real - yes)} {sorted(real - yes)}, "
+          f"no {sum(x == 'no' for x in v.values())}")
+    for name, s in (("strict", strict), ("hard", hard)):
+        print(f"audit precision, {name}: {len(s & real)}/{len(s)} real (yes or minor)")
+    nets = {n: {int(k) for k in json.load(open(f"{D}/{n}.json"))} for n in ("rules", "labse", "llm", "llm15")}
+    nets["rules+llm15+labse"] = nets["rules"] | nets["llm15"] | nets["labse"]
+    print("| net | flagged | yes | yes or minor | missed |")
+    print("|---|---|---|---|---|")
+    for n, f in nets.items():
+        miss = ", ".join(str(c) for c in sorted(real) if not hit(c, f))
+        print(f"| {n} | {len(f)} | {sum(hit(c, f) for c in yes)}/{len(yes)} | "
+              f"{sum(hit(c, f) for c in real)}/{len(real)} | {miss} |")
+
+
 if __name__ == "__main__":
-    {"rules": rules, "llm": llm, "score": score, "judge": judge}[sys.argv[1]](*map(int, sys.argv[2:]))
+    {"rules": rules, "llm": llm, "score": score, "judge": judge,
+     "harold": harold}[sys.argv[1]](*map(int, sys.argv[2:]))
