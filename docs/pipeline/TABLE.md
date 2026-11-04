@@ -389,3 +389,12 @@ Criteria (an error = Μικρό or Σοβαρό; «Δεν ξέρω» is left out
 4. Reported, no threshold: errors in the 25 unflagged cues (what the nets miss), and the median time per card.
 
 Step 8 passes only if C1, C2 and C3 all pass. `FILM=meg2 page.py score` prints the result.
+
+Run (2026-11-04, no frozen file changed):
+- Translation: 1411 cues in 4 chunks. Chunks 1-3 ran at 16:05-16:19. Chunk 4 first ran after the Gemini Pro quota
+  hit 0/2400, so a weaker model answered and merge failed ("timestamps differ from the Polish source"). Its outputs
+  were deleted and chunk 4 ran again at 20:52 after the quota reset (Pro 42761/48384): one call, no split.
+  Merge: 1411 cues, 23 changed by the style stage.
+- Nets: llm15 flags 60 cues; lex: 165 rare cues (192 words), 2 flagged.
+- Review page: 61 flagged cues (llm15 and lex overlap on 1), 34 of them with "no change" proposed, plus 25 unflagged
+  sample = 86 cards. Served by the `meg2-review` user unit at http://minipc.tail11f3d4.ts.net:8770/ (tailnet only).
