@@ -29,8 +29,10 @@ def embed(cues, model_name="sentence-transformers/LaBSE", texts=None):
     if os.path.exists(cache):
         return np.load(cache)
     if _MODEL is None:
+        import torch
         from sentence_transformers import SentenceTransformer
-        _MODEL = SentenceTransformer(model_name, device="mps")
+        device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        _MODEL = SentenceTransformer(model_name, device=device)
     E = _MODEL.encode(texts, batch_size=64, normalize_embeddings=True, show_progress_bar=False)
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     np.save(cache, E)
