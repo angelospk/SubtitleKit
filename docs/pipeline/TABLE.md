@@ -365,3 +365,27 @@ Companion, against Harold's verdicts on the llm15 flags:
 - Housemaid: 1 flag in 67 rare cues (338 «Τεντί», the ballet tendu), so the noise stays low on a second film.
 - Tried and dropped: a code rule for a missing or double accent (with synizesis words and enclitics excluded) finds
   only 1023 on Companion and nothing on Housemaid; lex already has 1023.
+
+## Step 8: blind test on a third film, Meg 2 (2023), with a review page (pre-registered 2026-11-04)
+
+Harold asked for proof, not a promise. lex was built after reading the Companion errors, so its 2/2 is in-sample. This
+step measures on a film nobody has seen yet, with the pass criteria written and committed here **before** the
+translation runs.
+
+- Film: the next pick of the same seeded TMDB list as step 6 (seed 20261104): Meg 2: The Trench (2023), TMDB 615656.
+  Tracks (OpenSubtitles): Polish MA WEB-DL FLUX (9703485, 1411 cues, base), English same release (13967881), English
+  SDH (9753071).
+- Frozen: `translate.py`, `net.py`, `lex.py` as in this commit. No prompt or threshold changes after the Meg 2
+  translation exists. The prep session uses the Companion brief with the film names changed.
+- New `page.py` (1 Opus call): every llm15 + lex flag gets a proposed Greek line (unchanged when the model thinks the
+  flag is a false alarm), plus 25 random unflagged cues (seed 8) as blind checks. `page.py serve` shows one card at a
+  time: Σωστό / Μικρό / Σοβαρό / Δεν ξέρω, then «Δέχομαι την πρόταση» or his own line. Each click saves to
+  `eval/table/meg2-verdicts.json`.
+
+Criteria (an error = Μικρό or Σοβαρό; «Δεν ξέρω» is left out of the counts):
+1. C1: at least 1 in 3 lex flags is an error.
+2. C2: at least 20 % of the llm15 flags are errors (Companion: 24 %).
+3. C3: for at least 60 % of the flagged errors, Harold takes the proposed fix unchanged.
+4. Reported, no threshold: errors in the 25 unflagged cues (what the nets miss), and the median time per card.
+
+Step 8 passes only if C1, C2 and C3 all pass. `FILM=meg2 page.py score` prints the result.

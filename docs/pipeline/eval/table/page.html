@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Έλεγχος υποτίτλων</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1f;--dim:#6b6b70;--line:#e2e0da;--acc:#2f5bd3;--ok:#2e7d4f;--mid:#b7791f;--bad:#c0392b;--add:#d6f5df;--del:#fbdcdc}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e22;--ink:#ececee;--dim:#9a9aa2;--line:#2e2e34;--acc:#7b9cff;--ok:#5cc489;--mid:#e0a84a;--bad:#ff7b6b;--add:#1f4a2e;--del:#5a2323}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+header h1{font-size:17px;margin:0;flex:1}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:14px}
+.bar i{display:block;height:100%;background:var(--acc);width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--dim);font-size:14px;margin-bottom:10px}
+.tag{border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px}
+.tag.s{border-color:var(--acc);color:var(--acc)}
+.ctx{color:var(--dim);font-size:14px;margin:2px 0}
+.src{margin:10px 0;display:grid;grid-template-columns:34px 1fr;gap:3px 8px;font-size:15px}
+.src b{color:var(--dim);font-weight:600;font-size:12px;padding-top:2px}
+.el{font-size:19px;font-weight:600}
+.why{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:14px;margin:10px 0}
+.why div+div{margin-top:4px}
+.fix{font-size:19px;margin:10px 0 4px}
+.fix ins{background:var(--add);text-decoration:none;border-radius:3px}
+.fix del{background:var(--del);border-radius:3px}
+.fixwhy{color:var(--dim);font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+button{font:inherit;font-size:15px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:10px 14px;cursor:pointer}
+button kbd{font-size:11px;color:var(--dim);margin-left:6px}
+button.on{outline:3px solid var(--acc)}
+.b0{border-color:var(--ok);color:var(--ok)}.b1{border-color:var(--mid);color:var(--mid)}.b2{border-color:var(--bad);color:var(--bad)}
+.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.primary kbd{color:#dfe6ff}
+textarea{width:100%;font:inherit;font-size:17px;padding:10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-height:64px;margin-top:10px}
+.step2{border-top:1px dashed var(--line);margin-top:14px;padding-top:6px}
+.hidden{display:none}
+.nav{display:flex;justify-content:space-between;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:16px}
+.chips a{width:14px;height:14px;border-radius:3px;background:var(--line);cursor:pointer;display:block}
+.chips a.v0{background:var(--ok)}.chips a.v1{background:var(--mid)}.chips a.v2{background:var(--bad)}.chips a.vq{background:var(--dim)}
+.chips a.cur{outline:2px solid var(--acc)}
+.chips a.s{border-radius:50%}
+.done{text-align:center;padding:30px}
+.saved{font-size:13px;color:var(--dim)}
+</style>
+</head>
+<body>
+<main>
+<header><h1 id="title">…</h1><span class="saved" id="saved"></span><span id="count"></span></header>
+<div class="bar"><i id="prog"></i></div>
+<div id="view"></div>
+<div class="nav"><button id="prev">← Προηγούμενο</button><button id="next">Επόμενο →</button></div>
+<div class="chips" id="chips" title="Τετράγωνο = σημάδι, κύκλος = τυχαίος έλεγχος"></div>
+</main>
+<script>
+let D, cards = [], V = {}, i = 0, shown = 0, sev = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function diff(a, b) {            // word diff: the proposal against the current line
+  const x = a.split(/(\s+)/), y = b.split(/(\s+)/), n = x.length, m = y.length;
+  const L = Array.from({length: n + 1}, () => new Array(m + 1).fill(0));
+  for (let p = n - 1; p >= 0; p--) for (let q = m - 1; q >= 0; q--)
+    L[p][q] = x[p] === y[q] ? L[p + 1][q + 1] + 1 : Math.max(L[p + 1][q], L[p][q + 1]);
+  let p = 0, q = 0, out = "";
+  while (p < n && q < m) {
+    if (x[p] === y[q]) { out += esc(x[p]); p++; q++; }
+    else if (L[p + 1][q] >= L[p][q + 1]) { out += x[p].trim() ? `<del>${esc(x[p])}</del>` : esc(x[p]); p++; }
+    else { out += y[q].trim() ? `<ins>${esc(y[q])}</ins>` : esc(y[q]); q++; }
+  }
+  while (p < n) { out += x[p].trim() ? `<del>${esc(x[p])}</del>` : esc(x[p]); p++; }
+  while (q < m) { out += y[q].trim() ? `<ins>${esc(y[q])}</ins>` : esc(y[q]); q++; }
+  return out;
+}
+
+function hasFix(c) { return c.kind === "flag" && c.fix && c.fix !== c.el; }
+
+function render() {
+  const c = cards[i], v = V[c.id];
+  sev = null; shown = Date.now();
+  const flags = c.kind === "flag"
+    ? Object.entries(c.flags).map(([k, t]) => `<div><b>${k}:</b> ${esc(t)}</div>`).join("")
+    : "<div>Δεν το σημάδεψε κανένας έλεγχος. Υπάρχει λάθος;</div>";
+  const prop = c.kind !== "flag" ? "" : hasFix(c)
+    ? `<div class="fixwhy">Πρόταση:</div><div class="fix">${diff(c.el, c.fix)}</div><div class="fixwhy">${esc(c.why)}</div>`
+    : `<div class="fixwhy">Η πρόταση δεν αλλάζει τίποτα: το μοντέλο λέει ότι η γραμμή είναι σωστή.</div>`;
+  $("view").innerHTML = `<div class="card">
+    <div class="meta"><b>#${c.id}</b><span>${c.time}</span>
+      ${c.kind === "flag" ? Object.keys(c.flags).map(k => `<span class="tag">${k}</span>`).join("") : '<span class="tag s">τυχαίος έλεγχος</span>'}
+      <span>${esc(c.note)}</span></div>
+    <div class="ctx">${esc(c.prev)}</div>
+    <div class="src"><b>PL</b><div>${esc(c.pl)}</div><b>EN</b><div>${esc(c.en)}</div><b>EL</b><div class="el">${esc(c.el)}</div></div>
+    <div class="ctx">${esc(c.next)}</div>
+    <div class="why">${flags}</div>
+    ${prop}
+    <div class="row">
+      <button class="b0" data-s="0">Σωστό<kbd>1</kbd></button>
+      <button class="b1" data-s="1">Μικρό λάθος<kbd>2</kbd></button>
+      <button class="b2" data-s="2">Σοβαρό λάθος<kbd>3</kbd></button>
+      <button data-s="?">Δεν ξέρω<kbd>0</kbd></button>
+    </div>
+    <div class="step2 hidden" id="step2">
+      <div class="row">
+        ${hasFix(c) ? '<button class="primary" id="take">✓ Δέχομαι την πρόταση<kbd>Enter</kbd></button>' : ""}
+        <button id="own">Αποθήκευση δικής μου<kbd>⌘Enter</kbd></button>
+      </div>
+      <textarea id="txt" spellcheck="false">${esc(hasFix(c) ? c.fix : c.el)}</textarea>
+    </div></div>`;
+  if (v) {
+    const b = document.querySelector(`[data-s="${v.sev}"]`); if (b) b.classList.add("on");
+    if (v.fix) $("txt").value = v.fix;
+  }
+  document.querySelectorAll("[data-s]").forEach(b => b.onclick = () => pick(b.dataset.s));
+  if ($("take")) $("take").onclick = () => save(sev, c.fix, "proposal");
+  $("own").onclick = () => save(sev, $("txt").value.trim(), "own");
+  $("txt").onkeydown = e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("own").click(); } };
+  status();
+}
+
+function pick(s) {
+  s = s === "?" ? "?" : Number(s);
+  document.querySelectorAll("[data-s]").forEach(b => b.classList.toggle("on", b.dataset.s === String(s)));
+  if (s === 0 || s === "?") return save(s, null, null);
+  sev = s;
+  $("step2").classList.remove("hidden");
+  if (!hasFix(cards[i])) { const t = $("txt"); t.focus(); t.select(); }
+}
+
+async function save(s, fix, src) {
+  const c = cards[i];
+  if (src === "own" && !fix) return;
+  const body = {id: c.id, sev: s, fix, src, ms: Date.now() - shown};
+  const r = await fetch("/save", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  if (!r.ok) { $("saved").textContent = "ΔΕΝ αποθηκεύτηκε: " + r.status; return; }
+  V[c.id] = body;
+  $("saved").textContent = "αποθηκεύτηκε #" + c.id;
+  const nxt = cards.findIndex((x, k) => k > i && !V[x.id]);
+  const any = cards.findIndex(x => !V[x.id]);
+  if (nxt >= 0) go(nxt); else if (any >= 0) go(any); else finish();
+}
+
+function finish() {
+  status();
+  $("view").innerHTML = `<div class="card done"><h2>Τέλος: ${cards.length} / ${cards.length}</h2>
+    <p>Όλες οι κρίσεις αποθηκεύτηκαν. Μπορείς να γυρίσεις σε όποιο κουτάκι θες για αλλαγή.</p></div>`;
+}
+
+function status() {
+  const n = cards.filter(c => V[c.id]).length;
+  $("count").textContent = `${n} / ${cards.length}`;
+  $("prog").style.width = (100 * n / cards.length) + "%";
+  $("chips").innerHTML = cards.map((c, k) => {
+    const v = V[c.id], cls = [c.kind === "sample" ? "s" : "", v ? (v.sev === "?" ? "vq" : "v" + v.sev) : "", k === i ? "cur" : ""].join(" ");
+    return `<a class="${cls}" data-k="${k}" title="#${c.id}"></a>`;
+  }).join("");
+  document.querySelectorAll("#chips a").forEach(a => a.onclick = () => go(Number(a.dataset.k)));
+}
+
+function go(k) { i = Math.max(0, Math.min(cards.length - 1, k)); render(); scrollTo(0, 0); }
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA") return;
+  if (e.key === "1") pick("0"); else if (e.key === "2") pick("1"); else if (e.key === "3") pick("2");
+  else if (e.key === "0") pick("?");
+  else if (e.key === "Enter" && $("take") && !$("step2").classList.contains("hidden")) $("take").click();
+  else if (e.key === "ArrowRight") go(i + 1); else if (e.key === "ArrowLeft") go(i - 1);
+});
+$("prev").onclick = () => go(i - 1);
+$("next").onclick = () => go(i + 1);
+
+fetch("/data").then(r => r.json()).then(d => {
+  D = d; cards = d.cards; V = d.verdicts || {};
+  $("title").textContent = d.title;
+  const first = cards.findIndex(c => !V[c.id]);
+  if (first < 0) { i = 0; finish(); } else go(first);
+});
+</script>
+</body>
+</html>

@@ -26,6 +26,14 @@ FILMS = {
         "variant": "Companion.2025.t4",
         "chunks": None,
     },
+    # Step 8 blind test. OpenSubtitles 9703485 (pl, MA WEB-DL FLUX), 13967881 (en, same release), 9753071 (en SDH)
+    "meg2": {
+        "base": f"{M}/meg2/subs/pl.srt",
+        "tracks": {"en": f"{M}/meg2/subs/en.srt", "sdh": f"{M}/meg2/subs/sdh.srt"},
+        "speakers": None,
+        "variant": "Meg2.2023.t4",
+        "chunks": None,
+    },
 }
 
 NAME = os.environ.get("FILM", "housemaid")
