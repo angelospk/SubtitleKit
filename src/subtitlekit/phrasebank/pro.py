@@ -37,6 +37,7 @@ _LABEL_NAMES = (
     "Μετάφραση υποτίτλων",
     "Επιμέλεια υποτίτλων",
     "Απόδοση διαλόγων",
+    "Προσαρμογή υποτίτλων",
     "Υποτιτλισμός",
     "Μετάφραση",
     "Απόδοση",
@@ -55,11 +56,17 @@ _STUDIO_RE = re.compile(
     re.IGNORECASE,
 )
 _FAN_RES = (
-    re.compile(r"[A-Za-z_]+\d{2,}"),
+    # A release tag, not any letter+digits token: "M113" is dialogue, "1080p" is a filename.
+    re.compile(
+        r"\b(?:x|h)\.?26[45]\b|\b(?:480|576|720|1080|2160)[pi]\b|"
+        r"\b(?:web[-. ]?dl|webrip|bluray|bdrip|hdtv|dvdrip)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"[♥♫❤]"),
     re.compile(r"\b(?:sync|synced|resync|repair|ripped)\b", re.IGNORECASE),
     re.compile(r"συγχρονισ", re.IGNORECASE),
-    re.compile(r"\bsubs?\b|\bteam\b|ομάδα", re.IGNORECASE),
+    # "ομάδα" alone is everyday dialogue ("εβδομάδα" contains it too); only a subtitle team counts.
+    re.compile(r"\bsubs?\b|\bteam\b|ομ[άα]δα\s+(?:υποτ[ίι]τλ|μετ[άα]φρ)", re.IGNORECASE),
     re.compile(r"www\.|\.(?:gr|com)\b", re.IGNORECASE),
     re.compile(r"@"),
     re.compile(r"Να είστε καλά", re.IGNORECASE),
@@ -108,7 +115,8 @@ def _credit_label_verdict(lines: List[str], i: int) -> Tuple[str, str]:
     nxt = lines[i + 1] if i + 1 < len(lines) else ""
     match = _CREDIT_RE.match(line)
     if match:
-        rest = match.group(1)
+        # "Υποτιτλισμός: Ζωγραφιά Κεφαλοπούλου." is a credit, the final period is punctuation.
+        rest = match.group(1).strip(" .,;:")
         if _is_name(rest):
             return "credit", rest
         if not rest and _is_name(nxt):
@@ -117,11 +125,13 @@ def _credit_label_verdict(lines: List[str], i: int) -> Tuple[str, str]:
     match = _LABEL_RE.match(line)
     if not match:
         return "", ""
-    rest = match.group(1)
+    rest = match.group(1).strip(" .,;:")
     if rest:
         return ("", "") if _is_name(rest) else ("fan", "")
-    if line.rstrip().endswith((":", ".")):
-        return ("", "") if _is_name(nxt) else ("fan", "")
+    # Retail cards often put the label alone ("Απόδοση Διαλόγων") and the name below it,
+    # with no colon; a label with no name at all stays a fan line.
+    if _is_name(nxt):
+        return "credit", nxt
     return "fan", ""
 
 

@@ -111,3 +111,52 @@ def test_a_decomposed_credit_line_still_counts():
 def test_a_latin_pseudonym_in_a_greek_credit_is_amateur():
     v = score_greek(with_edges(body(), tail=["<i>Μετάφραση: Calamity Jane</i>"]))
     assert v.label == "amateur"
+
+
+# False positives found on the -OFFiCiAL- uploader files (2026-11-05).
+def test_dialogue_word_containing_omada_is_not_a_fan_marker():
+    # "εβδομάδα"/"βδομάδα" contain "ομάδα": plain dialogue, not a subtitle team.
+    for line in ("Επτά μέρες την εβδομάδα,", "δε θα ιππεύσεις τον Φίνιξ μια βδομάδα.",
+                 "Η μουσική ομάδα ιππασίας ξεκίνησε"):
+        v = score_greek(with_edges(body(), tail=["Υποτιτλισμός: Γιώργος Λυκούδης", line]))
+        assert v.label == "professional", (line, v.reasons)
+
+
+def test_a_subtitle_team_line_is_still_a_fan_marker():
+    v = score_greek(with_edges(body(), tail=["Ομάδα Υποτίτλων"]))
+    assert v.label == "amateur"
+    assert any("Ομάδα Υποτίτλων" in r for r in v.reasons)
+
+
+def test_letter_digit_code_in_dialogue_is_not_a_release_tag():
+    v = score_greek(with_edges(body(), tail=["Υποτιτλισμός: Γιώργος Λυκούδης",
+                                             "Η θέση μας, στην τροχιά του πλανήτη M113."]))
+    assert v.label == "professional", v.reasons
+
+
+def test_a_release_filename_in_a_cue_is_still_a_fan_marker():
+    v = score_greek(with_edges(body(), tail=["Arrow.S08E04.1080p.AMZN.WEB-DL.DDP5.1.H.264-CasStudio"]))
+    assert v.label == "amateur"
+
+
+def test_a_credit_name_with_a_final_period_is_professional():
+    v = score_greek(with_edges(body(), tail=["Υποτιτλισμός: Ζωγραφιά Κεφαλοπούλου."]))
+    assert v.label == "professional"
+    assert any("Κεφαλοπούλου" in r for r in v.reasons)
+
+
+def test_a_credit_label_without_a_colon_counts_when_the_name_follows():
+    v = score_greek(with_edges(body(), tail=["Απόδοση Διαλόγων", "Νίκος Παπαδόπουλος"]))
+    assert v.label == "professional"
+
+
+def test_a_bare_label_with_no_name_stays_fan():
+    v = score_greek(with_edges(body(), tail=["Απόδοση Διαλόγων"]))
+    assert v.label == "amateur"
+
+
+def test_a_compound_credit_label_with_the_name_below_is_professional():
+    # The Simpsons card: "Απόδοση - Προσαρμογή Υποτίτλων" / "Αλέξης Γραμμένος".
+    v = score_greek(with_edges(body(), tail=["Απόδοση - Προσαρμογή Υποτίτλων", "Αλέξης Γραμμένος"]))
+    assert v.label == "professional"
+    assert any("Γραμμένος" in r for r in v.reasons)
