@@ -7,7 +7,7 @@ name = "subtitlekit"
 dynamic = ["version"]
 description = "Subtitle processing toolkit: merge, sync, fix overlaps, and apply corrections"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "angelospk", email = "haroldpoigr@gmail.com"}
@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -40,9 +39,17 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "subtitlekit[stats]",  # tests import subtitlekit.tools.subtitle_stats
+]
+stats = [
+    # subtitlekit.tools.subtitle_stats (statistics + comparison charts)
+    "pandas",
+    "numpy",
+    "matplotlib<3.11",  # subtitle_stats uses boxplot(labels=), removed in 3.11
 ]
 ui = [
     "ipywidgets>=8.0.0",  # For Colab UI
+    "subtitlekit[stats]",  # Colab comparison tab loads subtitle_stats
 ]
 
 [project.urls]
