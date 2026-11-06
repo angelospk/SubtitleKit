@@ -1,7 +1,7 @@
 # SubtitleKit - Subtitle Processing Toolkit
 
 [![PyPI version](https://badge.fury.io/py/subtitlekit.svg)](https://badge.fury.io/py/subtitlekit)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Comprehensive Python library and desktop application for subtitle processing, synchronization, and correction.
@@ -29,8 +29,8 @@ pip install subtitlekit
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1lvdSX7aNhNknLs9laxfTeKdK_xNUvLOY?usp=sharing)
 
 ```python
-# Install
-!pip install subtitlekit
+# Install (the [ui] extra adds ipywidgets and the statistics/comparison deps)
+!pip install "subtitlekit[ui]"
 
 # Launch UI
 from subtitlekit.ui import show_ui
@@ -163,8 +163,8 @@ Desktop and Colab UIs support:
 git clone https://github.com/angelospk/subtitlekit.git
 cd subtitlekit
 
-# Install in development mode
-pip install -e .
+# Install in development mode (with test and statistics dependencies)
+pip install -e ".[dev]"
 
 # Install pre-commit hooks (Mandatory for contributing)
 pip install pre-commit
