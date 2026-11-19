@@ -38,6 +38,7 @@ FILMS = {
 
 NAME = os.environ.get("FILM", "housemaid")
 F = FILMS[NAME]
+TAG = os.environ.get("TAG", "")  # model test: TAG=neon writes t4neon/ and <variant>neon (same prompts, other model)
 DIR = f"{E}/table/{NAME}"        # table.json, metadata.json, prep/, t4/, net/
-OUT = f"{E}/out/{F['variant']}"  # final SRT
+OUT = f"{E}/out/{F['variant']}{TAG}"  # final SRT
 EN = F["tracks"]["en"]

@@ -26,10 +26,12 @@ E = os.path.expanduser("~/pipeline-demo/eval")
 F = "The.Housemaid.2025"
 EN = load_srt(f"{E}/human/housemaid-source.eng.srt")
 VS = sys.argv[sys.argv.index("--vs") + 1]
-OTHER = {"e37raw": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt", "e38": f"{E}/out/{F}.e38/{F}.e38.meaning.el.srt"}[VS]
+OTHER = {"e37raw": f"{E}/out/{F}.e37_raw/{F}.e37_raw.el.srt", "e38": f"{E}/out/{F}.e38/{F}.e38.meaning.el.srt",
+         "t4": f"{E}/out/{F}.t4/{F}.t4.el.srt"}[VS]
+BT = sys.argv[sys.argv.index("--b") + 1] if "--b" in sys.argv else ""  # --b neon: version B is t4neon (model test)
 A, _sync_a = sync_track(load_srt(OTHER), EN)  # E36a has the English timing: "unchanged", synced
-B, _sync = sync_track(load_srt(f"{E}/out/{F}.t4/{F}.t4.el.srt"), EN)
-for side, info in ((VS, _sync_a), ("t4", _sync)):
+B, _sync = sync_track(load_srt(f"{E}/out/{F}.t4{BT}/{F}.t4{BT}.el.srt"), EN)
+for side, info in ((VS, _sync_a), ("t4" + BT, _sync)):
     if not info["synced"]:
         sys.exit(f"{side}: timing not synced to the English: {info['notes']}")
 NOREF = "--noref" in sys.argv
@@ -95,12 +97,12 @@ def main():
         for m in re.finditer(r"\[(\d+)\]\s*([12=])", out):
             n, v = int(m.group(1)), m.group(2)
             if n in order:
-                res[n] = "=" if v == "=" else ("t4" if (v == "1") == order[n] else VS)
+                res[n] = "=" if v == "=" else ("t4" + BT if (v == "1") == order[n] else VS)
         if any(n not in res for n in order):
             sys.exit(f"judge skipped windows {[n for n in order if n not in res]}")
-    with open(f"{E}/table/housemaid/t4/ab-{VS}{'-noref' if NOREF else ''}.json", "w", encoding="utf-8") as fh:
-        json.dump({"sync": {VS: _sync_a, "t4": _sync}, "windows": len(wins), "one_side": one_side, "picks": res,
-                   "lines": {n: {"en": en, VS: a, "t4": b} for n, en, a, b in wins}}, fh, ensure_ascii=False,
+    with open(f"{E}/table/housemaid/t4{BT}/ab-{VS}{'-noref' if NOREF else ''}.json", "w", encoding="utf-8") as fh:
+        json.dump({"sync": {VS: _sync_a, "t4" + BT: _sync}, "windows": len(wins), "one_side": one_side, "picks": res,
+                   "lines": {n: {"en": en, VS: a, "t4" + BT: b} for n, en, a, b in wins}}, fh, ensure_ascii=False,
                   indent=0)
     print("sync", round(_sync["offset_ms"]), "ms; noref" if NOREF else "; with English", "windows", len(wins), "one side only", len(one_side), "judged", len(res), Counter(res.values()))
 

@@ -28,13 +28,13 @@ from subtitlekit.pipeline.fixes import reflow_text  # noqa: E402
 from subtitlekit.pipeline.greek_style import fix_final_n, rebreak  # noqa: E402
 from subtitlekit.pipeline.srt import load_srt, save_srt  # noqa: E402
 
-from film import DIR as T, NAME, OUT, F  # noqa: E402
+from film import DIR as T, NAME, OUT, F, TAG  # noqa: E402
 
-D = f"{T}/t4"
-V = F["variant"]
+D = f"{T}/t4{TAG}"
+V = F["variant"] + TAG
 PL = F["base"]
 MAX_CHUNK = 450   # Gemini breaks the SRT format above ~650 cues per call
-G = ["/home/harold/.venvs/gemini-web/bin/python", "/home/harold/scripts/gemini-web/gem.py", "-m", "gemini-argon"]
+G = ["/home/harold/.venvs/gemini-web/bin/python", "/home/harold/scripts/gemini-web/gem.py", "-m", os.environ.get("GEM_MODEL", "gemini-argon")]
 
 FORM = {"εσύ": "εσύ", "εσείς-πλ": "εσείς (πολλοί)", "εσείς-ευγ": "εσείς (ευγένεια)", "-": "-"}
 

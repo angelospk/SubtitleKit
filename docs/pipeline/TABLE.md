@@ -398,3 +398,31 @@ Run (2026-11-04, no frozen file changed):
 - Nets: llm15 flags 60 cues; lex: 165 rare cues (192 words), 2 flagged.
 - Review page: 61 flagged cues (llm15 and lex overlap on 1), 34 of them with "no change" proposed, plus 25 unflagged
   sample = 86 cards. Served by the `meg2-review` user unit at http://minipc.tail11f3d4.ts.net:8770/ (tailnet only).
+
+### Model test: Gemini Neon vs Gemini 4 on T4 (2026-11-19)
+
+The web account now lists `gemini-neon` ("Deeper analysis"); `gemini-argon` (Gemini 4) is gone from the list.
+`table/run_neon.sh`: the Housemaid T4 prompts (byte copies of `t4/pl-*.txt`, 4 chunks), only the model changed
+(`TAG=neon GEM_MODEL=gemini-neon`), same merge/style stage, same audits, blind A/B `ab_t4.py --vs t4 --b neon`.
+Output `~/pipeline-demo/eval/out/The.Housemaid.2025.t4neon/`. All 4 chunks passed on the first call (1654 cues).
+
+| | T4 (Gemini 4) | **T4 Neon** |
+|---|---|---|
+| CPS > 17 / > 20 | 13.0 % / 3.4 % | **8.0 % / 1.5 %** |
+| Greek characters | 44,259 | 42,649 |
+| targeted gender/number/formality per hour (2 runs) | 0.95 (0.95, 0.95) | 0.48 (0, 0.95) |
+| meaning: confirmed serious / noticeable per hour (2 runs) | 1.19 / 9.04 | 2.86 / 10.23 |
+
+| Neon vs T4 | judge sees | Neon | T4 | equal |
+|---|---|---|---|---|
+| | English + Greek | **91** | 42 | 84 |
+| | Greek only | **98** | 50 | 69 |
+
+- The meaning audit number is noise, not a regression: of the 9 confirmed cues, 6 (327, 791, 1069, 1177, 1423,
+  1424) read the same or almost the same in T4, and Harold already judged 791 and 1423 not errors (step 5b).
+  410 «Και δεν έχει» for "He sure does" is the Greek idiom (emphatic yes), a false flag. 304 is a title card.
+  Only 875 («δε θέλουν να παρακολουθούν κάθε μήνυμα», agent unclear; T4 «να τους παρακολουθούν») is a real slip.
+- Neon is shorter and less literal: «Πάμε σε ειδικό γονιμότητας» (T4 «Πηγαίνουμε σε έναν ειδικό»), «Ο Άντριου δε
+  λυπάται τα έξοδα», «Κι εγώ τα ίδια». This is the step 4 weakness (literal wording) that T4 lost windows on.
+- T4 wins where Neon cuts too much («Έλα.» for «Έλα μέσα.»).
+Verdict: Neon replaces Gemini 4 as the T4 model (Gemini 4 is no longer offered anyway).
